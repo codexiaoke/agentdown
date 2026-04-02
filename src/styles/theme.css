@@ -1,0 +1,168 @@
+@import 'highlight.js/styles/github.css';
+
+:root {
+  --vpm-text-color: #18212f;
+  --vpm-muted-color: #5b6678;
+  --vpm-background: #f7f5ef;
+  --vpm-surface: #ffffff;
+  --vpm-border-color: #d7d2c7;
+  --vpm-accent: #124c5a;
+  --vpm-accent-soft: #dbeaed;
+  --vpm-code-bg: #f4f7fb;
+  --vpm-code-toolbar-bg: #eaf0f6;
+  --vpm-thought-bg: #fff7df;
+  --vpm-agui-bg: #f2f8f7;
+  --vpm-radius: 18px;
+  --vpm-shadow: 0 18px 50px rgba(11, 28, 38, 0.08);
+}
+
+.vpm-root {
+  color: var(--vpm-text-color);
+}
+
+.vpm-block-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.vpm-text-block {
+  position: relative;
+  margin: 0;
+  white-space: pre-wrap;
+  color: var(--vpm-text-color);
+}
+
+.vpm-text-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: block;
+  white-space: pre;
+}
+
+.vpm-text-block:is(h1, h2, h3, h4, h5, h6) {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.vpm-text-block:is(h1) {
+  font-size: 2.3rem;
+}
+
+.vpm-text-block:is(h2) {
+  font-size: 1.8rem;
+}
+
+.vpm-text-block:is(h3) {
+  font-size: 1.45rem;
+}
+
+.vpm-html-block :is(p, ul, ol, blockquote, table, pre) {
+  margin-top: 0;
+}
+
+.vpm-html-block :is(p, ul, ol, blockquote, table, pre):last-child {
+  margin-bottom: 0;
+}
+
+.vpm-code-block {
+  overflow: hidden;
+  border: 1px solid var(--vpm-border-color);
+  border-radius: var(--vpm-radius);
+  box-shadow: var(--vpm-shadow);
+  background: var(--vpm-surface);
+}
+
+.vpm-code-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 1rem;
+  background: var(--vpm-code-toolbar-bg);
+  border-bottom: 1px solid var(--vpm-border-color);
+  color: var(--vpm-muted-color);
+}
+
+.vpm-code-language {
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.vpm-copy-button {
+  border: 0;
+  border-radius: 999px;
+  padding: 0.45rem 0.9rem;
+  background: var(--vpm-accent);
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+
+.vpm-code-content {
+  overflow-x: auto;
+}
+
+.vpm-code-content pre,
+.vpm-code-fallback {
+  margin: 0;
+  padding: 1rem;
+  overflow-x: auto;
+  background: var(--vpm-code-bg);
+}
+
+.vpm-math-block,
+.vpm-html-block {
+  overflow-x: auto;
+}
+
+.vpm-thought {
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--vpm-thought-bg) 55%, var(--vpm-border-color));
+  border-radius: var(--vpm-radius);
+  background: var(--vpm-thought-bg);
+}
+
+.vpm-thought-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border: 0;
+  padding: 1rem 1.1rem;
+  background: transparent;
+  color: var(--vpm-text-color);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.vpm-thought-body {
+  padding: 0 1.1rem 1.1rem;
+}
+
+.vpm-thought-transition-enter-active,
+.vpm-thought-transition-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.vpm-thought-transition-enter-from,
+.vpm-thought-transition-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+.vpm-agui {
+  border: 1px dashed var(--vpm-border-color);
+  border-radius: var(--vpm-radius);
+  padding: 1rem;
+  background: var(--vpm-agui-bg);
+}
+
+.vpm-agui-missing {
+  color: var(--vpm-muted-color);
+}
