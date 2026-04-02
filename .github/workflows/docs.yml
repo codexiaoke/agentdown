@@ -9,10 +9,8 @@ on:
       - main
   workflow_dispatch:
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 concurrency:
   group: docs-pages
@@ -21,14 +19,16 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       - name: Install dependencies
@@ -37,13 +37,9 @@ jobs:
       - name: Build docs
         run: npm run docs:build
 
-      - name: Configure Pages
-        if: github.event_name != 'pull_request'
-        uses: actions/configure-pages@v5
-
       - name: Upload Pages artifact
         if: github.event_name != 'pull_request'
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: docs/.vitepress/dist
 
@@ -51,10 +47,20 @@ jobs:
     if: github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - name: Configure Pages
+        uses: actions/configure-pages@v6
+        with:
+          token: ${{ secrets.PAGES_ENABLEMENT_TOKEN != '' && secrets.PAGES_ENABLEMENT_TOKEN || github.token }}
+          enablement: ${{ secrets.PAGES_ENABLEMENT_TOKEN != '' }}
+
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
