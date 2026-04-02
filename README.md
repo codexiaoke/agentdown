@@ -2,7 +2,9 @@
 
 `Agentdown` 是一个面向 Vue 3 的 agent-native markdown UI runtime，目标是把 `markdown-it` 的结构化解析能力、`@chenglou/pretext` 的高性能文本布局能力，以及 AGUI 组件注入组合起来，服务 AI 长文本、流式输出、工具调用和多 agent 协作场景。
 
-## 当前首版包含什么
+`0.0.1` 是一个适合公开测试的首发版本：核心渲染链路、AGUI runtime、类型声明、npm 打包和 demo 已经打通，但协议层和测试体系仍然会继续迭代。
+
+## 0.0.1 测试版包含什么
 
 - `Vue 3 + Vite + TypeScript` 的 npm 库工程
 - `MarkdownRenderer` 组件
@@ -13,10 +15,12 @@
 - 响应式 AGUI runtime 与事件流
 - 内置 `text / code / mermaid / thought / math / html / agui` 组件可覆写
 - 表格、图片、链接、引用、列表等复杂 markdown 增强渲染
+- 图片预览、Mermaid 全屏预览、拖拽和平滑滚轮缩放
 - 官方核心 agent 事件 helpers
 - 自定义 AGUI reducer
 - `highlight.js` 代码高亮
 - `KaTeX` 块级公式渲染
+- 尽量中性的默认样式，方便接入自己的 Design System
 - 本地 demo 页面
 
 ## 安装
@@ -178,8 +182,11 @@ const events = useAguiEvents();
 
 更多文档：
 
-- [Agent Protocol](./docs/AGENT_PROTOCOL.md)
-- [Roadmap](./docs/ROADMAP.md)
+- [文档首页](./docs/index.md)
+- [快速开始](./docs/guide/getting-started.md)
+- [AGUI Runtime 协议](./docs/runtime/protocol.md)
+- [发布清单](./docs/reference/release.md)
+- [路线图](./docs/reference/roadmap.md)
 
 ## 设计约束
 
@@ -189,11 +196,43 @@ const events = useAguiEvents();
 - ` ```mermaid ` fence 会直接渲染成 Mermaid 图表块
 - AGUI 当前首版支持块级组件注入
 
+## 当前已知缺口
+
+- 还没有自动化测试与 CI 发布流程，当前主要依赖严格类型检查、构建和 pack 验证
+- runtime 目前更偏向 `run / agent / tool` 生命周期展示，`artifact / approval / replay / timeline` 仍在补协议
+- markdown 渲染优先解决 agent 展示场景，复杂 inline 协议和更细粒度 block schema 还会继续演进
+- 默认 UI 是中性的基础实现，真实产品通常仍建议覆写 `code / thought / html / agui` 等内置组件
+
+## 打包与发布
+
+```bash
+npm run typecheck
+npm run build
+npm run pack:check
+npm publish
+```
+
+说明：
+
+- 包内已经包含 `.d.ts` 声明文件
+- `publishConfig.access=public` 已配置，首次发布 scoped 包时不需要额外补 `--access public`
+- 当前 tarball 体积约 `32 kB`，`mermaid` 以运行时依赖方式提供，不再被整体打进库产物
+
 ## 开发
 
 ```bash
 npm install
 npm run dev
+```
+
+## 文档站
+
+仓库已经内置了 `VitePress` 文档站和 GitHub Pages 自动部署工作流：
+
+```bash
+npm run docs:dev
+npm run docs:build
+npm run docs:preview
 ```
 
 ## 后续路线

@@ -1,0 +1,207 @@
+:root {
+  --vp-font-family-base:
+    "Avenir Next", "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Helvetica Neue", sans-serif;
+  --vp-font-family-mono:
+    "SF Mono", "JetBrains Mono", "Fira Code", "Menlo", "Monaco", monospace;
+  --vp-c-brand-1: #0f172a;
+  --vp-c-brand-2: #1e293b;
+  --vp-c-brand-3: #334155;
+  --vp-c-brand-soft: rgba(15, 23, 42, 0.08);
+  --vp-c-bg: #fcfcfd;
+  --vp-c-bg-alt: #f5f7fa;
+  --vp-c-bg-soft: #f8fafc;
+  --vp-c-bg-elv: #ffffff;
+  --vp-c-border: rgba(15, 23, 42, 0.08);
+  --vp-c-divider: rgba(15, 23, 42, 0.08);
+  --vp-c-text-1: #0f172a;
+  --vp-c-text-2: #475569;
+  --vp-c-text-3: #64748b;
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: linear-gradient(135deg, #0f172a 0%, #3b4758 100%);
+  --vp-home-hero-image-background-image:
+    radial-gradient(circle at 30% 30%, rgba(15, 23, 42, 0.16), transparent 52%),
+    linear-gradient(135deg, rgba(15, 23, 42, 0.08), rgba(148, 163, 184, 0.08));
+  --vp-home-hero-image-filter: blur(0);
+  --vp-button-brand-border: #0f172a;
+  --vp-button-brand-bg: #0f172a;
+  --vp-button-brand-hover-bg: #111827;
+  --vp-button-brand-hover-border: #111827;
+  --vp-button-brand-active-bg: #1e293b;
+  --vp-button-brand-active-border: #1e293b;
+}
+
+body {
+  background:
+    radial-gradient(circle at top, rgba(15, 23, 42, 0.05), transparent 34%),
+    linear-gradient(180deg, #fcfcfd 0%, #f7f9fc 100%);
+}
+
+.Layout {
+  background: transparent;
+}
+
+.VPNavBar {
+  background: rgba(252, 252, 253, 0.82);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+  backdrop-filter: blur(16px);
+}
+
+.VPNavBar .title span,
+.VPNavBarMenuLink,
+.VPNavBarExtra a {
+  font-weight: 600;
+}
+
+.VPHero .name {
+  letter-spacing: -0.04em;
+}
+
+.VPHero .text {
+  max-width: 11em;
+  letter-spacing: -0.04em;
+}
+
+.VPHero .tagline {
+  max-width: 38rem;
+  color: var(--vp-c-text-2);
+}
+
+.VPHero .image-src {
+  border-radius: 28px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: #fff;
+  box-shadow: 0 28px 60px rgba(15, 23, 42, 0.08);
+}
+
+.VPFeature {
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 12px 36px rgba(15, 23, 42, 0.04);
+}
+
+.VPFeature .title {
+  letter-spacing: -0.02em;
+}
+
+.VPDoc.has-aside .content-container {
+  max-width: 840px;
+}
+
+.vp-doc a {
+  font-weight: 500;
+}
+
+.vp-doc h1,
+.vp-doc h2,
+.vp-doc h3 {
+  letter-spacing: -0.03em;
+}
+
+.vp-doc div[class*='language-'] {
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  border-radius: 18px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04);
+}
+
+.vp-doc table {
+  display: block;
+  overflow-x: auto;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin: 24px 0;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.vp-doc table thead {
+  background: rgba(248, 250, 252, 0.96);
+}
+
+.vp-doc table th,
+.vp-doc table td {
+  border: 0;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+  white-space: nowrap;
+}
+
+.vp-doc table tr:last-child td {
+  border-bottom: 0;
+}
+
+.ad-home-section {
+  margin-top: 40px;
+  padding: 28px;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.05);
+}
+
+.ad-home-section h2 {
+  margin-top: 0;
+}
+
+.ad-home-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.ad-home-card {
+  padding: 20px;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.92));
+}
+
+.ad-home-card strong {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 1rem;
+  letter-spacing: -0.02em;
+}
+
+.ad-home-card p {
+  margin: 0;
+  color: var(--vp-c-text-2);
+}
+
+.ad-inline-tokens {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.ad-inline-token {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 12px;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  border-radius: 999px;
+  background: rgba(248, 250, 252, 0.92);
+  color: var(--vp-c-text-2);
+  font-size: 0.92rem;
+  white-space: nowrap;
+}
+
+.ad-callout {
+  margin-top: 20px;
+  padding: 18px 20px;
+  border-left: 3px solid #0f172a;
+  border-radius: 16px;
+  background: rgba(248, 250, 252, 0.92);
+}
+
+@media (max-width: 768px) {
+  .ad-home-section {
+    padding: 22px;
+    border-radius: 22px;
+  }
+
+  .ad-home-grid {
+    grid-template-columns: 1fr;
+  }
+}

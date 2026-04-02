@@ -1,6 +1,6 @@
 {
   "name": "@codexiaoke/agentdown",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "description": "Reactive agent-native markdown UI runtime for Vue, powered by markdown-it and @chenglou/pretext.",
   "type": "module",
   "license": "MIT",
@@ -25,11 +25,16 @@
     "npm"
   ],
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "LICENSE"
   ],
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "publishConfig": {
+    "access": "public"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -43,7 +48,13 @@
   ],
   "scripts": {
     "dev": "vite",
-    "build": "npm run typecheck && vite build",
+    "build": "npm run typecheck && vite build && npm run build:types",
+    "build:types": "vue-tsc --declaration --emitDeclarationOnly -p tsconfig.types.json",
+    "docs:dev": "vitepress dev docs --host 0.0.0.0",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs",
+    "pack:check": "npm pack --dry-run",
+    "prepublishOnly": "npm run build",
     "typecheck": "vue-tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json",
     "preview": "vite preview"
   },
@@ -57,7 +68,7 @@
     "markdown-it": "^14.1.1",
     "markdown-it-container": "^4.0.0",
     "markdown-it-math": "^5.2.1",
-    "mermaid": "^11.14.0"
+    "mermaid": "^10.9.5"
   },
   "devDependencies": {
     "@types/markdown-it": "^14.1.2",
@@ -66,7 +77,7 @@
     "@vitejs/plugin-vue": "^6.0.5",
     "typescript": "^6.0.2",
     "vite": "^8.0.3",
-    "vite-plugin-dts": "^4.5.4",
+    "vitepress": "^1.6.4",
     "vue": "^3.5.31",
     "vue-tsc": "^3.2.6"
   }
