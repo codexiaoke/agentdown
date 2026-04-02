@@ -8,6 +8,7 @@ import {
   useAguiState,
   type AgentNodeState
 } from '../index';
+import { formatDemoLabel } from './demoLabels';
 
 const id = useAguiNodeId();
 const runtime = useAguiRuntime();
@@ -59,28 +60,28 @@ const waitingCount = computed(() => network.value.filter((node) => node.status =
   >
     <div class="demo-run-top">
       <div>
-        <span class="demo-run-label">Reactive run</span>
-        <strong>{{ state?.title ?? id ?? 'Unknown run' }}</strong>
-        <p>{{ state?.message ?? 'Waiting for runtime events.' }}</p>
+        <span class="demo-run-label">响应式运行</span>
+        <strong>{{ state?.title ?? id ?? '未知运行' }}</strong>
+        <p>{{ state?.message ?? '等待运行时事件。' }}</p>
       </div>
-      <span class="demo-run-status">{{ state?.status ?? 'idle' }}</span>
+      <span class="demo-run-status">{{ formatDemoLabel(state?.status ?? 'idle') }}</span>
     </div>
 
     <div class="demo-run-metrics">
       <div>
-        <span>Direct refs</span>
+        <span>直接引用</span>
         <strong>{{ directChildren.length }}</strong>
       </div>
       <div>
-        <span>Active</span>
+        <span>活动中</span>
         <strong>{{ activeCount }}</strong>
       </div>
       <div>
-        <span>Done</span>
+        <span>已完成</span>
         <strong>{{ doneCount }}</strong>
       </div>
       <div>
-        <span>Idle</span>
+        <span>空闲</span>
         <strong>{{ waitingCount }}</strong>
       </div>
     </div>
@@ -92,13 +93,13 @@ const waitingCount = computed(() => network.value.filter((node) => node.status =
         class="demo-run-child"
       >
         <span>{{ child.title }}</span>
-        <span>{{ child.kind }} · {{ child.status }}</span>
+        <span>{{ formatDemoLabel(child.kind) }} · {{ formatDemoLabel(child.status) }}</span>
       </div>
     </div>
 
     <div class="demo-run-footer">
-      <span>Latest signal</span>
-      <strong>{{ latestEvent }}</strong>
+      <span>最新信号</span>
+      <strong>{{ formatDemoLabel(latestEvent) }}</strong>
     </div>
   </section>
 </template>

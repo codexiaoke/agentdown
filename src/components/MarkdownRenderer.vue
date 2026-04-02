@@ -1,9 +1,15 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue';
 import MarkdownBlockList from './MarkdownBlockList.vue';
+import { defaultMarkdownBuiltinComponents } from './defaultMarkdownComponents';
 import { AGUI_RUNTIME_KEY } from '../core/aguiRuntime';
 import { parseMarkdown } from '../core/parseMarkdown';
-import type { AguiComponentMap, AguiRuntime, MarkdownEnginePlugin } from '../core/types';
+import type {
+  AguiComponentMap,
+  AguiRuntime,
+  MarkdownBuiltinComponentOverrides,
+  MarkdownEnginePlugin
+} from '../core/types';
 
 interface Props {
   source: string;
@@ -11,6 +17,7 @@ interface Props {
   font?: string;
   thoughtTitle?: string;
   aguiComponents?: AguiComponentMap;
+  builtinComponents?: MarkdownBuiltinComponentOverrides;
   aguiRuntime?: AguiRuntime | null;
   plugins?: MarkdownEnginePlugin[];
 }
@@ -20,6 +27,7 @@ const props = withDefaults(defineProps<Props>(), {
   font: '400 16px "Helvetica Neue"',
   thoughtTitle: 'Thought Process',
   aguiComponents: () => ({}),
+  builtinComponents: () => ({}),
   aguiRuntime: null,
   plugins: () => []
 });
@@ -37,6 +45,10 @@ const blocks = computed(() =>
     aguiComponents: props.aguiComponents
   })
 );
+const resolvedBuiltinComponents = computed(() => ({
+  ...defaultMarkdownBuiltinComponents,
+  ...props.builtinComponents
+}));
 
 let observer: ResizeObserver | null = null;
 
@@ -75,6 +87,7 @@ onBeforeUnmount(() => {
       :line-height="lineHeight"
       :font="font"
       :agui-components="aguiComponents"
+      :builtin-components="resolvedBuiltinComponents"
     />
   </div>
 </template>

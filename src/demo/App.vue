@@ -3,17 +3,28 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import DemoAgentNodeCard from './DemoAgentNodeCard.vue';
 import DemoRunBoard from './DemoRunBoard.vue';
 import {
+  agentAssigned,
+  agentBlocked,
+  agentFinished,
+  agentStarted,
   MarkdownRenderer,
   createAguiRuntime,
   parseMarkdown,
-  type AguiRuntimeEvent,
+  runFinished,
+  runStarted,
+  teamFinished,
+  toolFinished,
+  toolStarted,
+  userMessageCreated,
+  type CoreAguiEvent,
   type AguiRuntimeReducer,
   type AgentNodeState
 } from '../index';
+import { formatDemoLabel } from './demoLabels';
 
 interface ScheduledWorkflowEvent {
   delay: number;
-  event: AguiRuntimeEvent;
+  event: CoreAguiEvent;
 }
 
 interface BindingPreviewRow {
@@ -30,61 +41,61 @@ const demoLineHeight = 28;
 
 const fullMarkdown = `# Agentdown
 
-Agentdown 是一个为 agent workflow 设计的 markdown runtime：正文继续走 pretext 布局，组件块则通过 \`{"ref":"..."}\` 绑定到同一个 AGUI runtime。
+Agentdown 是一个为智能体工作流设计的 markdown 运行时：正文继续走 pretext 布局，组件块则通过 \`{"ref":"..."}\` 绑定到同一个 AGUI 运行时。
 
-## Why pretext is still the backbone
+## 为什么 pretext 仍然是核心骨架
 
 pretext 会先完成文本测量和换行，再交给 Vue 去渲染，所以宽度变化、流式推进和长段落更新都能更稳。AGUI 不是脱离 markdown 的浮层，而是和正文共享同一个阅读节奏。
 
-## Live run
+## 实时运行演示
 
-下面这几张卡片不是一次性塞入最终数据，而是通过 runtime 事件持续推进。你可以暂停、继续、重播，组件会像读普通 ref 一样读取最新状态。
+下面这几张卡片不是一次性塞入最终数据，而是通过运行时事件持续推进。你可以暂停、继续、重播，组件会像读取普通 ref 一样拿到最新状态。
 
 :::vue-component DemoRunBoard {"ref":"run:demo-1"}
 
-### Coordinator
+### 协调者
 :::vue-component DemoAgentNodeCard {"ref":"node:leader-1"}
 
-### Research agent
+### 研究智能体
 :::vue-component DemoAgentNodeCard {"ref":"node:agent-1"}
 
-### GTM agent
+### GTM 智能体
 :::vue-component DemoAgentNodeCard {"ref":"node:agent-2"}
 
-### Pricing tool
+### 定价工具
 :::vue-component DemoAgentNodeCard {"ref":"node:tool-1"}
 
 :::thought
-当 leader 进入 team mode 后，子 agent 和 tool 会继续挂在同一个 runtime 上。组件并不需要重新解析 markdown，只要拿到 \`ref\` 对应的 binding，就可以随着事件流自然更新。
+当协调者进入团队模式后，子智能体和工具会继续挂在同一个运行时上。组件并不需要重新解析 markdown，只要拿到 \`ref\` 对应的 binding，就可以随着事件流自然更新。
 :::
 
-## Runtime sketch
+## 运行时示例
 
 \`\`\`ts
+import { agentBlocked, createAguiRuntime } from '@codexiaoke/agentdown';
+
 const runtime = createAguiRuntime({
   reducer: ({ event }) => {
     if (event.type === 'agent.blocked') {
       return {
         patch: {
           status: 'waiting_tool',
-          message: 'Waiting for downstream tool output.'
+          message: '等待下游工具返回结果。'
         }
       };
     }
   }
 });
 
-runtime.emit({
-  type: 'agent.blocked',
-  nodeId: 'node:agent-1'
-});
+runtime.emit(agentBlocked({ nodeId: 'node:agent-1' }));
 \`\`\`
 
-## What this proves
+## 这个示例说明了什么
 
 1. markdown 文本可以继续按 token 流式出现。
-2. AGUI block 可以像 \`ref\` 一样订阅状态，而不是只吃静态 props。
-3. team mode、tool call、finish event 和自定义 reducer 都能落在同一条 runtime 里。`;
+2. AGUI 区块可以像 \`ref\` 一样订阅状态，而不是只接收静态 props。
+3. 团队模式、工具调用、结束事件和自定义 reducer 都能落在同一条运行时里。
+4. 默认代码块、思考块和 AGUI 外壳都可以替换成你自己的设计系统组件。`;
 
 function tokenizeInlineText(line: string): string[] {
   const parts = line.match(
@@ -140,9 +151,7 @@ function tokenizeMarkdown(source: string): string[] {
 }
 
 function formatLabel(value: string): string {
-  return value
-    .replace(/[._:]+/g, ' ')
-    .replace(/\b\w/g, (char) => char.toUpperCase());
+  return formatDemoLabel(value);
 }
 
 const streamTokens = tokenizeMarkdown(fullMarkdown);
@@ -155,141 +164,127 @@ const workflowStartTokenCount = tokenizeMarkdown(
 const workflowSequence: ScheduledWorkflowEvent[] = [
   {
     delay: 260,
-    event: {
-      type: 'run.started',
+    event: runStarted({
       nodeId: 'run:demo-1',
-      title: 'Enterprise pricing request',
-      message: 'A new multi-agent run is now orchestrating the request.'
-    }
+      title: '企业定价请求',
+      message: '新的多智能体运行正在编排这次任务。'
+    })
   },
   {
     delay: 440,
-    event: {
-      type: 'user.message.created',
+    event: userMessageCreated({
       nodeId: 'node:user-1',
       parentId: 'run:demo-1',
-      title: 'Requester',
-      message: 'Compare pricing signals and ship a recommendation.'
-    }
+      title: '需求方',
+      message: '请比较定价信号，并给出一份建议。'
+    })
   },
   {
     delay: 540,
-    event: {
-      type: 'agent.started',
+    event: agentStarted({
       nodeId: 'node:leader-1',
       parentId: 'run:demo-1',
       kind: 'leader',
-      title: 'Coordinator',
-      message: 'Splitting the task into research and GTM tracks.'
-    }
+      title: '协调者',
+      message: '准备把任务拆成研究和 GTM 两条支线。'
+    })
   },
   {
     delay: 360,
-    event: {
-      type: 'agent.assigned',
+    event: agentAssigned({
       nodeId: 'node:agent-1',
       parentId: 'node:leader-1',
-      title: 'Pricing analyst',
-      message: 'Research historical pricing signals.'
-    }
+      title: '定价分析师',
+      message: '先去研究历史定价信号。'
+    })
   },
   {
     delay: 220,
-    event: {
-      type: 'agent.assigned',
+    event: agentAssigned({
       nodeId: 'node:agent-2',
       parentId: 'node:leader-1',
-      title: 'GTM writer',
-      message: 'Draft the rollout summary for the customer team.'
-    }
+      title: 'GTM 撰写者',
+      message: '整理一份面向客户团队的投放总结。'
+    })
   },
   {
     delay: 520,
-    event: {
-      type: 'agent.started',
+    event: agentStarted({
       nodeId: 'node:agent-1',
       parentId: 'node:leader-1',
-      title: 'Pricing analyst',
-      message: 'Scanning prior quotes and deal variance.'
-    }
+      title: '定价分析师',
+      message: '正在扫描历史报价与成交波动。'
+    })
   },
   {
     delay: 280,
-    event: {
-      type: 'agent.blocked',
+    event: agentBlocked({
       nodeId: 'node:agent-1',
       parentId: 'node:leader-1',
-      title: 'Pricing analyst',
-      message: 'Waiting for pricing.lookup before final synthesis.'
-    }
+      title: '定价分析师',
+      message: '在最终归纳前，先等待 pricing.lookup 的结果。'
+    })
   },
   {
     delay: 320,
-    event: {
-      type: 'tool.started',
+    event: toolStarted({
       nodeId: 'node:tool-1',
       parentId: 'node:agent-1',
-      title: 'Pricing API',
+      title: '定价 API',
       toolName: 'pricing.lookup',
-      message: 'Calling pricing.lookup with 12 comparable accounts.'
-    }
+      message: '正在调用 pricing.lookup，并带上 12 个可比客户样本。'
+    })
   },
   {
     delay: 940,
-    event: {
-      type: 'tool.finished',
+    event: toolFinished({
       nodeId: 'node:tool-1',
-      title: 'Pricing API',
+      title: '定价 API',
       toolName: 'pricing.lookup',
-      message: 'Fetched 12 comparable deals with an 18% spread.'
-    }
+      message: '已取回 12 个可比成交案例，价格带波动约为 18%。'
+    })
   },
   {
     delay: 420,
-    event: {
-      type: 'agent.finished',
+    event: agentFinished({
       nodeId: 'node:agent-1',
-      title: 'Pricing analyst',
-      message: 'Pricing band narrowed and ready to merge.'
-    }
+      title: '定价分析师',
+      message: '定价区间已经收敛，可以并入总结果。'
+    })
   },
   {
     delay: 420,
-    event: {
-      type: 'agent.started',
+    event: agentStarted({
       nodeId: 'node:agent-2',
       parentId: 'node:leader-1',
-      title: 'GTM writer',
-      message: 'Writing the final launch narrative and risk notes.'
-    }
+      title: 'GTM 撰写者',
+      message: '开始撰写最终上线叙事和风险备注。'
+    })
   },
   {
     delay: 980,
-    event: {
-      type: 'agent.finished',
+    event: agentFinished({
       nodeId: 'node:agent-2',
-      title: 'GTM writer',
-      message: 'GTM summary is complete and ready for synthesis.'
-    }
+      title: 'GTM 撰写者',
+      message: 'GTM 总结已完成，可以交给协调者汇总。'
+    })
   },
   {
     delay: 460,
-    event: {
-      type: 'team.finished',
+    event: teamFinished({
       nodeId: 'node:leader-1',
       kind: 'leader',
-      title: 'Coordinator',
-      message: 'Both tracks are merged into one final recommendation.'
-    }
+      title: '协调者',
+      message: '两条支线结果已经汇总成一份最终建议。'
+    })
   },
   {
     delay: 360,
-    event: {
-      type: 'run.finished',
+    event: runFinished({
       nodeId: 'run:demo-1',
-      title: 'Enterprise pricing request',
-      message: 'Run completed successfully and is ready to hand off.'
-    }
+      title: '企业定价请求',
+      message: '运行已顺利完成，可以准备交付。'
+    })
   }
 ];
 
@@ -301,7 +296,7 @@ const customAguiReducer: AguiRuntimeReducer = ({ event, previousState }) => {
         status: 'waiting_tool',
         title: event.title ?? previousState?.title ?? event.nodeId,
         parentId: event.parentId ?? previousState?.parentId,
-        message: event.message ?? 'Waiting for downstream tool output.',
+        message: event.message ?? '等待下游工具返回结果。',
         meta: {
           tone: 'warning'
         }
@@ -336,27 +331,27 @@ const aguiComponents = {
 const bindingEntries = [
   {
     id: 'run:demo-1',
-    label: 'Run ref',
+    label: '运行引用',
     binding: aguiRuntime.binding<AgentNodeState>('run:demo-1')
   },
   {
     id: 'node:leader-1',
-    label: 'Leader ref',
+    label: '协调者引用',
     binding: aguiRuntime.binding<AgentNodeState>('node:leader-1')
   },
   {
     id: 'node:agent-1',
-    label: 'Research ref',
+    label: '研究引用',
     binding: aguiRuntime.binding<AgentNodeState>('node:agent-1')
   },
   {
     id: 'node:agent-2',
-    label: 'GTM ref',
+    label: 'GTM 引用',
     binding: aguiRuntime.binding<AgentNodeState>('node:agent-2')
   },
   {
     id: 'node:tool-1',
-    label: 'Tool ref',
+    label: '工具引用',
     binding: aguiRuntime.binding<AgentNodeState>('node:tool-1')
   }
 ] as const;
@@ -375,29 +370,29 @@ const streamProgress = computed(() => Math.round((visibleTokenCount.value / stre
 const workflowProgress = computed(() => Math.round((workflowEventIndex.value / workflowSequence.length) * 100));
 const currentRunStatus = computed(() => {
   if (!isWorkflowReady.value) {
-    return 'queued';
+    return '等待开始';
   }
 
   return bindingEntries[0].binding.stateRef.value?.status ?? 'idle';
 });
 const currentStatus = computed(() => {
   if (isPlaybackComplete.value) {
-    return 'Complete';
+    return '已完成';
   }
 
   if (!isPlaying.value) {
-    return 'Paused';
+    return '已暂停';
   }
 
   if (!isWorkflowReady.value) {
-    return 'Streaming intro';
+    return '正文流式中';
   }
 
   if (isTextComplete.value && !isWorkflowComplete.value) {
-    return 'Runtime finishing';
+    return '运行时收尾中';
   }
 
-  return 'Live streaming';
+  return '实时播放中';
 });
 const blockStats = computed(() =>
   parsedBlocks.value.reduce(
@@ -504,7 +499,7 @@ function scheduleNextToken() {
 function scheduleNextWorkflowEvent() {
   stopWorkflow();
 
-  // workflow 等 AGUI block 真正出现在流里之后再启动，视觉上会更自然。
+  // workflow 等 AGUI 区块真正出现在流里之后再启动，视觉上会更自然。
   if (!isPlaying.value || !isWorkflowReady.value || isWorkflowComplete.value) {
     finishPlaybackIfComplete();
     return;
@@ -611,32 +606,32 @@ onBeforeUnmount(() => {
   <main class="demo-shell">
     <section class="demo-hero">
       <div class="demo-hero-copy">
-        <p class="demo-label">Open Source Vue Runtime</p>
+        <p class="demo-label">开源 Vue 运行时</p>
         <h1>Agentdown</h1>
         <p class="demo-summary">
-          一个面向 agent workflow 的 markdown UI runtime。正文继续交给 pretext 做稳定布局，AGUI 则通过
-          runtime ref 持续响应 team mode、tool calls 和 finish events。
+          一个面向智能体工作流的 markdown UI 运行时。正文继续交给 pretext 做稳定布局，AGUI 则通过
+          运行时 ref 持续响应团队模式、工具调用和结束事件。
         </p>
         <p class="demo-note">
-          这个 demo 会先流式吐出 markdown，再在 AGUI block 出现后启动 workflow 事件，所以文本和状态变化是同一条叙事线。
+          这个 demo 会先流式输出 markdown，再在 AGUI 区块出现后启动工作流事件，所以文本和状态变化属于同一条叙事线。
         </p>
       </div>
 
       <div class="demo-hero-rail">
         <article class="demo-metric-card">
-          <span>Playback</span>
+          <span>播放状态</span>
           <strong>{{ currentStatus }}</strong>
         </article>
         <article class="demo-metric-card">
-          <span>Text stream</span>
+          <span>正文流式</span>
           <strong>{{ streamProgress }}%</strong>
         </article>
         <article class="demo-metric-card">
-          <span>Runtime</span>
+          <span>运行时进度</span>
           <strong>{{ workflowProgress }}%</strong>
         </article>
         <article class="demo-metric-card">
-          <span>Run state</span>
+          <span>运行状态</span>
           <strong>{{ formatLabel(currentRunStatus) }}</strong>
         </article>
       </div>
@@ -649,26 +644,26 @@ onBeforeUnmount(() => {
           class="demo-button demo-button-primary"
           @click="togglePlayback"
         >
-          {{ isPlaying ? 'Pause stream' : isPlaybackComplete ? 'Replay demo' : 'Resume stream' }}
+          {{ isPlaying ? '暂停流式' : isPlaybackComplete ? '重播演示' : '继续流式' }}
         </button>
         <button
           type="button"
           class="demo-button"
           @click="resetPlayback"
         >
-          Restart
+          重新开始
         </button>
         <button
           type="button"
           class="demo-button"
           @click="revealAll"
         >
-          Reveal all
+          直接展开
         </button>
       </div>
 
       <label class="demo-control">
-        <span>Preview width</span>
+        <span>预览宽度</span>
         <input
           v-model.number="previewWidth"
           type="range"
@@ -679,7 +674,7 @@ onBeforeUnmount(() => {
       </label>
 
       <label class="demo-control">
-        <span>Token delay</span>
+        <span>流式延迟</span>
         <input
           v-model.number="playbackDelay"
           type="range"
@@ -694,13 +689,13 @@ onBeforeUnmount(() => {
       <section class="demo-card demo-preview-card">
         <div class="demo-card-header">
           <div>
-            <p class="demo-kicker">Preview</p>
-            <h2>Markdown + AGUI output</h2>
+            <p class="demo-kicker">预览</p>
+            <h2>Markdown + AGUI 输出</h2>
           </div>
 
           <div class="demo-badge-set">
-            <span class="demo-badge">{{ blockStats.total }} blocks</span>
-            <span class="demo-badge demo-badge-soft">{{ blockStats.text }} text / {{ blockStats.agui }} agui</span>
+            <span class="demo-badge">{{ blockStats.total }} 个区块</span>
+            <span class="demo-badge demo-badge-soft">{{ blockStats.text }} 文本 / {{ blockStats.agui }} AGUI</span>
           </div>
         </div>
 
@@ -716,6 +711,7 @@ onBeforeUnmount(() => {
                 :agui-runtime="aguiRuntime"
                 :line-height="demoLineHeight"
                 :font="demoFont"
+                thought-title="思考过程"
               />
             </div>
           </div>
@@ -726,10 +722,10 @@ onBeforeUnmount(() => {
         <section class="demo-card">
           <div class="demo-card-header">
             <div>
-              <p class="demo-kicker">Bindings</p>
-              <h2>Reactive refs</h2>
+              <p class="demo-kicker">绑定</p>
+              <h2>响应式 ref</h2>
             </div>
-            <span class="demo-badge">{{ runtimeSummary.active }} active</span>
+            <span class="demo-badge">{{ runtimeSummary.active }} 个活跃中</span>
           </div>
 
           <div class="demo-binding-list">
@@ -742,7 +738,7 @@ onBeforeUnmount(() => {
               <div class="demo-binding-copy">
                 <span class="demo-binding-label">{{ row.label }}</span>
                 <strong>{{ row.title }}</strong>
-                <p>{{ formatLabel(row.kind) }} · {{ row.childCount }} children</p>
+                <p>{{ formatLabel(row.kind) }} · {{ row.childCount }} 个子节点</p>
               </div>
               <span class="demo-binding-status">{{ formatLabel(row.status) }}</span>
             </article>
@@ -752,10 +748,10 @@ onBeforeUnmount(() => {
         <section class="demo-card">
           <div class="demo-card-header">
             <div>
-              <p class="demo-kicker">Signals</p>
-              <h2>Runtime event flow</h2>
+              <p class="demo-kicker">信号</p>
+              <h2>运行时事件流</h2>
             </div>
-            <span class="demo-badge">{{ runtimeSummary.events }} events</span>
+            <span class="demo-badge">{{ runtimeSummary.events }} 条事件</span>
           </div>
 
           <div class="demo-event-list">
@@ -766,7 +762,7 @@ onBeforeUnmount(() => {
             >
               <div>
                 <code>{{ event.type }}</code>
-                <p>{{ event.message ?? event.title ?? 'State updated' }}</p>
+                <p>{{ event.message ?? event.title ?? '状态已更新' }}</p>
               </div>
               <span>{{ event.nodeId }}</span>
             </article>
@@ -775,21 +771,9 @@ onBeforeUnmount(() => {
               v-if="latestEvents.length === 0"
               class="demo-empty"
             >
-              Waiting for the first AGUI block to become visible.
+              等待首个 AGUI 区块出现在页面中。
             </p>
           </div>
-        </section>
-
-        <section class="demo-card">
-          <div class="demo-card-header">
-            <div>
-              <p class="demo-kicker">Source</p>
-              <h2>Live markdown feed</h2>
-            </div>
-            <span class="demo-badge demo-badge-soft">{{ streamedSource.length }} chars</span>
-          </div>
-
-          <pre class="demo-source"><code>{{ streamedSource }}</code></pre>
         </section>
       </aside>
     </section>
@@ -1124,29 +1108,6 @@ onBeforeUnmount(() => {
   color: #6b7280;
   font-size: 14px;
   line-height: 1.7;
-}
-
-.demo-source {
-  margin: 0;
-  max-height: 320px;
-  overflow: auto;
-  border-radius: 18px;
-  background: #111827;
-  color: #e5eef7;
-}
-
-.demo-source code {
-  display: block;
-  padding: 16px;
-  font-family:
-    "SFMono-Regular",
-    "JetBrains Mono",
-    "Fira Code",
-    monospace;
-  font-size: 12px;
-  line-height: 1.8;
-  white-space: pre-wrap;
-  word-break: break-word;
 }
 
 @media (max-width: 1080px) {

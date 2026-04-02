@@ -11,14 +11,27 @@ const expanded = ref(false);
 </script>
 
 <template>
-  <section class="vpm-thought">
+  <section
+    class="vpm-thought"
+    :data-expanded="expanded ? 'true' : 'false'"
+  >
     <button
       type="button"
       class="vpm-thought-toggle"
+      :aria-expanded="expanded"
       @click="expanded = !expanded"
     >
-      <span>{{ title }}</span>
-      <span>{{ expanded ? 'Hide' : 'Show' }}</span>
+      <span class="vpm-thought-copy">
+        <span
+          class="vpm-thought-marker"
+          aria-hidden="true"
+        />
+        <span class="vpm-thought-title">{{ title }}</span>
+      </span>
+      <span
+        class="vpm-thought-chevron"
+        aria-hidden="true"
+      />
     </button>
 
     <transition name="vpm-thought-transition">

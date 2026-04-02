@@ -199,6 +199,24 @@ export type MarkdownBlock =
   | MarkdownMathBlock
   | MarkdownAguiBlock;
 
+export interface MarkdownBuiltinComponents {
+  /** 负责渲染 pretext 文本块和标题的组件。 */
+  text: Component;
+  /** 负责渲染 fenced code block 的组件。 */
+  code: Component;
+  /** 负责渲染公式块的组件。 */
+  math: Component;
+  /** 负责渲染 thought 容器的组件。 */
+  thought: Component;
+  /** 负责渲染 HTML 回退块的组件。 */
+  html: Component;
+  /** 负责包裹 AGUI 注入节点的组件。 */
+  agui: Component;
+}
+
+/** 允许调用方按需覆盖默认 markdown 渲染组件。 */
+export type MarkdownBuiltinComponentOverrides = Partial<MarkdownBuiltinComponents>;
+
 export interface AguiComponentRegistration {
   /** 实际要渲染的 Vue 组件。 */
   component: Component;

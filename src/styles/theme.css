@@ -1,30 +1,29 @@
 @import 'highlight.js/styles/github.css';
 
 :root {
-  --vpm-text-color: #18212f;
-  --vpm-muted-color: #5b6678;
-  --vpm-background: #f7f5ef;
+  --vpm-text-color: #111827;
+  --vpm-muted-color: #6b7280;
+  --vpm-subtle-color: #9ca3af;
   --vpm-surface: #ffffff;
-  --vpm-border-color: #d7d2c7;
-  --vpm-accent: #124c5a;
-  --vpm-accent-soft: #dbeaed;
-  --vpm-code-bg: #f4f7fb;
-  --vpm-code-toolbar-bg: #eaf0f6;
-  --vpm-thought-bg: #fff7df;
-  --vpm-agui-bg: #f2f8f7;
-  --vpm-radius: 18px;
-  --vpm-shadow: 0 18px 50px rgba(11, 28, 38, 0.08);
-  --vpm-agui-shadow: 0 18px 44px rgba(11, 28, 38, 0.09);
+  --vpm-elevated-surface: #fcfcfd;
+  --vpm-border-color: #e5e7eb;
+  --vpm-border-soft: #eef2f6;
+  --vpm-code-bg: #fafbfc;
+  --vpm-thought-bg: #fcfcfd;
+  --vpm-agui-bg: #fbfcfe;
+  --vpm-radius: 16px;
+  --vpm-shadow: 0 10px 30px rgba(15, 23, 42, 0.04);
 }
 
 .vpm-root {
   color: var(--vpm-text-color);
+  text-rendering: optimizeLegibility;
 }
 
 .vpm-block-list {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 1.25rem;
 }
 
 .vpm-text-block {
@@ -32,6 +31,7 @@
   margin: 0;
   white-space: pre-wrap;
   color: var(--vpm-text-color);
+  letter-spacing: -0.01em;
 }
 
 .vpm-text-line {
@@ -44,63 +44,107 @@
 
 .vpm-text-block:is(h1, h2, h3, h4, h5, h6) {
   font-weight: 700;
-  letter-spacing: -0.02em;
 }
 
 .vpm-text-block:is(h1) {
-  font-size: 2.3rem;
+  font-size: clamp(2.35rem, 4vw, 3.4rem);
+  line-height: 1.04;
+  letter-spacing: -0.06em;
 }
 
 .vpm-text-block:is(h2) {
-  font-size: 1.8rem;
+  font-size: clamp(1.72rem, 3vw, 2.15rem);
+  line-height: 1.12;
+  letter-spacing: -0.045em;
 }
 
 .vpm-text-block:is(h3) {
-  font-size: 1.45rem;
+  font-size: 1.35rem;
+  line-height: 1.24;
+  letter-spacing: -0.03em;
+}
+
+.vpm-html-block,
+.vpm-math-block {
+  overflow-x: auto;
+}
+
+.vpm-html-block {
+  color: var(--vpm-text-color);
+  line-height: 1.8;
 }
 
 .vpm-html-block :is(p, ul, ol, blockquote, table, pre) {
   margin-top: 0;
+  margin-bottom: 1rem;
 }
 
 .vpm-html-block :is(p, ul, ol, blockquote, table, pre):last-child {
   margin-bottom: 0;
 }
 
+.vpm-html-block :is(blockquote) {
+  margin-left: 0;
+  padding-left: 1rem;
+  border-left: 2px solid var(--vpm-border-color);
+  color: var(--vpm-muted-color);
+}
+
 .vpm-code-block {
   overflow: hidden;
+  margin: 0;
   border: 1px solid var(--vpm-border-color);
-  border-radius: var(--vpm-radius);
-  box-shadow: var(--vpm-shadow);
-  background: var(--vpm-surface);
+  border-radius: calc(var(--vpm-radius) + 2px);
+  background: linear-gradient(180deg, var(--vpm-elevated-surface), var(--vpm-code-bg));
 }
 
 .vpm-code-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  padding: 0.85rem 1rem;
-  background: var(--vpm-code-toolbar-bg);
-  border-bottom: 1px solid var(--vpm-border-color);
-  color: var(--vpm-muted-color);
+  gap: 0.75rem;
+  padding: 0.75rem 0.875rem 0;
 }
 
 .vpm-code-language {
-  font-size: 0.85rem;
-  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--vpm-border-soft);
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--vpm-muted-color);
+  font-size: 0.72rem;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
 }
 
 .vpm-copy-button {
-  border: 0;
-  border-radius: 999px;
-  padding: 0.45rem 0.9rem;
-  background: var(--vpm-accent);
-  color: #fff;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 0.32rem 0.58rem;
+  background: transparent;
+  color: var(--vpm-muted-color);
   font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
   cursor: pointer;
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease;
+}
+
+.vpm-copy-button:hover {
+  background: rgba(255, 255, 255, 0.88);
+  border-color: var(--vpm-border-soft);
+  color: var(--vpm-text-color);
+}
+
+.vpm-copy-button[data-copied='true'] {
+  color: #2563eb;
 }
 
 .vpm-code-content {
@@ -110,19 +154,31 @@
 .vpm-code-content pre,
 .vpm-code-fallback {
   margin: 0;
-  padding: 1rem;
+  padding: 0.85rem 0.95rem 1rem;
   overflow-x: auto;
-  background: var(--vpm-code-bg);
+  background: transparent;
 }
 
-.vpm-math-block,
-.vpm-html-block {
-  overflow-x: auto;
+.vpm-code-content code,
+.vpm-code-fallback code {
+  font-family:
+    "SFMono-Regular",
+    "JetBrains Mono",
+    "Fira Code",
+    "Menlo",
+    monospace;
+  font-size: 13px;
+  line-height: 1.75;
+}
+
+.hljs {
+  background: transparent !important;
+  color: inherit;
 }
 
 .vpm-thought {
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--vpm-thought-bg) 55%, var(--vpm-border-color));
+  border: 1px solid var(--vpm-border-color);
   border-radius: var(--vpm-radius);
   background: var(--vpm-thought-bg);
 }
@@ -134,46 +190,84 @@
   justify-content: space-between;
   gap: 1rem;
   border: 0;
-  padding: 1rem 1.1rem;
+  padding: 0.85rem 0.95rem;
   background: transparent;
   color: var(--vpm-text-color);
   font: inherit;
-  font-weight: 600;
   cursor: pointer;
 }
 
+.vpm-thought-copy {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.vpm-thought-marker {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #d1d5db;
+}
+
+.vpm-thought-title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--vpm-text-color);
+  font-size: 0.93rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vpm-thought-chevron {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-right: 1.5px solid var(--vpm-subtle-color);
+  border-bottom: 1.5px solid var(--vpm-subtle-color);
+  transform: rotate(45deg) translateY(-1px);
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease;
+}
+
+.vpm-thought[data-expanded='true'] .vpm-thought-chevron {
+  border-color: var(--vpm-muted-color);
+  transform: rotate(225deg) translateY(-1px);
+}
+
 .vpm-thought-body {
-  padding: 0 1.1rem 1.1rem;
+  padding: 0 0.95rem 0.95rem;
+  border-top: 1px solid var(--vpm-border-soft);
 }
 
 .vpm-thought-transition-enter-active,
 .vpm-thought-transition-leave-active {
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
 }
 
 .vpm-thought-transition-enter-from,
 .vpm-thought-transition-leave-to {
   opacity: 0;
-  transform: translateY(-6px);
+  transform: translateY(-4px);
 }
 
 .vpm-agui {
   position: relative;
   overflow: hidden;
-  border: 1px dashed var(--vpm-border-color);
-  border-radius: var(--vpm-radius);
+  border: 1px solid var(--vpm-border-color);
+  border-radius: 20px;
   padding: 1rem;
-  background: var(--vpm-agui-bg);
-  box-shadow: var(--vpm-agui-shadow);
-  animation: vpm-agui-shell-in 0.42s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-.vpm-agui::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.72), transparent 52%);
-  pointer-events: none;
+  background: linear-gradient(180deg, var(--vpm-surface), var(--vpm-agui-bg));
+  box-shadow: var(--vpm-shadow);
+  animation: vpm-agui-shell-in 280ms ease;
 }
 
 .vpm-agui-content {
@@ -188,7 +282,7 @@
 .vpm-agui-transition-enter-active,
 .vpm-agui-transition-leave-active {
   transition:
-    opacity 0.28s ease;
+    opacity 220ms ease;
 }
 
 .vpm-agui-transition-enter-from,
@@ -199,12 +293,12 @@
 @keyframes vpm-agui-shell-in {
   from {
     opacity: 0;
-    box-shadow: 0 8px 18px rgba(11, 28, 38, 0.03);
+    transform: translateY(6px);
   }
 
   to {
     opacity: 1;
-    box-shadow: var(--vpm-agui-shadow);
+    transform: translateY(0);
   }
 }
 
@@ -213,13 +307,12 @@
     animation: none;
   }
 
+  .vpm-copy-button,
+  .vpm-thought-chevron,
+  .vpm-thought-transition-enter-active,
+  .vpm-thought-transition-leave-active,
   .vpm-agui-transition-enter-active,
   .vpm-agui-transition-leave-active {
-    transition: opacity 0.01s linear;
-  }
-
-  .vpm-agui-transition-enter-from,
-  .vpm-agui-transition-leave-to {
-    opacity: 0;
+    transition: none;
   }
 }

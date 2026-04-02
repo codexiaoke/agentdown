@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useAguiChildren, useAguiEvents, useAguiNodeId, useAguiState, type AgentNodeState } from '../index';
+import { formatDemoLabel } from './demoLabels';
 
 const id = useAguiNodeId();
 const state = useAguiState<AgentNodeState>();
@@ -17,21 +18,21 @@ const nodeTone = computed(() => state.value?.status ?? 'idle');
   >
     <div class="demo-node-top">
       <div>
-        <span class="demo-node-kind">{{ state?.kind ?? 'node' }}</span>
-        <strong>{{ state?.title ?? id ?? 'Unknown node' }}</strong>
+        <span class="demo-node-kind">{{ formatDemoLabel(state?.kind ?? 'agent') }}</span>
+        <strong>{{ state?.title ?? id ?? '未知节点' }}</strong>
       </div>
-      <span class="demo-node-status">{{ state?.status ?? 'idle' }}</span>
+      <span class="demo-node-status">{{ formatDemoLabel(state?.status ?? 'idle') }}</span>
     </div>
 
     <p class="demo-node-message">
-      {{ state?.message ?? 'Waiting for state updates.' }}
+      {{ state?.message ?? '等待状态更新。' }}
     </p>
 
     <div
       v-if="state?.toolName"
       class="demo-node-meta"
     >
-      Tool: {{ state.toolName }}
+      工具：{{ state.toolName }}
     </div>
 
     <div
@@ -43,13 +44,13 @@ const nodeTone = computed(() => state.value?.status ?? 'idle');
         :key="child.id"
         class="demo-node-chip"
       >
-        {{ child.title }} · {{ child.status }}
+        {{ child.title }} · {{ formatDemoLabel(child.status) }}
       </span>
     </div>
 
     <div class="demo-node-footer">
-      <span>Latest event</span>
-      <strong>{{ latestEvent }}</strong>
+      <span>最新事件</span>
+      <strong>{{ formatDemoLabel(latestEvent) }}</strong>
     </div>
   </section>
 </template>

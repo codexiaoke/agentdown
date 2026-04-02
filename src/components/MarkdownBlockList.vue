@@ -1,11 +1,5 @@
 <script setup lang="ts">
-import AguiComponentWrapper from './AguiComponentWrapper.vue';
-import CodeBlock from './CodeBlock.vue';
-import HtmlBlock from './HtmlBlock.vue';
-import MathBlock from './MathBlock.vue';
-import PretextTextBlock from './PretextTextBlock.vue';
-import ThoughtBlock from './ThoughtBlock.vue';
-import type { AguiComponentMap, MarkdownBlock } from '../core/types';
+import type { AguiComponentMap, MarkdownBlock, MarkdownBuiltinComponents } from '../core/types';
 
 interface Props {
   blocks: MarkdownBlock[];
@@ -13,6 +7,7 @@ interface Props {
   lineHeight: number;
   font: string;
   aguiComponents: AguiComponentMap;
+  builtinComponents: MarkdownBuiltinComponents;
 }
 
 defineProps<Props>();
@@ -24,8 +19,9 @@ defineProps<Props>();
       v-for="block in blocks"
       :key="block.id"
     >
-      <PretextTextBlock
+      <component
         v-if="block.kind === 'text'"
+        :is="builtinComponents.text"
         :tag="block.tag"
         :text="block.text"
         :width="width"
@@ -33,20 +29,23 @@ defineProps<Props>();
         :font="font"
       />
 
-      <CodeBlock
+      <component
         v-else-if="block.kind === 'code'"
+        :is="builtinComponents.code"
         :code="block.code"
         :language="block.language"
       />
 
-      <MathBlock
+      <component
         v-else-if="block.kind === 'math'"
+        :is="builtinComponents.math"
         :expression="block.expression"
         :display-mode="block.displayMode"
       />
 
-      <ThoughtBlock
+      <component
         v-else-if="block.kind === 'thought'"
+        :is="builtinComponents.thought"
         :title="block.title"
       >
         <MarkdownBlockList
@@ -55,19 +54,22 @@ defineProps<Props>();
           :line-height="lineHeight"
           :font="font"
           :agui-components="aguiComponents"
+          :builtin-components="builtinComponents"
         />
-      </ThoughtBlock>
+      </component>
 
-      <AguiComponentWrapper
+      <component
         v-else-if="block.kind === 'agui'"
+        :is="builtinComponents.agui"
         :name="block.name"
         :component-props="block.props"
         :components="aguiComponents"
         :min-height="block.minHeight"
       />
 
-      <HtmlBlock
+      <component
         v-else
+        :is="builtinComponents.html"
         :html="block.html"
       />
     </template>

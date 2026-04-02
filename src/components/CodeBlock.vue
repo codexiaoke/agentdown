@@ -14,6 +14,7 @@ const props = withDefaults(defineProps<Props>(), {
 const copied = ref(false);
 
 const label = computed(() => props.language || 'text');
+const copyLabel = computed(() => (copied.value ? 'done' : 'copy'));
 
 function escapeHtml(value: string): string {
   return value
@@ -36,32 +37,42 @@ const highlightedHtml = computed(() => {
 });
 
 async function copyCode() {
-  await navigator.clipboard.writeText(props.code);
-  copied.value = true;
-  // 复制反馈只做一个轻量状态，不引入额外依赖。
-  window.setTimeout(() => {
+  if (typeof navigator === 'undefined' || !navigator.clipboard) {
+    return;
+  }
+
+  try {
+    await navigator.clipboard.writeText(props.code);
+    copied.value = true;
+
+    // 复制反馈只做一个轻量状态，不引入额外依赖。
+    window.setTimeout(() => {
+      copied.value = false;
+    }, 1500);
+  } catch {
     copied.value = false;
-  }, 1500);
+  }
 }
 </script>
 
 <template>
-  <div class="vpm-code-block">
-    <div class="vpm-code-toolbar">
+  <figure class="vpm-code-block">
+    <figcaption class="vpm-code-toolbar">
       <span class="vpm-code-language">{{ label }}</span>
       <button
         type="button"
         class="vpm-copy-button"
+        :data-copied="copied ? 'true' : 'false'"
+        :aria-label="copied ? 'Code copied' : 'Copy code'"
+        :title="copied ? 'Copied' : 'Copy'"
         @click="copyCode"
       >
-        {{ copied ? 'Copied' : 'Copy' }}
+        {{ copyLabel }}
       </button>
-    </div>
+    </figcaption>
 
-    <div
-      class="vpm-code-content"
-    >
+    <div class="vpm-code-content">
       <pre class="vpm-code-fallback"><code v-html="highlightedHtml" /></pre>
     </div>
-  </div>
+  </figure>
 </template>
