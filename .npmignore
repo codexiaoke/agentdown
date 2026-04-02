@@ -1,0 +1,8 @@
+# 排除目录
+node_modules/
+src/
+test/
+# 排除文件
+.gitignore
+.env
+*.log

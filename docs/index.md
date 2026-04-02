@@ -5,9 +5,6 @@ hero:
   name: Agentdown
   text: Agent Native Markdown for Vue 3
   tagline: 用 markdown 渲染叙事层，用 AGUI runtime 驱动状态层，把一次 agent run 变成可阅读、可回放、可干预的界面。
-  image:
-    src: /agentdown-mark.svg
-    alt: Agentdown
   actions:
     - theme: brand
       text: 快速开始
