@@ -79,7 +79,7 @@ onBeforeUnmount(() => {
 <template>
   <div
     ref="containerRef"
-    class="vpm-root"
+    class="agentdown-root"
   >
     <MarkdownBlockList
       :blocks="blocks"

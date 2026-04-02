@@ -52,14 +52,14 @@ const textStyle = computed(() => ({
 <template>
   <component
     :is="tag"
-    class="vpm-text-block"
+    class="agentdown-text-block"
     :style="[blockStyle, textStyle]"
   >
     <template v-if="lines.length > 0">
       <span
         v-for="(line, index) in lines"
         :key="`${tag}-${index}-${line.text}`"
-        class="vpm-text-line"
+        class="agentdown-text-line"
         :style="{
           top: `${index * lineHeight}px`,
           height: `${lineHeight}px`

@@ -9,6 +9,7 @@ import type {
   MarkdownHeadingTag,
   MarkdownHtmlBlock,
   MarkdownMathBlock,
+  MarkdownMermaidBlock,
   MarkdownTextBlock,
   MarkdownThoughtBlock,
   ParseMarkdownOptions
@@ -113,6 +114,15 @@ function renderHtmlBlock(
   };
 }
 
+/** 把单个 token 包装成 HTML block，适合 hr 这类自闭合结构。 */
+function renderSingleHtmlToken(
+  mdPlugins: MarkdownEnginePlugin[],
+  token: Token,
+  index: number
+): MarkdownHtmlBlock {
+  return renderHtmlBlock(mdPlugins, [token], 0, 0, createBlockId('html', index));
+}
+
 /** 优先把段落和标题解析成 text block，不满足条件时回退为 HTML。 */
 function parseTextLikeBlock(
   token: Token,
@@ -160,12 +170,37 @@ function parseTokens(
     }
 
     if (token.type === 'fence') {
+      const language = token.info.split(/\s+/)[0] ?? '';
+
+      if (language === 'mermaid') {
+        const block: MarkdownMermaidBlock = {
+          id: createBlockId('mermaid', index),
+          kind: 'mermaid',
+          code: token.content,
+          meta: token.info
+        };
+        blocks.push(block);
+        continue;
+      }
+
       const block: MarkdownCodeBlock = {
         id: createBlockId('code', index),
         kind: 'code',
         code: token.content,
-        language: token.info.split(/\s+/)[0] ?? '',
+        language,
         meta: token.info
+      };
+      blocks.push(block);
+      continue;
+    }
+
+    if (token.type === 'code_block') {
+      const block: MarkdownCodeBlock = {
+        id: createBlockId('code', index),
+        kind: 'code',
+        code: token.content,
+        language: '',
+        meta: ''
       };
       blocks.push(block);
       continue;
@@ -179,6 +214,11 @@ function parseTokens(
         displayMode: true
       };
       blocks.push(block);
+      continue;
+    }
+
+    if (token.type === 'hr') {
+      blocks.push(renderSingleHtmlToken(plugins, token, index));
       continue;
     }
 

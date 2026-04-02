@@ -12,32 +12,32 @@ const expanded = ref(false);
 
 <template>
   <section
-    class="vpm-thought"
+    class="agentdown-thought"
     :data-expanded="expanded ? 'true' : 'false'"
   >
     <button
       type="button"
-      class="vpm-thought-toggle"
+      class="agentdown-thought-toggle"
       :aria-expanded="expanded"
       @click="expanded = !expanded"
     >
-      <span class="vpm-thought-copy">
+      <span class="agentdown-thought-copy">
         <span
-          class="vpm-thought-marker"
+          class="agentdown-thought-marker"
           aria-hidden="true"
         />
-        <span class="vpm-thought-title">{{ title }}</span>
+        <span class="agentdown-thought-title">{{ title }}</span>
       </span>
       <span
-        class="vpm-thought-chevron"
+        class="agentdown-thought-chevron"
         aria-hidden="true"
       />
     </button>
 
-    <transition name="vpm-thought-transition">
+    <transition name="agentdown-thought-transition">
       <div
         v-if="expanded"
-        class="vpm-thought-body"
+        class="agentdown-thought-body"
       >
         <slot />
       </div>

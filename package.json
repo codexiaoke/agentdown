@@ -56,7 +56,8 @@
     "katex": "^0.16.44",
     "markdown-it": "^14.1.1",
     "markdown-it-container": "^4.0.0",
-    "markdown-it-math": "^5.2.1"
+    "markdown-it-math": "^5.2.1",
+    "mermaid": "^11.14.0"
   },
   "devDependencies": {
     "@types/markdown-it": "^14.1.2",

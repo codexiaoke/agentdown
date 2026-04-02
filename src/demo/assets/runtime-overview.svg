@@ -1,0 +1,36 @@
+<svg width="1200" height="720" viewBox="0 0 1200 720" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="720" rx="36" fill="#FBFCFE"/>
+  <rect x="48" y="48" width="1104" height="624" rx="28" fill="white" stroke="#E5E7EB"/>
+  <rect x="88" y="92" width="224" height="132" rx="20" fill="#F8FAFC" stroke="#E5E7EB"/>
+  <text x="116" y="136" fill="#6B7280" font-family="Arial, Helvetica, sans-serif" font-size="18">运行状态</text>
+  <text x="116" y="184" fill="#111827" font-family="Arial, Helvetica, sans-serif" font-size="36" font-weight="700">已完成</text>
+  <rect x="336" y="92" width="360" height="132" rx="20" fill="#FCFCFD" stroke="#E5E7EB"/>
+  <text x="364" y="136" fill="#6B7280" font-family="Arial, Helvetica, sans-serif" font-size="18">事件流</text>
+  <path d="M364 188C406 154 448 162 490 170C532 178 574 242 616 220C658 198 674 134 724 116" stroke="#111827" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="364" cy="188" r="10" fill="#111827"/>
+  <circle cx="490" cy="170" r="10" fill="#111827"/>
+  <circle cx="616" cy="220" r="10" fill="#111827"/>
+  <circle cx="724" cy="116" r="10" fill="#111827"/>
+  <rect x="720" y="92" width="392" height="132" rx="20" fill="#F8FAFC" stroke="#E5E7EB"/>
+  <text x="748" y="136" fill="#6B7280" font-family="Arial, Helvetica, sans-serif" font-size="18">节点分布</text>
+  <rect x="748" y="162" width="78" height="18" rx="9" fill="#DCEAFE"/>
+  <rect x="838" y="152" width="110" height="28" rx="14" fill="#DBEAFE"/>
+  <rect x="960" y="144" width="72" height="36" rx="18" fill="#BFDBFE"/>
+  <rect x="1044" y="132" width="40" height="48" rx="20" fill="#93C5FD"/>
+  <rect x="88" y="264" width="1024" height="160" rx="24" fill="#FCFCFD" stroke="#E5E7EB"/>
+  <text x="116" y="310" fill="#111827" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700">多智能体运行视图</text>
+  <text x="116" y="348" fill="#6B7280" font-family="Arial, Helvetica, sans-serif" font-size="18">协调者、研究智能体、GTM 智能体与工具共享同一条运行时叙事线。</text>
+  <rect x="116" y="376" width="176" height="28" rx="14" fill="#EEF2F7"/>
+  <rect x="308" y="376" width="218" height="28" rx="14" fill="#EEF2F7"/>
+  <rect x="542" y="376" width="194" height="28" rx="14" fill="#EEF2F7"/>
+  <rect x="88" y="464" width="496" height="160" rx="24" fill="#FFFFFF" stroke="#E5E7EB"/>
+  <text x="116" y="510" fill="#111827" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700">复杂块渲染</text>
+  <text x="116" y="548" fill="#6B7280" font-family="Arial, Helvetica, sans-serif" font-size="18">表格保留结构，图片自动延迟加载，外链默认新开窗口。</text>
+  <rect x="116" y="572" width="172" height="18" rx="9" fill="#F3F4F6"/>
+  <rect x="300" y="572" width="126" height="18" rx="9" fill="#F3F4F6"/>
+  <rect x="620" y="464" width="492" height="160" rx="24" fill="#FFFFFF" stroke="#E5E7EB"/>
+  <text x="648" y="510" fill="#111827" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700">可替换内置组件</text>
+  <text x="648" y="548" fill="#6B7280" font-family="Arial, Helvetica, sans-serif" font-size="18">code、thought、html、agui 都可以接入你自己的设计系统。</text>
+  <rect x="648" y="572" width="152" height="18" rx="9" fill="#F3F4F6"/>
+  <rect x="812" y="572" width="136" height="18" rx="9" fill="#F3F4F6"/>
+</svg>

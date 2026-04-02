@@ -21,7 +21,7 @@ const html = computed(() =>
 
 <template>
   <div
-    class="vpm-math-block"
+    class="agentdown-math-block"
     v-html="html"
   />
 </template>

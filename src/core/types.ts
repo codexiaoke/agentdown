@@ -43,6 +43,17 @@ export interface MarkdownCodeBlock {
   meta: string;
 }
 
+export interface MarkdownMermaidBlock {
+  /** 当前 block 的稳定标识。 */
+  id: string;
+  /** block 类型，固定为 mermaid。 */
+  kind: 'mermaid';
+  /** Mermaid 图表源码。 */
+  code: string;
+  /** fence 后附带的完整 meta 信息。 */
+  meta: string;
+}
+
 export interface MarkdownThoughtBlock {
   /** 当前 block 的稳定标识。 */
   id: string;
@@ -195,6 +206,7 @@ export type MarkdownBlock =
   | MarkdownTextBlock
   | MarkdownHtmlBlock
   | MarkdownCodeBlock
+  | MarkdownMermaidBlock
   | MarkdownThoughtBlock
   | MarkdownMathBlock
   | MarkdownAguiBlock;
@@ -204,6 +216,8 @@ export interface MarkdownBuiltinComponents {
   text: Component;
   /** 负责渲染 fenced code block 的组件。 */
   code: Component;
+  /** 负责渲染 Mermaid 图表块的组件。 */
+  mermaid: Component;
   /** 负责渲染公式块的组件。 */
   math: Component;
   /** 负责渲染 thought 容器的组件。 */

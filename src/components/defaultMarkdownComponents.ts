@@ -2,6 +2,7 @@ import AguiComponentWrapper from './AguiComponentWrapper.vue';
 import CodeBlock from './CodeBlock.vue';
 import HtmlBlock from './HtmlBlock.vue';
 import MathBlock from './MathBlock.vue';
+import MermaidBlock from './MermaidBlock.vue';
 import PretextTextBlock from './PretextTextBlock.vue';
 import ThoughtBlock from './ThoughtBlock.vue';
 import type { MarkdownBuiltinComponents } from '../core/types';
@@ -10,6 +11,7 @@ import type { MarkdownBuiltinComponents } from '../core/types';
 export const defaultMarkdownBuiltinComponents: MarkdownBuiltinComponents = {
   text: PretextTextBlock,
   code: CodeBlock,
+  mermaid: MermaidBlock,
   math: MathBlock,
   thought: ThoughtBlock,
   html: HtmlBlock,

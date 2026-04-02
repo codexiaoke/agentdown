@@ -11,7 +11,8 @@
 - `:::thought` 折叠块
 - `:::vue-component ComponentName {...}` AGUI 组件注入
 - 响应式 AGUI runtime 与事件流
-- 内置 `text / code / thought / math / html / agui` 组件可覆写
+- 内置 `text / code / mermaid / thought / math / html / agui` 组件可覆写
+- 表格、图片、链接、引用、列表等复杂 markdown 增强渲染
 - 官方核心 agent 事件 helpers
 - 自定义 AGUI reducer
 - `highlight.js` 代码高亮
@@ -45,6 +46,11 @@ const source = `
 这是可以折叠的思考过程。
 :::
 
+\`\`\`mermaid
+flowchart LR
+  A[User] --> B[Agent]
+\`\`\`
+
 :::vue-component ApprovalCard {"id": 1, "status": "pending"}
 `;
 
@@ -57,6 +63,7 @@ const aguiComponents = {
 
 const builtinComponents = {
   code: MinimalCodeBlock,
+  mermaid: MinimalMermaidBlock,
   thought: MinimalThoughtBlock
 };
 </script>
@@ -77,12 +84,14 @@ const builtinComponents = {
 ```ts
 import {
   DefaultMarkdownCodeBlock,
+  DefaultMarkdownMermaidBlock,
   MarkdownRenderer,
   type MarkdownBuiltinComponentOverrides
 } from '@codexiaoke/agentdown';
 
 const builtinComponents: MarkdownBuiltinComponentOverrides = {
   code: MyCodeBlock,
+  mermaid: MyMermaidBlock,
   thought: MyThoughtBlock
 };
 ```
@@ -91,6 +100,7 @@ const builtinComponents: MarkdownBuiltinComponentOverrides = {
 
 - `text`
 - `code`
+- `mermaid`
 - `thought`
 - `math`
 - `html`
@@ -109,6 +119,16 @@ const builtinComponents: MarkdownBuiltinComponentOverrides = {
 ```md
 :::vue-component ApprovalCard id=1 status="pending"
 ```
+
+## Mermaid 语法
+
+````md
+```mermaid
+flowchart LR
+  User[用户请求] --> Agent[协调者]
+  Agent --> Tool[工具调用]
+```
+````
 
 ## AGUI Runtime
 
@@ -165,7 +185,8 @@ const events = useAguiEvents();
 
 - 纯文本段落和标题优先走 `pretext`
 - 含有复杂行内标记的块会先回退到 HTML 渲染
-- 复杂块元素如列表、引用、表格目前也先回退到 HTML 渲染
+- 复杂块元素如列表、引用、表格、图片、链接会先走增强型 HTML 渲染
+- ` ```mermaid ` fence 会直接渲染成 Mermaid 图表块
 - AGUI 当前首版支持块级组件注入
 
 ## 开发

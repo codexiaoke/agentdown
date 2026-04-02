@@ -14,7 +14,6 @@ const props = withDefaults(defineProps<Props>(), {
 const copied = ref(false);
 
 const label = computed(() => props.language || 'text');
-const copyLabel = computed(() => (copied.value ? 'done' : 'copy'));
 
 function escapeHtml(value: string): string {
   return value
@@ -56,23 +55,62 @@ async function copyCode() {
 </script>
 
 <template>
-  <figure class="vpm-code-block">
-    <figcaption class="vpm-code-toolbar">
-      <span class="vpm-code-language">{{ label }}</span>
+  <figure class="agentdown-code-block">
+    <figcaption class="agentdown-code-toolbar">
+      <span class="agentdown-code-language">{{ label }}</span>
       <button
         type="button"
-        class="vpm-copy-button"
+        class="agentdown-copy-button"
         :data-copied="copied ? 'true' : 'false'"
         :aria-label="copied ? 'Code copied' : 'Copy code'"
         :title="copied ? 'Copied' : 'Copy'"
         @click="copyCode"
       >
-        {{ copyLabel }}
+        <svg
+          v-if="copied"
+          class="agentdown-copy-icon"
+          viewBox="0 0 16 16"
+          fill="none"
+          aria-hidden="true"
+        >
+          <path
+            d="M3.75 8.25 6.5 11l5.75-6"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+
+        <svg
+          v-else
+          class="agentdown-copy-icon"
+          viewBox="0 0 16 16"
+          fill="none"
+          aria-hidden="true"
+        >
+          <rect
+            x="5.25"
+            y="3.25"
+            width="7.5"
+            height="9.5"
+            rx="1.75"
+            stroke="currentColor"
+            stroke-width="1.25"
+          />
+          <path
+            d="M3.75 10.25H3.25c-.552 0-1-.448-1-1v-6.5c0-.552.448-1 1-1h5.5c.552 0 1 .448 1 1v.5"
+            stroke="currentColor"
+            stroke-width="1.25"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
       </button>
     </figcaption>
 
-    <div class="vpm-code-content">
-      <pre class="vpm-code-fallback"><code v-html="highlightedHtml" /></pre>
+    <div class="agentdown-code-content">
+      <pre class="agentdown-code-fallback"><code v-html="highlightedHtml" /></pre>
     </div>
   </figure>
 </template>

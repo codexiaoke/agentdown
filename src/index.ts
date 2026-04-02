@@ -5,6 +5,7 @@ export { default as DefaultMarkdownAguiBlock } from './components/AguiComponentW
 export { default as DefaultMarkdownCodeBlock } from './components/CodeBlock.vue';
 export { default as DefaultMarkdownHtmlBlock } from './components/HtmlBlock.vue';
 export { default as DefaultMarkdownMathBlock } from './components/MathBlock.vue';
+export { default as DefaultMarkdownMermaidBlock } from './components/MermaidBlock.vue';
 export { default as DefaultMarkdownTextBlock } from './components/PretextTextBlock.vue';
 export { default as DefaultMarkdownThoughtBlock } from './components/ThoughtBlock.vue';
 export { defaultMarkdownBuiltinComponents } from './components/defaultMarkdownComponents';
@@ -61,6 +62,7 @@ export type {
   MarkdownHeadingTag,
   MarkdownHtmlBlock,
   MarkdownMathBlock,
+  MarkdownMermaidBlock,
   MarkdownTextBlock,
   MarkdownThoughtBlock,
   ParseMarkdownOptions,

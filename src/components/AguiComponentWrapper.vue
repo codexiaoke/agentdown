@@ -164,17 +164,17 @@ onBeforeUnmount(() => {
 
 <template>
   <div
-    class="vpm-agui"
+    class="agentdown-agui"
     :style="{ minHeight: `${minHeight}px` }"
   >
     <Transition
-      name="vpm-agui-transition"
+      name="agentdown-agui-transition"
       appear
       mode="out-in"
     >
       <div
         :key="registration ? name : `missing-${name}`"
-        class="vpm-agui-content"
+        class="agentdown-agui-content"
       >
         <component
           :is="registration?.component"
@@ -190,7 +190,7 @@ onBeforeUnmount(() => {
 
         <div
           v-else
-          class="vpm-agui-missing"
+          class="agentdown-agui-missing"
         >
           Missing AGUI component: <code>{{ name }}</code>
         </div>

@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import DemoAgentNodeCard from './DemoAgentNodeCard.vue';
 import DemoRunBoard from './DemoRunBoard.vue';
+import runtimeOverviewUrl from './assets/runtime-overview.svg';
 import {
   agentAssigned,
   agentBlocked,
@@ -90,12 +91,55 @@ const runtime = createAguiRuntime({
 runtime.emit(agentBlocked({ nodeId: 'node:agent-1' }));
 \`\`\`
 
+## 复杂 Markdown 渲染
+
+![Agentdown 运行态概览](${runtimeOverviewUrl} "多智能体运行态概览")
+
+| 阶段 | 负责人 | 当前状态 | 输出物 | 风险级别 | 执行窗口 | 依赖工具 | 地区策略 | 定价区间 | 同步频率 | 客户类型 | 备注 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 需求拆解 | 协调者 | 已完成 | 任务树 | 低 | T+0 | planner.split | 中国区优先 | 12k-16k | 实时 | 企业 | 先锁定高意向客户 |
+| 历史研究 | 研究智能体 | 已完成 | 历史报价摘要 | 中 | T+1h | retrieval.search | 华东 | 11k-15k | 30 分钟 | SaaS | 同时回看折扣记录 |
+| 竞品扫描 | 研究智能体 | 已完成 | 竞品矩阵 | 中 | T+2h | web.lookup | 华北 | 10k-14k | 1 小时 | 平台型 | 竞品最近在降价 |
+| 线索清洗 | GTM 智能体 | 进行中 | ICP 清单 | 低 | T+3h | crm.segment | 全国 | 13k-18k | 15 分钟 | 新签 | 过滤掉低预算线索 |
+| 销售话术 | GTM 智能体 | 进行中 | 销售脚本 | 中 | T+4h | copy.compose | 华南 | 14k-18k | 实时 | 增购 | 要强调回本周期 |
+| 定价比对 | 定价工具 | 已完成 | 可比案例表 | 高 | T+5h | pricing.lookup | 东南亚 | 9k-13k | 实时 | 渠道 | 汇率波动需要单独备注 |
+| 折扣模拟 | 定价工具 | 已完成 | 折扣模型 | 中 | T+6h | pricing.simulate | 中国港澳 | 11k-14k | 30 分钟 | 企业 | 年付折扣更有优势 |
+| 审批准备 | 协调者 | 排队中 | 审批草案 | 中 | T+7h | approval.prepare | 全国 | 12k-17k | 2 小时 | 战略客户 | 需要财务共同确认 |
+| 发布计划 | 协调者 | 排队中 | 发布时间线 | 低 | T+8h | launch.schedule | 海外 | 13k-16k | 1 天 | 存量客户 | 注意节假日窗口 |
+| 复盘沉淀 | 系统 | 等待中 | 复盘文档 | 低 | T+9h | docs.archive | 全区域 | 12k-16k | 每周 | 全量 | 自动沉淀到知识库 |
+
+| 单元格类型 | 示例内容 | 说明 |
+| --- | --- | --- |
+| 链接 | [GitHub 仓库](https://github.com/codexiaoke/agentdown) | 表格内链接可以直接点击，并默认新开窗口。 |
+| 图片 | ![运行态缩略图](${runtimeOverviewUrl}) | 表格内图片会自动压成缩略尺寸，不会撑坏布局。 |
+
+## Mermaid 图表示例
+
+\`\`\`mermaid
+flowchart LR
+  User[用户请求] --> Leader[协调者]
+  Leader --> Research[研究智能体]
+  Leader --> GTM[GTM 智能体]
+  Research --> Tool[定价工具]
+  Tool --> Leader
+  GTM --> Leader
+  Leader --> Output[交付结果]
+\`\`\`
+
+> 当 markdown 遇到表格、图片、引用和列表时，Agentdown 会优先保留语义结构，再补上阅读体验。
+
+- 复杂块优先保证稳定渲染。
+- 内置 \`html\` renderer 会补齐表格、图片和外链的细节体验。
+- 当表头很多或行数很多时，表格会自动出现滚动条。
+- mermaid fence 会直接渲染成可视化图表。
+
 ## 这个示例说明了什么
 
 1. markdown 文本可以继续按 token 流式出现。
 2. AGUI 区块可以像 \`ref\` 一样订阅状态，而不是只接收静态 props。
 3. 团队模式、工具调用、结束事件和自定义 reducer 都能落在同一条运行时里。
-4. 默认代码块、思考块和 AGUI 外壳都可以替换成你自己的设计系统组件。`;
+4. 默认代码块、思考块和 AGUI 外壳都可以替换成你自己的设计系统组件。
+5. 表格、图片、引用和列表等复杂块会走增强型 html 渲染路径。`;
 
 function tokenizeInlineText(line: string): string[] {
   const parts = line.match(
@@ -118,7 +162,10 @@ function tokenizeMarkdown(source: string): string[] {
     const isStructuralLine =
       trimmed.startsWith('#') ||
       trimmed.startsWith(':::') ||
+      trimmed.startsWith('![') ||
+      trimmed.startsWith('|') ||
       trimmed.startsWith('>') ||
+      /^(-{3,}|_{3,}|\*{3,})$/.test(trimmed) ||
       /^\d+\.\s/.test(trimmed) ||
       trimmed.startsWith('- ') ||
       trimmed.startsWith('* ');
@@ -406,6 +453,7 @@ const blockStats = computed(() =>
       text: 0,
       html: 0,
       code: 0,
+      mermaid: 0,
       thought: 0,
       math: 0,
       agui: 0
@@ -695,12 +743,13 @@ onBeforeUnmount(() => {
 
           <div class="demo-badge-set">
             <span class="demo-badge">{{ blockStats.total }} 个区块</span>
-            <span class="demo-badge demo-badge-soft">{{ blockStats.text }} 文本 / {{ blockStats.agui }} AGUI</span>
+            <span class="demo-badge demo-badge-soft">
+              {{ blockStats.text }} 文本 / {{ blockStats.agui }} AGUI / {{ blockStats.mermaid }} 图表
+            </span>
           </div>
         </div>
 
-        <div class="demo-preview-frame">
-          <div
+         <div
             class="demo-preview-stage"
             :style="{ width: `${previewWidth}px`, maxWidth: '100%' }"
           >
@@ -715,7 +764,6 @@ onBeforeUnmount(() => {
               />
             </div>
           </div>
-        </div>
       </section>
 
       <aside class="demo-side-stack">
@@ -1017,7 +1065,7 @@ onBeforeUnmount(() => {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 
-.demo-renderer-surface :deep(.vpm-root) {
+.demo-renderer-surface :deep(.agentdown-root) {
   font-family:
     "Avenir Next",
     "SF Pro Text",

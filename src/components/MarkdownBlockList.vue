@@ -14,7 +14,7 @@ defineProps<Props>();
 </script>
 
 <template>
-  <div class="vpm-block-list">
+  <div class="agentdown-block-list">
     <template
       v-for="block in blocks"
       :key="block.id"
@@ -34,6 +34,12 @@ defineProps<Props>();
         :is="builtinComponents.code"
         :code="block.code"
         :language="block.language"
+      />
+
+      <component
+        v-else-if="block.kind === 'mermaid'"
+        :is="builtinComponents.mermaid"
+        :code="block.code"
       />
 
       <component
