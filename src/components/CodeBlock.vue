@@ -25,6 +25,7 @@ function escapeHtml(value: string): string {
 const highlightedHtml = computed(() => {
   const language = props.language?.trim();
 
+  // 语言未知时降级成纯转义文本，避免因为高亮失败把原始代码吞掉。
   if (language && hljs.getLanguage(language)) {
     return hljs.highlight(props.code, {
       language
@@ -37,6 +38,7 @@ const highlightedHtml = computed(() => {
 async function copyCode() {
   await navigator.clipboard.writeText(props.code);
   copied.value = true;
+  // 复制反馈只做一个轻量状态，不引入额外依赖。
   window.setTimeout(() => {
     copied.value = false;
   }, 1500);

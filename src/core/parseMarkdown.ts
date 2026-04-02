@@ -14,10 +14,12 @@ import type {
   ParseMarkdownOptions
 } from './types';
 
+/** 为 block 生成稳定但轻量的 id。 */
 function createBlockId(prefix: string, index: number): string {
   return `${prefix}-${index}`;
 }
 
+/** 读取 AGUI 组件注册里的最小高度配置。 */
 function getAguiMinHeight(components: AguiComponentMap | undefined, name: string): number {
   const registration = components?.[name];
 
@@ -28,11 +30,17 @@ function getAguiMinHeight(components: AguiComponentMap | undefined, name: string
   return registration.minHeight ?? 88;
 }
 
+/** 判断 inline token 是否仍属于纯文本可布局范围。 */
 function isPlainInlineToken(token: Token): boolean {
   return token.type === 'text' || token.type === 'softbreak' || token.type === 'hardbreak';
 }
 
-function normalizeInlineText(children: Token[] = []): string {
+/** 把 markdown-it 的 inline children 还原成 pretext 能消费的纯文本。 */
+function normalizeInlineText(children?: Token[] | null): string {
+  if (!children) {
+    return '';
+  }
+
   return children
     .map((child) => {
       if (child.type === 'softbreak' || child.type === 'hardbreak') {
@@ -44,21 +52,39 @@ function normalizeInlineText(children: Token[] = []): string {
     .join('');
 }
 
-function isPlainInline(children: Token[] = []): boolean {
+/** 判断一组 inline children 是否仍然可以走 pretext 渲染。 */
+function isPlainInline(children?: Token[] | null): boolean {
+  if (!children) {
+    return true;
+  }
+
   return children.every(isPlainInlineToken);
 }
 
+/** 在 token 流里找到当前 open token 对应的 close 位置。 */
 function findMatchingClose(tokens: Token[], startIndex: number): number {
-  const openType = tokens[startIndex].type;
+  const openToken = tokens[startIndex];
+
+  if (!openToken) {
+    return startIndex;
+  }
+
+  const openType = openToken.type;
   const closeType = openType.replace(/_open$/, '_close');
   let depth = 0;
 
   for (let index = startIndex; index < tokens.length; index += 1) {
-    if (tokens[index].type === openType) {
+    const currentToken = tokens[index];
+
+    if (!currentToken) {
+      continue;
+    }
+
+    if (currentToken.type === openType) {
       depth += 1;
     }
 
-    if (tokens[index].type === closeType) {
+    if (currentToken.type === closeType) {
       depth -= 1;
 
       if (depth === 0) {
@@ -70,6 +96,7 @@ function findMatchingClose(tokens: Token[], startIndex: number): number {
   return startIndex;
 }
 
+/** 把一段 token 直接回退渲染成 HTML block。 */
 function renderHtmlBlock(
   mdPlugins: MarkdownEnginePlugin[],
   tokens: Token[],
@@ -86,6 +113,7 @@ function renderHtmlBlock(
   };
 }
 
+/** 优先把段落和标题解析成 text block，不满足条件时回退为 HTML。 */
 function parseTextLikeBlock(
   token: Token,
   inlineToken: Token | undefined,
@@ -95,6 +123,7 @@ function parseTextLikeBlock(
 ): MarkdownTextBlock | MarkdownHtmlBlock {
   const tag = token.tag as MarkdownHeadingTag;
 
+  // 纯文本段落优先走 pretext；一旦混入复杂 inline 标记就回退成 HTML。
   if (inlineToken?.type === 'inline' && isPlainInline(inlineToken.children)) {
     return {
       id: createBlockId(tag, index),
@@ -108,6 +137,7 @@ function parseTextLikeBlock(
   return renderHtmlBlock(mdPlugins, tokens, index, closeIndex, createBlockId('html', index));
 }
 
+/** 把 markdown-it token 流压缩成更适合 Vue 渲染的 block 列表。 */
 function parseTokens(
   tokens: Token[],
   options: ParseMarkdownOptions,
@@ -117,6 +147,10 @@ function parseTokens(
 
   for (let index = 0; index < tokens.length; index += 1) {
     const token = tokens[index];
+
+    if (!token) {
+      continue;
+    }
 
     if (token.type === 'paragraph_open' || token.type === 'heading_open') {
       const block = parseTextLikeBlock(token, tokens[index + 1], index, plugins, tokens);
@@ -163,6 +197,7 @@ function parseTokens(
 
     if (token.type === 'container_thought_open') {
       const closeIndex = findMatchingClose(tokens, index);
+      // thought 内部继续复用同一套 block 解析，保证嵌套行为一致。
       const nestedBlocks = parseTokens(tokens.slice(index + 1, closeIndex), options, plugins);
       const block: MarkdownThoughtBlock = {
         id: createBlockId('thought', index),
@@ -181,6 +216,7 @@ function parseTokens(
       token.type !== 'heading_open' &&
       token.type !== 'container_thought_open'
     ) {
+      // 列表、表格、引用等复杂块先统一兜底成 HTML，后面再逐步细化布局树。
       const closeIndex = findMatchingClose(tokens, index);
       blocks.push(renderHtmlBlock(plugins, tokens, index, closeIndex, createBlockId('html', index)));
       index = closeIndex;
@@ -199,10 +235,12 @@ function parseTokens(
   return blocks;
 }
 
+/** 对外暴露的 markdown 解析入口。 */
 export function parseMarkdown(source: string, options: ParseMarkdownOptions = {}): MarkdownBlock[] {
   const plugins = options.plugins ?? [];
   const md = createMarkdownEngine(plugins);
   const tokens = md.parse(source, {});
 
+  // 这里把 markdown-it token 流压成更适合 Vue 渲染的 block 结构。
   return parseTokens(tokens, options, plugins);
 }

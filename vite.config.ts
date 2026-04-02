@@ -15,7 +15,7 @@ export default defineConfig({
     assetsInlineLimit: 0,
     lib: {
       entry: resolve(__dirname, 'src/index.ts'),
-      name: 'VuePretextMarkdown',
+      name: 'Agentdown',
       formats: ['es', 'cjs'],
       fileName: (format) => (format === 'es' ? 'index.js' : 'index.cjs'),
       cssFileName: 'style'

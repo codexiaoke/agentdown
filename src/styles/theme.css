@@ -14,6 +14,7 @@
   --vpm-agui-bg: #f2f8f7;
   --vpm-radius: 18px;
   --vpm-shadow: 0 18px 50px rgba(11, 28, 38, 0.08);
+  --vpm-agui-shadow: 0 18px 44px rgba(11, 28, 38, 0.09);
 }
 
 .vpm-root {
@@ -157,12 +158,68 @@
 }
 
 .vpm-agui {
+  position: relative;
+  overflow: hidden;
   border: 1px dashed var(--vpm-border-color);
   border-radius: var(--vpm-radius);
   padding: 1rem;
   background: var(--vpm-agui-bg);
+  box-shadow: var(--vpm-agui-shadow);
+  animation: vpm-agui-shell-in 0.42s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.vpm-agui::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.72), transparent 52%);
+  pointer-events: none;
+}
+
+.vpm-agui-content {
+  position: relative;
+  z-index: 1;
 }
 
 .vpm-agui-missing {
   color: var(--vpm-muted-color);
+}
+
+.vpm-agui-transition-enter-active,
+.vpm-agui-transition-leave-active {
+  transition:
+    opacity 0.28s ease;
+}
+
+.vpm-agui-transition-enter-from,
+.vpm-agui-transition-leave-to {
+  opacity: 0;
+}
+
+@keyframes vpm-agui-shell-in {
+  from {
+    opacity: 0;
+    box-shadow: 0 8px 18px rgba(11, 28, 38, 0.03);
+  }
+
+  to {
+    opacity: 1;
+    box-shadow: var(--vpm-agui-shadow);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vpm-agui {
+    animation: none;
+  }
+
+  .vpm-agui-transition-enter-active,
+  .vpm-agui-transition-leave-active {
+    transition: opacity 0.01s linear;
+  }
+
+  .vpm-agui-transition-enter-from,
+  .vpm-agui-transition-leave-to {
+    opacity: 0;
+  }
 }

@@ -18,6 +18,7 @@ const prepared = computed(() => {
     return null;
   }
 
+  // prepare 是相对昂贵的一次性预处理，后续宽度变化只需要重新 layout。
   return prepareWithSegments(props.text, props.font, {
     whiteSpace: 'pre-wrap'
   });
@@ -28,6 +29,7 @@ const lines = computed(() => {
     return [];
   }
 
+  // 这里直接拿到每一行的文本结果，方便首版继续走 DOM 渲染。
   return layoutWithLines(prepared.value, props.width, props.lineHeight).lines;
 });
 

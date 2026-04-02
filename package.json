@@ -1,25 +1,27 @@
 {
-  "name": "vue-pretext-markdown",
+  "name": "@codexiaoke/agentdown",
   "version": "0.1.0",
-  "description": "A Vue 3 markdown renderer powered by markdown-it and @chenglou/pretext.",
+  "description": "Reactive agent-native markdown UI runtime for Vue, powered by markdown-it and @chenglou/pretext.",
   "type": "module",
   "license": "MIT",
   "author": "xiaoke",
-  "homepage": "https://github.com/codexiaoke/vue-pretext-markdown",
+  "homepage": "https://github.com/codexiaoke/agentdown",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/codexiaoke/vue-pretext-markdown.git"
+    "url": "git+https://github.com/codexiaoke/agentdown.git"
   },
   "bugs": {
-    "url": "https://github.com/codexiaoke/vue-pretext-markdown/issues"
+    "url": "https://github.com/codexiaoke/agentdown/issues"
   },
   "keywords": [
     "vue",
     "vue3",
     "vite",
+    "agent",
+    "agui",
     "markdown",
     "pretext",
-    "renderer",
+    "runtime",
     "npm"
   ],
   "files": [
@@ -41,8 +43,8 @@
   ],
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc --noEmit && vite build",
-    "typecheck": "vue-tsc --noEmit",
+    "build": "npm run typecheck && vite build",
+    "typecheck": "vue-tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json",
     "preview": "vite preview"
   },
   "peerDependencies": {
