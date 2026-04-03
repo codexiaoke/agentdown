@@ -30,7 +30,7 @@ import {
   MarkdownRenderer,
   DefaultMarkdownMermaidBlock,
   type MarkdownBuiltinComponentOverrides
-} from '@codexiaoke/agentdown';
+} from 'agentdown';
 
 import MyCodeBlock from './MyCodeBlock.vue';
 import MyThoughtBlock from './MyThoughtBlock.vue';

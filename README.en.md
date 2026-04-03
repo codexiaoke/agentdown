@@ -24,11 +24,11 @@ Repository: [https://github.com/codexiaoke/agentdown](https://github.com/codexia
 ## Installation
 
 ```bash
-npm install @codexiaoke/agentdown
+npm install agentdown
 ```
 
 ```ts
-import '@codexiaoke/agentdown/style.css';
+import 'agentdown/style.css';
 import 'katex/dist/katex.min.css';
 ```
 
@@ -41,8 +41,8 @@ import {
   createAguiRuntime,
   runStarted,
   toolStarted
-} from '@codexiaoke/agentdown';
-import '@codexiaoke/agentdown/style.css';
+} from 'agentdown';
+import 'agentdown/style.css';
 import 'katex/dist/katex.min.css';
 
 import RunBoard from './RunBoard.vue';
@@ -119,7 +119,7 @@ import {
   toolStarted,
   toolFinished,
   runFinished
-} from '@codexiaoke/agentdown';
+} from 'agentdown';
 
 const runtime = createAguiRuntime();
 
@@ -168,7 +168,7 @@ import {
   useAguiEvents,
   useAguiState,
   type AgentNodeState
-} from '@codexiaoke/agentdown';
+} from 'agentdown';
 
 const state = useAguiState<AgentNodeState>();
 const children = useAguiChildren<AgentNodeState>();
@@ -183,7 +183,7 @@ If you want to plug Agentdown into your own design system, you can override the 
 import {
   MarkdownRenderer,
   type MarkdownBuiltinComponentOverrides
-} from '@codexiaoke/agentdown';
+} from 'agentdown';
 
 import MyCodeBlock from './MyCodeBlock.vue';
 import MyThoughtBlock from './MyThoughtBlock.vue';

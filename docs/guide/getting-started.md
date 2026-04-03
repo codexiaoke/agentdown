@@ -10,13 +10,13 @@ description: 在 Vue 3 项目中接入 Agentdown，完成 markdown 渲染、Merm
 ## 安装
 
 ```bash
-npm install @codexiaoke/agentdown
+npm install agentdown
 ```
 
 如果你会用到数学公式，还需要在项目入口额外引入 KaTeX 样式：
 
 ```ts
-import '@codexiaoke/agentdown/style.css';
+import 'agentdown/style.css';
 import 'katex/dist/katex.min.css';
 ```
 
@@ -24,8 +24,8 @@ import 'katex/dist/katex.min.css';
 
 ```vue
 <script setup lang="ts">
-import { MarkdownRenderer } from '@codexiaoke/agentdown';
-import '@codexiaoke/agentdown/style.css';
+import { MarkdownRenderer } from 'agentdown';
+import 'agentdown/style.css';
 import 'katex/dist/katex.min.css';
 
 const source = `
@@ -66,7 +66,7 @@ import {
   runStarted,
   agentStarted,
   toolStarted
-} from '@codexiaoke/agentdown';
+} from 'agentdown';
 
 const runtime = createAguiRuntime();
 

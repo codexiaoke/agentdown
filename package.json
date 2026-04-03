@@ -1,5 +1,5 @@
 {
-  "name": "@codexiaoke/agentdown",
+  "name": "agentdown",
   "version": "0.0.1",
   "description": "Reactive agent-native markdown UI runtime for Vue, powered by markdown-it and @chenglou/pretext.",
   "type": "module",

@@ -47,7 +47,7 @@ const runtime = createAguiRuntime(options?)
 
 ```ts
 import { computed } from 'vue';
-import { useAguiChildren, useAguiEvents, useAguiState, type AgentNodeState } from '@codexiaoke/agentdown';
+import { useAguiChildren, useAguiEvents, useAguiState, type AgentNodeState } from 'agentdown';
 
 const state = useAguiState<AgentNodeState>();
 const children = useAguiChildren<AgentNodeState>();

@@ -38,10 +38,10 @@ npm publish
 
 ## 发布后冒烟检查
 
-1. `npm info @codexiaoke/agentdown version`
+1. `npm info agentdown version`
 2. 新建一个最小 Vue 3 + TS 项目安装包
 3. 验证 `MarkdownRenderer`、`createAguiRuntime`、`DefaultMarkdownCodeBlock` 可导入
-4. 验证 `@codexiaoke/agentdown/style.css` 和 `katex/dist/katex.min.css` 可导入
+4. 验证 `agentdown/style.css` 和 `katex/dist/katex.min.css` 可导入
 5. 验证 Mermaid、图片预览、表格滚动、AGUI 注入都可运行
 
 ## 现在不阻塞发布，但建议尽快补齐

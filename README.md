@@ -23,11 +23,11 @@ Agentdown 是一个面向 Vue 3 的 agent-native markdown UI runtime。
 ## 安装
 
 ```bash
-npm install @codexiaoke/agentdown
+npm install agentdown
 ```
 
 ```ts
-import '@codexiaoke/agentdown/style.css';
+import 'agentdown/style.css';
 import 'katex/dist/katex.min.css';
 ```
 
@@ -40,8 +40,8 @@ import {
   createAguiRuntime,
   runStarted,
   toolStarted
-} from '@codexiaoke/agentdown';
-import '@codexiaoke/agentdown/style.css';
+} from 'agentdown';
+import 'agentdown/style.css';
 import 'katex/dist/katex.min.css';
 
 import RunBoard from './RunBoard.vue';
@@ -118,7 +118,7 @@ import {
   toolStarted,
   toolFinished,
   runFinished
-} from '@codexiaoke/agentdown';
+} from 'agentdown';
 
 const runtime = createAguiRuntime();
 
@@ -167,7 +167,7 @@ import {
   useAguiEvents,
   useAguiState,
   type AgentNodeState
-} from '@codexiaoke/agentdown';
+} from 'agentdown';
 
 const state = useAguiState<AgentNodeState>();
 const children = useAguiChildren<AgentNodeState>();
@@ -182,7 +182,7 @@ const events = useAguiEvents();
 import {
   MarkdownRenderer,
   type MarkdownBuiltinComponentOverrides
-} from '@codexiaoke/agentdown';
+} from 'agentdown';
 
 import MyCodeBlock from './MyCodeBlock.vue';
 import MyThoughtBlock from './MyThoughtBlock.vue';

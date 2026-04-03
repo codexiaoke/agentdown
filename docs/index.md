@@ -78,8 +78,8 @@ features:
 
 ```vue
 <script setup lang="ts">
-import { MarkdownRenderer, createAguiRuntime, runStarted, toolStarted } from '@codexiaoke/agentdown';
-import '@codexiaoke/agentdown/style.css';
+import { MarkdownRenderer, createAguiRuntime, runStarted, toolStarted } from 'agentdown';
+import 'agentdown/style.css';
 import 'katex/dist/katex.min.css';
 
 const runtime = createAguiRuntime();
