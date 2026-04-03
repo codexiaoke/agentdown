@@ -10,10 +10,10 @@ description: 在 Vue 3 项目中接入 Agentdown，完成 markdown 渲染、Merm
 ## 安装
 
 ```bash
-npm install agentdown
+npm install agentdown katex
 ```
 
-如果你会用到数学公式，还需要在项目入口额外引入 KaTeX 样式：
+如果你会用到数学公式，建议一起安装 `katex`，这样在 `pnpm` 项目里也能稳定导入它的样式：
 
 ```ts
 import 'agentdown/style.css';

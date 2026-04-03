@@ -60,6 +60,43 @@ function isReducerResult(value: unknown): value is AguiRuntimeReducerResult {
   return typeof value === 'object' && value !== null && ('patch' in value || 'replaceDefault' in value);
 }
 
+/** 把事件特有字段补进默认 meta，便于内建卡片和自定义 UI 直接消费。 */
+function buildEventMeta(event: AguiRuntimeEvent): Record<string, unknown> | undefined {
+  const merged: Record<string, unknown> = {
+    ...(event.meta ?? {})
+  };
+
+  if ('artifactId' in event && typeof event.artifactId === 'string') {
+    merged.artifactId = event.artifactId;
+  }
+
+  if ('artifactKind' in event && typeof event.artifactKind === 'string') {
+    merged.artifactKind = event.artifactKind;
+  }
+
+  if ('label' in event && typeof event.label === 'string') {
+    merged.label = event.label;
+  }
+
+  if ('href' in event && typeof event.href === 'string') {
+    merged.href = event.href;
+  }
+
+  if ('approvalId' in event && typeof event.approvalId === 'string') {
+    merged.approvalId = event.approvalId;
+  }
+
+  if ('decision' in event && typeof event.decision === 'string') {
+    merged.decision = event.decision;
+  }
+
+  if ('target' in event && typeof event.target === 'string') {
+    merged.target = event.target;
+  }
+
+  return Object.keys(merged).length > 0 ? merged : undefined;
+}
+
 /** 为内置事件类型生成默认状态补丁。 */
 function getDefaultEventPatch(event: AguiRuntimeEvent, at: number): AguiNodePatch {
   switch (event.type) {
@@ -72,7 +109,7 @@ function getDefaultEventPatch(event: AguiRuntimeEvent, at: number): AguiNodePatc
         message: event.message,
         startedAt: at,
         endedAt: at,
-        meta: event.meta ?? {}
+        meta: buildEventMeta(event)
       }) as AguiNodePatch;
     case 'run.started':
       return compactPatch({
@@ -82,7 +119,7 @@ function getDefaultEventPatch(event: AguiRuntimeEvent, at: number): AguiNodePatc
         parentId: event.parentId,
         message: event.message,
         startedAt: at,
-        meta: event.meta ?? {}
+        meta: buildEventMeta(event)
       }) as AguiNodePatch;
     case 'agent.assigned':
       return compactPatch({
@@ -92,7 +129,7 @@ function getDefaultEventPatch(event: AguiRuntimeEvent, at: number): AguiNodePatc
         parentId: event.parentId,
         message: event.message,
         startedAt: at,
-        meta: event.meta ?? {}
+        meta: buildEventMeta(event)
       }) as AguiNodePatch;
     case 'agent.started':
       return compactPatch({
@@ -102,7 +139,7 @@ function getDefaultEventPatch(event: AguiRuntimeEvent, at: number): AguiNodePatc
         parentId: event.parentId,
         message: event.message,
         startedAt: at,
-        meta: event.meta ?? {}
+        meta: buildEventMeta(event)
       }) as AguiNodePatch;
     case 'agent.thinking':
       return compactPatch({
@@ -111,7 +148,7 @@ function getDefaultEventPatch(event: AguiRuntimeEvent, at: number): AguiNodePatc
         title: event.title ?? event.nodeId,
         parentId: event.parentId,
         message: event.message,
-        meta: event.meta ?? {}
+        meta: buildEventMeta(event)
       }) as AguiNodePatch;
     case 'tool.started':
       return compactPatch({
@@ -122,7 +159,7 @@ function getDefaultEventPatch(event: AguiRuntimeEvent, at: number): AguiNodePatc
         message: event.message,
         toolName: event.toolName,
         startedAt: at,
-        meta: event.meta ?? {}
+        meta: buildEventMeta(event)
       }) as AguiNodePatch;
     case 'tool.finished':
     case 'agent.finished':
@@ -136,7 +173,7 @@ function getDefaultEventPatch(event: AguiRuntimeEvent, at: number): AguiNodePatc
         message: event.message,
         toolName: event.toolName,
         endedAt: at,
-        meta: event.meta ?? {}
+        meta: buildEventMeta(event)
       }) as AguiNodePatch;
     case 'node.error':
       return compactPatch({
@@ -147,7 +184,7 @@ function getDefaultEventPatch(event: AguiRuntimeEvent, at: number): AguiNodePatc
         message: event.message,
         toolName: event.toolName,
         endedAt: at,
-        meta: event.meta ?? {}
+        meta: buildEventMeta(event)
       }) as AguiNodePatch;
     default:
       return compactPatch({
@@ -156,7 +193,7 @@ function getDefaultEventPatch(event: AguiRuntimeEvent, at: number): AguiNodePatc
         parentId: event.parentId,
         message: event.message,
         toolName: event.toolName,
-        meta: event.meta ?? {}
+        meta: buildEventMeta(event)
       }) as AguiNodePatch;
   }
 }

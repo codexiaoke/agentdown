@@ -71,5 +71,8 @@ description: MarkdownRenderer 的 props、用途和常见接法。
 - `DefaultMarkdownThoughtBlock`
 - `DefaultMarkdownHtmlBlock`
 - `DefaultMarkdownAguiBlock`
+- `DefaultMarkdownArtifactBlock`
+- `DefaultMarkdownApprovalBlock`
+- `DefaultMarkdownTimelineBlock`
 
 如果你只想在默认实现上加一层埋点、样式或布局，优先复用这些组件会比较省力。

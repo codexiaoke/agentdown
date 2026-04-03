@@ -1,5 +1,7 @@
 import './styles/theme.css';
 
+export { default as DefaultMarkdownApprovalBlock } from './components/ApprovalBlock.vue';
+export { default as DefaultMarkdownArtifactBlock } from './components/ArtifactBlock.vue';
 export { default as MarkdownRenderer } from './components/MarkdownRenderer.vue';
 export { default as DefaultMarkdownAguiBlock } from './components/AguiComponentWrapper.vue';
 export { default as DefaultMarkdownCodeBlock } from './components/CodeBlock.vue';
@@ -8,6 +10,7 @@ export { default as DefaultMarkdownMathBlock } from './components/MathBlock.vue'
 export { default as DefaultMarkdownMermaidBlock } from './components/MermaidBlock.vue';
 export { default as DefaultMarkdownTextBlock } from './components/PretextTextBlock.vue';
 export { default as DefaultMarkdownThoughtBlock } from './components/ThoughtBlock.vue';
+export { default as DefaultMarkdownTimelineBlock } from './components/TimelineBlock.vue';
 export { defaultMarkdownBuiltinComponents } from './components/defaultMarkdownComponents';
 export {
   agentAssigned,
@@ -54,6 +57,11 @@ export type {
   AguiRuntimeReducerResult,
   AgentNodeState,
   CreateAguiRuntimeOptions,
+  MarkdownAguiBlock,
+  MarkdownApprovalBlock,
+  MarkdownApprovalStatus,
+  MarkdownArtifactBlock,
+  MarkdownArtifactKind,
   MarkdownBlock,
   MarkdownBuiltinComponents,
   MarkdownBuiltinComponentOverrides,
@@ -64,6 +72,7 @@ export type {
   MarkdownMathBlock,
   MarkdownMermaidBlock,
   MarkdownTextBlock,
+  MarkdownTimelineBlock,
   MarkdownThoughtBlock,
   ParseMarkdownOptions,
   StatePatch

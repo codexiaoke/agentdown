@@ -12,7 +12,7 @@ Agentdown 是一个面向 Vue 3 的 agent-native markdown UI runtime。
 - 面向 `Vue 3 + TypeScript` 的 markdown UI runtime
 - 纯文本段落和标题优先走 `pretext`，适合更自然的长文本与流式内容展示
 - 基于 `markdown-it` 的结构化解析与 block 分发
-- 内置 `text / code / mermaid / thought / math / html / agui` 渲染组件
+- 内置 `text / code / mermaid / thought / math / html / agui / approval / artifact / timeline` 渲染组件
 - 支持 `:::vue-component` 把运行态组件直接嵌入 markdown
 - 内置响应式 `AGUI runtime`，支持事件流、节点状态、父子关系和 hooks
 - 支持复杂 markdown 内容：表格、图片、链接、引用、列表、代码块、公式、Mermaid
@@ -23,7 +23,7 @@ Agentdown 是一个面向 Vue 3 的 agent-native markdown UI runtime。
 ## 安装
 
 ```bash
-npm install agentdown
+npm install agentdown katex
 ```
 
 ```ts
@@ -105,6 +105,9 @@ runtime.emit(toolStarted({
 - Mermaid 图表
 - 数学公式
 - `:::thought`
+- `:::approval`
+- `:::artifact`
+- `:::timeline`
 
 ### 2. Runtime 负责状态层
 
@@ -204,6 +207,9 @@ const builtinComponents: MarkdownBuiltinComponentOverrides = {
 - `math`
 - `html`
 - `agui`
+- `artifact`
+- `approval`
+- `timeline`
 
 ## 文档
 

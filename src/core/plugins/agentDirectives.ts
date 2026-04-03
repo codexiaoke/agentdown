@@ -2,14 +2,13 @@ import type MarkdownIt from 'markdown-it';
 import type Token from 'markdown-it/lib/token.mjs';
 import { parseDirectiveProps } from './directiveProps';
 
-const AGUI_DIRECTIVE = /^:::\s*vue-component\s+([A-Za-z][\w-]*)(?:\s+(.*))?$/;
+const AGENT_DIRECTIVE = /^:::\s*(approval|artifact|timeline)(?:\s+(.*))?$/;
 
-/** 注册 :::vue-component 指令，把它转成专用 token。 */
-export function aguiPlugin(md: MarkdownIt): void {
+/** 注册 agent-native 单行指令。 */
+export function agentDirectivesPlugin(md: MarkdownIt): void {
   md.block.ruler.before(
     'fence',
-    'agui_component',
-    /** 识别单行 AGUI 指令，并写入组件名与 props。 */
+    'agent_directives',
     (state, startLine, _endLine, silent) => {
       const lineStart = state.bMarks[startLine];
       const shift = state.tShift[startLine];
@@ -21,7 +20,7 @@ export function aguiPlugin(md: MarkdownIt): void {
 
       const start = lineStart + shift;
       const line = state.src.slice(start, max);
-      const match = line.match(AGUI_DIRECTIVE);
+      const match = line.match(AGENT_DIRECTIVE);
 
       if (!match) {
         return false;
@@ -31,13 +30,10 @@ export function aguiPlugin(md: MarkdownIt): void {
         return true;
       }
 
-      // 自定义指令在解析阶段就转成独立 token，渲染层只关心组件名和 props。
-      const token = state.push('agui_component', 'div', 0) as Token;
+      const directive = match[1];
+      const token = state.push(`agent_${directive}_directive`, 'div', 0) as Token;
       token.block = true;
-      token.meta = {
-        name: match[1],
-        props: parseDirectiveProps(match[2])
-      };
+      token.meta = parseDirectiveProps(match[2]);
       token.map = [startLine, startLine + 1];
       state.line = startLine + 1;
       return true;

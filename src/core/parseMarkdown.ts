@@ -3,6 +3,10 @@ import { createMarkdownEngine } from './createMarkdownEngine';
 import type {
   AguiComponentMap,
   MarkdownAguiBlock,
+  MarkdownApprovalBlock,
+  MarkdownApprovalStatus,
+  MarkdownArtifactBlock,
+  MarkdownArtifactKind,
   MarkdownBlock,
   MarkdownCodeBlock,
   MarkdownEnginePlugin,
@@ -29,6 +33,54 @@ function getAguiMinHeight(components: AguiComponentMap | undefined, name: string
   }
 
   return registration.minHeight ?? 88;
+}
+
+function readMetaValue(meta: Record<string, unknown> | undefined, ...keys: string[]): unknown {
+  for (const key of keys) {
+    const value = meta?.[key];
+
+    if (value !== undefined) {
+      return value;
+    }
+  }
+
+  return undefined;
+}
+
+function readStringMeta(meta: Record<string, unknown> | undefined, ...keys: string[]): string | undefined {
+  const value = readMetaValue(meta, ...keys);
+  return typeof value === 'string' && value.trim() ? value : undefined;
+}
+
+function readNumberMeta(meta: Record<string, unknown> | undefined, ...keys: string[]): number | undefined {
+  const value = readMetaValue(meta, ...keys);
+
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+
+  return undefined;
+}
+
+function normalizeApprovalStatus(value: unknown): MarkdownApprovalStatus | undefined {
+  if (value === 'approved' || value === 'rejected' || value === 'changes_requested' || value === 'pending') {
+    return value;
+  }
+
+  return undefined;
+}
+
+function normalizeArtifactKind(value: unknown): MarkdownArtifactKind | undefined {
+  if (value === 'file' || value === 'diff' || value === 'report' || value === 'image' || value === 'json' || value === 'table') {
+    return value;
+  }
+
+  return undefined;
 }
 
 /** 判断 inline token 是否仍属于纯文本可布局范围。 */
@@ -232,6 +284,62 @@ function parseTokens(
         minHeight: getAguiMinHeight(options.aguiComponents, name)
       };
       blocks.push(block);
+      continue;
+    }
+
+    if (token.type === 'agent_artifact_directive') {
+      const meta = (token.meta as Record<string, unknown> | undefined) ?? {};
+      const refId = readStringMeta(meta, 'ref', 'nodeId');
+      const message = readStringMeta(meta, 'message', 'description');
+      const artifactId = readStringMeta(meta, 'artifactId', 'artifact-id', 'id');
+      const label = readStringMeta(meta, 'label');
+      const href = readStringMeta(meta, 'href', 'url');
+      const block: MarkdownArtifactBlock = {
+        id: createBlockId('artifact', index),
+        kind: 'artifact',
+        title: readStringMeta(meta, 'title') ?? readStringMeta(meta, 'label') ?? 'Artifact',
+        artifactKind: normalizeArtifactKind(readMetaValue(meta, 'artifactKind', 'artifact-kind', 'kind')) ?? 'report',
+        ...(refId ? { refId } : {}),
+        ...(message ? { message } : {}),
+        ...(artifactId ? { artifactId } : {}),
+        ...(label ? { label } : {}),
+        ...(href ? { href } : {})
+      };
+      blocks.push(block);
+      continue;
+    }
+
+    if (token.type === 'agent_approval_directive') {
+      const meta = (token.meta as Record<string, unknown> | undefined) ?? {};
+      const refId = readStringMeta(meta, 'ref', 'nodeId');
+      const message = readStringMeta(meta, 'message', 'description');
+      const approvalId = readStringMeta(meta, 'approvalId', 'approval-id', 'id');
+      const status = normalizeApprovalStatus(readMetaValue(meta, 'status', 'decision'));
+      const block: MarkdownApprovalBlock = {
+        id: createBlockId('approval', index),
+        kind: 'approval',
+        title: readStringMeta(meta, 'title') ?? 'Approval',
+        ...(refId ? { refId } : {}),
+        ...(message ? { message } : {}),
+        ...(approvalId ? { approvalId } : {}),
+        ...(status ? { status } : {})
+      };
+      blocks.push(block);
+      continue;
+    }
+
+    if (token.type === 'agent_timeline_directive') {
+      const meta = (token.meta as Record<string, unknown> | undefined) ?? {};
+      const refId = readStringMeta(meta, 'ref', 'nodeId');
+      const emptyText = readStringMeta(meta, 'emptyText', 'empty-text');
+      blocks.push({
+        id: createBlockId('timeline', index),
+        kind: 'timeline',
+        title: readStringMeta(meta, 'title') ?? 'Timeline',
+        limit: readNumberMeta(meta, 'limit') ?? 8,
+        ...(refId ? { refId } : {}),
+        ...(emptyText ? { emptyText } : {})
+      });
       continue;
     }
 

@@ -74,6 +74,37 @@ defineProps<Props>();
       />
 
       <component
+        v-else-if="block.kind === 'artifact'"
+        :is="builtinComponents.artifact"
+        :title="block.title"
+        :message="block.message"
+        :artifact-id="block.artifactId"
+        :artifact-kind="block.artifactKind"
+        :label="block.label"
+        :href="block.href"
+        :ref-id="block.refId"
+      />
+
+      <component
+        v-else-if="block.kind === 'approval'"
+        :is="builtinComponents.approval"
+        :title="block.title"
+        :message="block.message"
+        :approval-id="block.approvalId"
+        :status="block.status"
+        :ref-id="block.refId"
+      />
+
+      <component
+        v-else-if="block.kind === 'timeline'"
+        :is="builtinComponents.timeline"
+        :title="block.title"
+        :limit="block.limit"
+        :empty-text="block.emptyText"
+        :ref-id="block.refId"
+      />
+
+      <component
         v-else
         :is="builtinComponents.html"
         :html="block.html"

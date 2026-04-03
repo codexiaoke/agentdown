@@ -13,7 +13,7 @@ Repository: [https://github.com/codexiaoke/agentdown](https://github.com/codexia
 - Markdown UI runtime for `Vue 3 + TypeScript`
 - Pretext-first rendering for plain text headings and paragraphs
 - Structured block pipeline powered by `markdown-it`
-- Built-in renderers for `text / code / mermaid / thought / math / html / agui`
+- Built-in renderers for `text / code / mermaid / thought / math / html / agui / approval / artifact / timeline`
 - `:::vue-component` support for runtime-aware Vue components inside markdown
 - Reactive AGUI runtime with events, node state, parent-child relationships and hooks
 - Rich markdown support including tables, images, links, quotes, lists, code blocks, Mermaid and math
@@ -24,7 +24,7 @@ Repository: [https://github.com/codexiaoke/agentdown](https://github.com/codexia
 ## Installation
 
 ```bash
-npm install agentdown
+npm install agentdown katex
 ```
 
 ```ts
@@ -106,6 +106,9 @@ You can write content as regular markdown:
 - Mermaid diagrams
 - math blocks
 - `:::thought`
+- `:::approval`
+- `:::artifact`
+- `:::timeline`
 
 ### 2. Runtime as the state layer
 
@@ -205,6 +208,9 @@ Overridable keys:
 - `math`
 - `html`
 - `agui`
+- `artifact`
+- `approval`
+- `timeline`
 
 ## Documentation
 

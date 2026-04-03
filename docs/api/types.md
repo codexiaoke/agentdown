@@ -19,7 +19,10 @@ type MarkdownBlock =
   | MarkdownMermaidBlock
   | MarkdownThoughtBlock
   | MarkdownMathBlock
-  | MarkdownAguiBlock;
+  | MarkdownAguiBlock
+  | MarkdownArtifactBlock
+  | MarkdownApprovalBlock
+  | MarkdownTimelineBlock;
 ```
 
 它是 `parseMarkdown()` 的输出核心，也是 `MarkdownBlockList` 分发组件的依据。
@@ -35,6 +38,9 @@ interface MarkdownBuiltinComponents {
   thought: Component;
   html: Component;
   agui: Component;
+  artifact: Component;
+  approval: Component;
+  timeline: Component;
 }
 ```
 

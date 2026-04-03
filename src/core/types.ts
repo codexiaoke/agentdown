@@ -89,6 +89,63 @@ export interface MarkdownAguiBlock {
   minHeight: number;
 }
 
+export type MarkdownArtifactKind = 'file' | 'diff' | 'report' | 'image' | 'json' | 'table';
+
+export type MarkdownApprovalStatus = 'pending' | 'approved' | 'rejected' | 'changes_requested';
+
+export interface MarkdownArtifactBlock {
+  /** 当前 block 的稳定标识。 */
+  id: string;
+  /** block 类型，固定为 artifact。 */
+  kind: 'artifact';
+  /** 绑定的 runtime ref。 */
+  refId?: string;
+  /** 卡片标题。 */
+  title: string;
+  /** 说明文案。 */
+  message?: string;
+  /** 产物唯一标识。 */
+  artifactId?: string;
+  /** 产物种类。 */
+  artifactKind: MarkdownArtifactKind;
+  /** 产物标签。 */
+  label?: string;
+  /** 产物链接。 */
+  href?: string;
+}
+
+export interface MarkdownApprovalBlock {
+  /** 当前 block 的稳定标识。 */
+  id: string;
+  /** block 类型，固定为 approval。 */
+  kind: 'approval';
+  /** 绑定的 runtime ref。 */
+  refId?: string;
+  /** 卡片标题。 */
+  title: string;
+  /** 说明文案。 */
+  message?: string;
+  /** 审批项唯一标识。 */
+  approvalId?: string;
+  /** 当前审批状态。 */
+  status?: MarkdownApprovalStatus;
+}
+
+export interface MarkdownTimelineBlock {
+  /** 当前 block 的稳定标识。 */
+  id: string;
+  /** block 类型，固定为 timeline。 */
+  kind: 'timeline';
+  /** 绑定的 runtime ref；为空时读取全局事件流。 */
+  refId?: string;
+  /** 时间线标题。 */
+  title: string;
+  /** 最多展示多少条事件。 */
+  limit: number;
+  /** 没有事件时显示的文案。 */
+  emptyText?: string;
+}
+
 export type AguiNodeKind = 'run' | 'user' | 'leader' | 'agent' | 'tool' | 'system';
 
 export type AguiNodeStatus = 'idle' | 'thinking' | 'assigned' | 'running' | 'waiting_tool' | 'done' | 'error';
@@ -209,7 +266,10 @@ export type MarkdownBlock =
   | MarkdownMermaidBlock
   | MarkdownThoughtBlock
   | MarkdownMathBlock
-  | MarkdownAguiBlock;
+  | MarkdownAguiBlock
+  | MarkdownArtifactBlock
+  | MarkdownApprovalBlock
+  | MarkdownTimelineBlock;
 
 export interface MarkdownBuiltinComponents {
   /** 负责渲染 pretext 文本块和标题的组件。 */
@@ -226,6 +286,12 @@ export interface MarkdownBuiltinComponents {
   html: Component;
   /** 负责包裹 AGUI 注入节点的组件。 */
   agui: Component;
+  /** 负责渲染 artifact 卡片的组件。 */
+  artifact: Component;
+  /** 负责渲染 approval 卡片的组件。 */
+  approval: Component;
+  /** 负责渲染 timeline 卡片的组件。 */
+  timeline: Component;
 }
 
 /** 允许调用方按需覆盖默认 markdown 渲染组件。 */

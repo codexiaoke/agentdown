@@ -19,6 +19,9 @@ type MarkdownBuiltinComponentOverrides = Partial<{
   thought: Component;
   html: Component;
   agui: Component;
+  artifact: Component;
+  approval: Component;
+  timeline: Component;
 }>
 ```
 
@@ -57,7 +60,10 @@ const builtinComponents: MarkdownBuiltinComponentOverrides = {
 2. `thought`
 3. `html`
 4. `agui`
-5. `mermaid`
+5. `timeline`
+6. `approval`
+7. `artifact`
+8. `mermaid`
 
 原因很简单：这几个模块最容易直接暴露产品气质。
 

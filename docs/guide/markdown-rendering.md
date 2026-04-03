@@ -12,7 +12,7 @@ Agentdown 的渲染思路不是“把所有 token 都塞进一个大 HTML 字符
 1. `markdown-it` 负责原始解析。
 2. `parseMarkdown()` 把 token 流压缩成 `MarkdownBlock[]`。
 3. `MarkdownBlockList` 按 block 类型分发到对应组件。
-4. `text` 优先走 pretext，复杂内容回退到 `html / code / mermaid / math / thought / agui`。
+4. `text` 优先走 pretext，复杂内容回退到 `html / code / mermaid / math / thought / agui / artifact / approval / timeline`。
 
 ## 当前 block 类型
 
@@ -25,6 +25,9 @@ Agentdown 的渲染思路不是“把所有 token 都塞进一个大 HTML 字符
 | `math` | 块级数学公式 | `MathBlock` | 使用 KaTeX |
 | `thought` | `:::thought` | `ThoughtBlock` | 可折叠思考块 |
 | `agui` | `:::vue-component` | `AguiComponentWrapper` | 注入运行态组件 |
+| `artifact` | `:::artifact` | `ArtifactBlock` | 读取产物事件或静态 props |
+| `approval` | `:::approval` | `ApprovalBlock` | 展示审批状态与结果 |
+| `timeline` | `:::timeline` | `TimelineBlock` | 展示节点或全局事件时间线 |
 
 ## 哪些内容会优先走 pretext
 
@@ -59,6 +62,33 @@ Agentdown 的渲染思路不是“把所有 token 都塞进一个大 HTML 字符
 - 读取 `ref`
 - 绑定 runtime
 - 通过 provide/inject 向内部组件暴露 hooks 所需上下文
+
+## Agent-native 内建指令
+
+除了 `:::vue-component`，Agentdown 现在还内置了三种更接近协议层的 block：
+
+### `:::artifact`
+
+```md
+:::artifact ref="tool:pricing" title="报价产物"
+:::artifact title="报价单" artifactKind="report" href="https://example.com/report"
+```
+
+### `:::approval`
+
+```md
+:::approval ref="approval:finance" title="财务审批"
+:::approval title="人工确认" status="pending" message="等待负责人确认"
+```
+
+### `:::timeline`
+
+```md
+:::timeline ref="run:pricing" title="运行时间线" limit=8
+:::timeline title="全局事件流" limit=12
+```
+
+这三类 block 的设计目标是：先让 `approval / artifact / timeline` 从“只有事件 helper”升级成“可以直接写进 markdown 的默认协议块”。
 
 ## 复杂 HTML 内容增强
 
