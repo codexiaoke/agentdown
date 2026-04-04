@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { computed, inject } from 'vue';
-import { AGUI_RUNTIME_KEY } from '../core/aguiRuntime';
-import type { AguiRuntimeEvent, MarkdownArtifactKind } from '../core/types';
+import { computed } from 'vue';
+import type { MarkdownArtifactKind } from '../core/types';
 
 interface Props {
   title: string;
@@ -14,36 +13,12 @@ interface Props {
 }
 
 const props = defineProps<Props>();
-const runtime = inject(AGUI_RUNTIME_KEY, null);
-
-type ArtifactEvent = AguiRuntimeEvent & {
-  artifactId?: string;
-  artifactKind?: MarkdownArtifactKind;
-  label?: string;
-  href?: string;
-};
-
-const binding = computed(() => (props.refId && runtime ? runtime.binding(props.refId) : null));
-const state = computed(() => binding.value?.stateRef.value as { title?: string; message?: string; meta?: Record<string, unknown> } | null);
-const events = computed(() => binding.value?.eventsRef.value ?? []);
-
-function readStateMeta(key: string): string | undefined {
-  const value = state.value?.meta?.[key];
-  return typeof value === 'string' && value.trim() ? value : undefined;
-}
-
-const latestArtifactEvent = computed<ArtifactEvent | undefined>(() =>
-  [...events.value].reverse().find(event => event.type === 'artifact.created') as ArtifactEvent | undefined
-);
-
-const resolvedTitle = computed(() => state.value?.title ?? props.title);
-const resolvedMessage = computed(() => state.value?.message ?? latestArtifactEvent.value?.message ?? props.message);
-const resolvedArtifactId = computed(() => latestArtifactEvent.value?.artifactId ?? readStateMeta('artifactId') ?? props.artifactId);
-const resolvedArtifactKind = computed<MarkdownArtifactKind>(
-  () => latestArtifactEvent.value?.artifactKind ?? (readStateMeta('artifactKind') as MarkdownArtifactKind | undefined) ?? props.artifactKind
-);
-const resolvedLabel = computed(() => latestArtifactEvent.value?.label ?? readStateMeta('label') ?? props.label);
-const resolvedHref = computed(() => latestArtifactEvent.value?.href ?? readStateMeta('href') ?? props.href);
+const resolvedTitle = computed(() => props.title);
+const resolvedMessage = computed(() => props.message);
+const resolvedArtifactId = computed(() => props.artifactId);
+const resolvedArtifactKind = computed<MarkdownArtifactKind>(() => props.artifactKind);
+const resolvedLabel = computed(() => props.label);
+const resolvedHref = computed(() => props.href);
 </script>
 
 <template>

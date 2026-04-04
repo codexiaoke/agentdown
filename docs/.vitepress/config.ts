@@ -9,7 +9,7 @@ const docsBase = process.env.DOCS_BASE ?? (process.env.GITHUB_ACTIONS === 'true'
 
 export default defineConfig({
   title: 'Agentdown',
-  description: '面向 Vue 3 的 agent-native markdown UI runtime 文档站',
+  description: '面向流式输出的 Agent Markdown UI Runtime 文档站',
   lang: 'zh-CN',
   base: docsBase,
   cleanUrls: true,
@@ -19,7 +19,7 @@ export default defineConfig({
     ['meta', { name: 'theme-color', content: '#f8fafc' }],
     ['meta', { property: 'og:type', content: 'website' }],
     ['meta', { property: 'og:title', content: 'Agentdown' }],
-    ['meta', { property: 'og:description', content: '把 agent run 变成可阅读、可回放、可干预的前端协议。' }],
+    ['meta', { property: 'og:description', content: '把 raw packet 映射成可交互、可持续更新的 Agent UI。' }],
     ['link', { rel: 'icon', type: 'image/svg+xml', href: `${docsBase}agentdown-mark.svg` }]
   ],
   themeConfig: {
@@ -46,11 +46,11 @@ export default defineConfig({
       ],
       '/runtime/': [
         {
-          text: 'AGUI Runtime',
+          text: 'Runtime',
           items: [
             { text: '概览', link: '/runtime/overview' },
             { text: '协议与事件', link: '/runtime/protocol' },
-            { text: 'Reducer 扩展', link: '/runtime/reducer' }
+            { text: 'Streaming 组装', link: '/runtime/reducer' }
           ]
         }
       ],
@@ -59,8 +59,8 @@ export default defineConfig({
           text: 'API 参考',
           items: [
             { text: 'MarkdownRenderer', link: '/api/renderer' },
-            { text: 'Runtime 与 Hooks', link: '/api/runtime' },
-            { text: '事件 Helpers', link: '/api/events' },
+            { text: 'Runtime 与 Bridge', link: '/api/runtime' },
+            { text: '协议辅助函数', link: '/api/events' },
             { text: '核心类型', link: '/api/types' }
           ]
         }
@@ -68,7 +68,7 @@ export default defineConfig({
       '/examples/': [
         {
           text: '示例',
-          items: [{ text: 'Team Mode', link: '/examples/team-mode' }]
+          items: [{ text: 'SSE 天气示例', link: '/examples/team-mode' }]
         }
       ],
       '/reference/': [

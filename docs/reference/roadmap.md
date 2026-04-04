@@ -16,20 +16,20 @@ Agentdown 的目标不是“能渲染 markdown 的 AGUI”，而是：
 当前首发测试版已经具备：
 
 - markdown 渲染主链路
-- AGUI runtime 与核心事件 helpers
+- Protocol + Bridge + Assembler + Runtime 基础骨架
 - 可覆写的内置组件系统
 - 图片预览、Mermaid 全屏预览、拖拽与滚轮缩放
 - npm 打包、类型声明与发布清单校验
 
 ## v0.2 Protocol Layer
 
-目标：把 runtime 从 demo 能力收敛成稳定协议。
+目标：把协议层和 streaming 组装进一步做稳。
 
 重点：
 
-- 稳定核心事件 schema
-- 完善 reducer 扩展能力
-- 补齐 runtime 最佳实践
+- 更细粒度的 protocol helpers
+- 更聪明的 markdown 稳定化策略
+- 补齐 transport 最佳实践
 - 增加基础测试
 
 ## v0.3 Replay And Artifacts
@@ -38,7 +38,7 @@ Agentdown 的目标不是“能渲染 markdown 的 AGUI”，而是：
 
 重点：
 
-- timeline / replay
+- replay / transcript
 - artifact 事件与展示协议
 - shell / tool log
 - transcript 导出格式

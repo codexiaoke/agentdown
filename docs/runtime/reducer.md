@@ -1,112 +1,80 @@
 ---
-title: Reducer 扩展
-description: 用自定义 reducer 把 Agentdown 的事件流映射成适合你业务的状态语义。
+title: Streaming 组装
+description: 理解 stream.open / delta / close、assembler 和批量 flush 在 Agentdown 里的职责。
 ---
 
-# Reducer 扩展
+# Streaming 组装
 
-默认 runtime 已经帮你处理了一批常见事件语义，但真正落到业务里时，你通常还是会想扩展自己的状态。
+流式输出最难的地方，不是“怎么把 token 拼起来”，而是“什么时候该渲染、什么时候该先忍住”。
 
-## 一个最常见的例子
+Agentdown 把这件事放进 assembler 里处理。
 
-把 `agent.blocked` 映射成 `waiting_tool`：
-
-```ts
-import { createAguiRuntime, type AgentNodeState } from 'agentdown';
-
-const runtime = createAguiRuntime({
-  reducer: ({ event, previousState }) => {
-    if (event.type === 'agent.blocked') {
-      return {
-        patch: {
-          kind: previousState?.kind ?? 'agent',
-          status: 'waiting_tool',
-          message: event.message ?? '等待下游工具返回'
-        }
-      };
-    }
-  }
-});
-```
-
-## reducer 能拿到什么
-
-`reducer` 的入参包含：
-
-- `event`: 当前进入归约器的事件
-- `at`: 归一化后的事件时间
-- `previousState`: 当前节点之前的状态
-- `defaultPatch`: 内置规则已经计算好的默认补丁
-
-这意味着你可以做三种事情：
-
-1. 在默认行为上补字段
-2. 覆盖默认行为
-3. 对某些事件完全不处理，继续走默认规则
-
-## 追加默认 patch
+## 基础命令
 
 ```ts
-const runtime = createAguiRuntime({
-  reducer: ({ event }) => {
-    if (event.type === 'tool.finished') {
-      return {
-        meta: {
-          source: 'runtime',
-          category: 'tool'
-        }
-      };
-    }
-  }
-});
+cmd.stream.open({
+  streamId: 'stream:answer',
+  slot: 'main',
+  assembler: 'markdown'
+})
+
+cmd.stream.delta('stream:answer', '我来为你查询天气')
+cmd.stream.close('stream:answer')
 ```
 
-这种写法会和默认 patch 合并。
+## 当前内置 assembler
 
-## 完全替换默认 patch
+- `createMarkdownAssembler()`
+- `createPlainTextAssembler()`
 
-```ts
-const runtime = createAguiRuntime({
-  reducer: ({ event }) => {
-    if (event.type === 'agent.started') {
-      return {
-        replaceDefault: true,
-        patch: {
-          kind: 'agent',
-          status: 'running',
-          title: event.title ?? '自定义 Agent'
-        }
-      };
-    }
-  }
-});
-```
+## `createPlainTextAssembler()`
 
-当你设置 `replaceDefault: true` 时，内置规则就不会再参与这次合并。
+纯文本 assembler 的策略最直接：
 
-## reducer 适合做什么
+1. `open` 时创建一个 `draft` block
+2. `delta` 时不断追加 `content`
+3. `close` 时把它标记成 `stable`
 
-- 把业务事件映射成你的 UI 状态
-- 给节点补充 `meta`
-- 做 status 归一化
-- 把多种事件折叠成更少的展示状态
+适合：
 
-## reducer 不适合做什么
+- 简单 token 流
+- 结构稳定的普通文本
+- 不需要 markdown 解析的输出
 
-- 发网络请求
-- 写副作用很多的逻辑
-- 把它当成完整状态管理框架
+## `createMarkdownAssembler()`
 
-它更像是“事件进来之后，如何把节点状态补好”的薄层转换器。
+markdown assembler 会先维护一个尾部草稿：
 
-## 一个 team mode 的思路
+1. `open` 时插入一个 `draft` markdown block
+2. `delta` 时持续更新草稿内容
+3. `close` 时再把完整内容交给 `parseMarkdown()`
+4. 解析出的稳定 block 会替换掉草稿 block
 
-对于 team mode，你通常会这样约定：
+这样做的原因是：
 
-- `run.started` 对应整个任务
-- `agent.started` + `kind: 'leader'` 对应总控
-- `agent.assigned` 对应 leader 下发任务
-- `agent.started` 对应子 agent 真正开始
-- `team.finished` 对应一个 team 分支收尾
+- table 需要表头完整后再渲染
+- fenced code block 需要结束 fence 后再稳定
+- Mermaid、公式、复杂 HTML 也更适合在结构闭合后渲染
 
-这样 runtime 的树结构就会天然长出来，侧边栏、卡片、拓扑视图都可以共用这一份数据。
+## 为什么需要 `draft` / `stable`
+
+这是为了让 UI 在“尽快响应”和“不要提前乱码”之间有一个更自然的平衡。
+
+- `draft` block 适合尾部进行中内容
+- `stable` block 适合已经闭合、可安全展示的内容
+
+## Bridge 的批量 flush 做什么
+
+`createBridge()` 不会强制每来一个 token 就立刻触发一次 runtime 更新。  
+它可以把多条命令攒在一起，再统一 flush，减少渲染抖动。
+
+## 自定义 assembler 适合什么场景
+
+如果你的后端不是普通 markdown token，而是更结构化的片段流，例如：
+
+- JSON patch
+- 表格行流
+- 代码解释器输出
+- 富文本 AST 片段
+
+那你可以自己实现 `StreamAssembler`，把它们变成更适合前端消费的 block 更新。

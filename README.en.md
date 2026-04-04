@@ -2,24 +2,26 @@
 
 Language: [中文](./README.md) | **English**
 
-Agentdown is an agent-native markdown UI runtime for Vue 3.  
-It combines the structured parsing power of `markdown-it`, the text layout capability of `@chenglou/pretext`, AGUI component injection, and a reactive runtime so you can build interfaces for AI responses, tool calls, multi-agent workflows, and team-mode orchestration.
+Agentdown is a streaming-first Agent Markdown UI Runtime for Vue 3.  
+It combines `MarkdownRenderer` for the narrative layer with `Protocol + Bridge + Assembler + Runtime` for interactive agent state, so backend packets can become a living UI instead of plain text.
 
-Documentation: [https://codexiaoke.github.io/agentdown/](https://codexiaoke.github.io/agentdown/)  
-Repository: [https://github.com/codexiaoke/agentdown](https://github.com/codexiaoke/agentdown)
+Documentation: [https://codexiaoke.github.io/agentdown/](https://codexiaoke.github.io/agentdown/)
 
 ## Features
 
-- Markdown UI runtime for `Vue 3 + TypeScript`
-- Pretext-first rendering for plain text headings and paragraphs
-- Structured block pipeline powered by `markdown-it`
-- Built-in renderers for `text / code / mermaid / thought / math / html / agui / approval / artifact / timeline`
-- `:::vue-component` support for runtime-aware Vue components inside markdown
-- Reactive AGUI runtime with events, node state, parent-child relationships and hooks
-- Rich markdown support including tables, images, links, quotes, lists, code blocks, Mermaid and math
-- Image preview and fullscreen Mermaid preview with pan and wheel zoom
-- Neutral default styles designed to fit into your own design system
-- Full `.d.ts` declarations included in the published package
+- Agent-native markdown rendering for `Vue 3 + TypeScript`
+- `markdown-it + pretext` powered narrative rendering
+- `defineProtocol()` to map arbitrary backend events into `RuntimeCommand[]`
+- `createBridge()` to orchestrate protocol mapping, stream assembly and batched flushes
+- `createMarkdownAssembler()` and `createPlainTextAssembler()` for `stream.open / delta / close`
+- Built-in `createSseTransport()`, `createNdjsonTransport()`, `createWebSocketTransport()`, and `createAsyncIterableTransport()`
+- Built-in `createRuntimeTranscript()` and `createRuntimeReplayPlayer()` for replay and export flows
+- `createAgentRuntime()` for `node / block / intent / history`
+- `RunSurface` as the formal runtime-driven chat surface
+- High-level helpers such as `content.replace`, `tool.finish`, `artifact.upsert`, `approval.update`, and `node.error`
+- Built-in `text / code / mermaid / thought / math / html / agui / approval / artifact / timeline`
+- `:::vue-component` support for embedding Vue components directly in markdown
+- Neutral default styling that fits custom design systems
 
 ## Installation
 
@@ -34,153 +36,145 @@ import 'katex/dist/katex.min.css';
 
 ## Quick Start
 
+### 1. Start with the narrative layer
+
 ```vue
 <script setup lang="ts">
-import {
-  MarkdownRenderer,
-  createAguiRuntime,
-  runStarted,
-  toolStarted
-} from 'agentdown';
+import { MarkdownRenderer } from 'agentdown';
 import 'agentdown/style.css';
 import 'katex/dist/katex.min.css';
 
-import RunBoard from './RunBoard.vue';
-
-const runtime = createAguiRuntime();
-
 const source = `
-# Pricing Assistant
+# Agentdown
 
-This is an active run.
+This is a minimal example.
 
-:::vue-component RunBoard {"ref":"run:pricing"}
-
-\`\`\`mermaid
-flowchart LR
-  User[User] --> Agent[Pricing Agent]
-  Agent --> Tool[pricing.lookup]
-\`\`\`
+:::thought
+Collapsible thought content works here.
+:::
 `;
-
-const aguiComponents = {
-  RunBoard: {
-    component: RunBoard,
-    minHeight: 120
-  }
-};
-
-runtime.emit(runStarted({
-  nodeId: 'run:pricing',
-  title: 'Pricing Run',
-  message: 'Processing user request'
-}));
-
-runtime.emit(toolStarted({
-  nodeId: 'tool:pricing',
-  parentId: 'run:pricing',
-  toolName: 'pricing.lookup',
-  title: 'Querying pricing database'
-}));
 </script>
 
 <template>
-  <MarkdownRenderer
-    :source="source"
-    :agui-runtime="runtime"
-    :agui-components="aguiComponents"
-  />
+  <MarkdownRenderer :source="source" />
 </template>
 ```
 
-## Core Concepts
-
-### 1. Markdown as the narrative layer
-
-You can write content as regular markdown:
-
-- headings and paragraphs
-- tables and images
-- lists and quotes
-- code blocks
-- Mermaid diagrams
-- math blocks
-- `:::thought`
-- `:::approval`
-- `:::artifact`
-- `:::timeline`
-
-### 2. Runtime as the state layer
-
-Drive a run lifecycle with events:
+### 2. Then connect streaming packets to the runtime
 
 ```ts
 import {
-  createAguiRuntime,
-  runStarted,
-  agentStarted,
-  toolStarted,
-  toolFinished,
-  runFinished
+  cmd,
+  createHelperProtocolFactory,
+  createAgentRuntime,
+  createBridge,
+  createMarkdownAssembler,
+  defineEventProtocol
 } from 'agentdown';
 
-const runtime = createAguiRuntime();
+type Packet =
+  | { event: 'RunStarted'; runId: string; title: string }
+  | { event: 'ContentOpen'; streamId: string; slot: string }
+  | { event: 'ContentDelta'; streamId: string; text: string }
+  | { event: 'ContentClose'; streamId: string }
+  | { event: 'ToolCall'; id: string; name: string }
+  | { event: 'ToolCompleted'; id: string; name: string; content: Record<string, unknown> };
 
-runtime.emit(runStarted({
-  nodeId: 'run:demo',
-  title: 'Demo Run'
-}));
+const runtime = createAgentRuntime();
 
-runtime.emit(agentStarted({
-  nodeId: 'agent:planner',
-  parentId: 'run:demo',
-  title: 'Planner'
-}));
+const protocol = defineEventProtocol<Packet>({
+  RunStarted: (event) =>
+    cmd.run.start({
+      id: event.runId,
+      title: event.title
+    }),
+  ContentOpen: (event) =>
+    cmd.content.open({
+      streamId: event.streamId,
+      slot: event.slot
+    }),
+  ContentDelta: (event) => cmd.content.append(event.streamId, event.text),
+  ContentClose: (event) => cmd.content.close(event.streamId)
+});
 
-runtime.emit(toolStarted({
-  nodeId: 'tool:search',
-  parentId: 'agent:planner',
-  toolName: 'web.search'
-}));
+const bridge = createBridge({
+  runtime,
+  protocol,
+  assemblers: {
+    markdown: createMarkdownAssembler()
+  }
+});
 
-runtime.emit(toolFinished({
-  nodeId: 'tool:search',
-  parentId: 'agent:planner',
-  toolName: 'web.search'
-}));
+bridge.push([
+  { event: 'RunStarted', runId: 'run:weather', title: 'Weather Assistant' },
+  { event: 'ContentOpen', streamId: 'stream:answer', slot: 'main' },
+  { event: 'ContentDelta', streamId: 'stream:answer', text: 'Let me check the weather.' },
+  { event: 'ContentClose', streamId: 'stream:answer' }
+]);
 
-runtime.emit(runFinished({
-  nodeId: 'run:demo',
-  title: 'Demo Run'
-}));
+console.log(runtime.snapshot());
 ```
 
-### 3. Runtime-aware AGUI components
-
-Inside markdown:
-
-```md
-:::vue-component RunBoard {"ref":"run:demo"}
-```
-
-Inside the component:
+If your backend sends full content snapshots instead of token appends, you can also do:
 
 ```ts
-import {
-  useAguiChildren,
-  useAguiEvents,
-  useAguiState,
-  type AgentNodeState
-} from 'agentdown';
-
-const state = useAguiState<AgentNodeState>();
-const children = useAguiChildren<AgentNodeState>();
-const events = useAguiEvents();
+cmd.content.replace({
+  id: 'block:assistant',
+  groupId: 'turn:1',
+  content: 'I already prepared it.\\n\\n- Beijing is sunny\\n- 26°C',
+  kind: 'markdown'
+});
 ```
+
+If your app already has a stable event convention, you can also define a reusable global protocol factory:
+
+```ts
+const helperProtocolFactory = createHelperProtocolFactory<Packet, 'type'>({
+  eventKey: 'type',
+  defaults: {
+    'content.replace': {
+      kind: 'markdown'
+    },
+    'tool.start': {
+      renderer: 'tool.weather'
+    }
+  },
+  bindings: {
+    'content.replace': {
+      on: 'content.replace',
+      resolve: (event) => ({
+        id: event.blockId,
+        groupId: event.groupId,
+        content: event.markdown
+      })
+    },
+    'tool.start': {
+      on: 'tool.start',
+      resolve: (event) => ({
+        id: event.toolId,
+        title: event.label,
+        groupId: event.groupId
+      })
+    }
+  }
+});
+
+const protocol = helperProtocolFactory.createProtocol();
+```
+
+## Mental Model
+
+```text
+raw packet -> protocol -> bridge -> assembler -> runtime -> your UI
+```
+
+- `MarkdownRenderer` renders standalone narrative markdown
+- `Protocol` converts arbitrary backend packets into runtime commands
+- `Assembler` stabilizes token streams before rendering complex markdown structures
+- `Runtime` stores synchronous, replayable UI state
+- `RunSurface` turns runtime blocks into a real chat or card-based UI
 
 ## Component Overrides
-
-If you want to plug Agentdown into your own design system, you can override the built-in components:
 
 ```ts
 import {
@@ -190,52 +184,28 @@ import {
 
 import MyCodeBlock from './MyCodeBlock.vue';
 import MyThoughtBlock from './MyThoughtBlock.vue';
-import MyAguiShell from './MyAguiShell.vue';
 
 const builtinComponents: MarkdownBuiltinComponentOverrides = {
   code: MyCodeBlock,
-  thought: MyThoughtBlock,
-  agui: MyAguiShell
+  thought: MyThoughtBlock
 };
 ```
-
-Overridable keys:
-
-- `text`
-- `code`
-- `mermaid`
-- `thought`
-- `math`
-- `html`
-- `agui`
-- `artifact`
-- `approval`
-- `timeline`
 
 ## Documentation
 
 - Home: [https://codexiaoke.github.io/agentdown/](https://codexiaoke.github.io/agentdown/)
 - Getting Started: [https://codexiaoke.github.io/agentdown/guide/getting-started](https://codexiaoke.github.io/agentdown/guide/getting-started)
-- Markdown Rendering: [https://codexiaoke.github.io/agentdown/guide/markdown-rendering](https://codexiaoke.github.io/agentdown/guide/markdown-rendering)
 - Runtime Overview: [https://codexiaoke.github.io/agentdown/runtime/overview](https://codexiaoke.github.io/agentdown/runtime/overview)
-- Protocol and Events: [https://codexiaoke.github.io/agentdown/runtime/protocol](https://codexiaoke.github.io/agentdown/runtime/protocol)
-- API Reference: [https://codexiaoke.github.io/agentdown/api/renderer](https://codexiaoke.github.io/agentdown/api/renderer)
-- FAQ: [https://codexiaoke.github.io/agentdown/reference/faq](https://codexiaoke.github.io/agentdown/reference/faq)
-- Release Checklist: [https://codexiaoke.github.io/agentdown/reference/release](https://codexiaoke.github.io/agentdown/reference/release)
+- Protocol Mapping: [https://codexiaoke.github.io/agentdown/runtime/protocol](https://codexiaoke.github.io/agentdown/runtime/protocol)
+- API Reference: [https://codexiaoke.github.io/agentdown/api/runtime](https://codexiaoke.github.io/agentdown/api/runtime)
 
 ## Development
 
 ```bash
 npm install
 npm run dev
-```
-
-## Docs Development
-
-```bash
 npm run docs:dev
-npm run docs:build
-npm run docs:preview
+npm run build
 ```
 
 ## Publishing

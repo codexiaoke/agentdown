@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import type { AgentNodeState } from '../../index';
-
 const props = defineProps<{
-  tool: AgentNodeState;
+  title: string;
+  status?: string;
+  result?: Record<string, unknown>;
 }>();
 
 const weather = computed(() => {
-  const result = props.tool.meta?.result as Record<string, unknown> | undefined;
+  const result = props.result;
 
   return {
     city: typeof result?.city === 'string' ? result.city : '北京',
@@ -17,7 +17,7 @@ const weather = computed(() => {
   };
 });
 
-const isDone = computed(() => props.tool.status === 'done');
+const isDone = computed(() => props.status === 'done');
 </script>
 
 <template>
@@ -25,7 +25,7 @@ const isDone = computed(() => props.tool.status === 'done');
     <div class="weather-tool-card__header">
       <div>
         <strong>{{ weather.city }}</strong>
-        <p>{{ tool.title }}</p>
+        <p>{{ title }}</p>
       </div>
 
       <span>{{ isDone ? '已返回' : '查询中' }}</span>
@@ -58,10 +58,11 @@ const isDone = computed(() => props.tool.status === 'done');
 
 <style scoped>
 .weather-tool-card {
-  border: 1px solid #dbeafe;
-  border-radius: 20px;
-  padding: 16px;
-  background: linear-gradient(180deg, #ffffff, #eff6ff);
+  width: min(100%, 520px);
+  border: 1px solid rgba(147, 197, 253, 0.58);
+  border-radius: 18px;
+  padding: 14px 16px;
+  background: linear-gradient(180deg, #f8fbff, #eef6ff);
 }
 
 .weather-tool-card__header {
@@ -95,7 +96,7 @@ const isDone = computed(() => props.tool.status === 'done');
   align-items: flex-end;
   justify-content: space-between;
   gap: 12px;
-  margin-top: 16px;
+  margin-top: 14px;
 }
 
 .weather-tool-card__temp {
@@ -116,7 +117,7 @@ const isDone = computed(() => props.tool.status === 'done');
 .weather-tool-card__loading {
   display: flex;
   gap: 8px;
-  margin-top: 18px;
+  margin-top: 14px;
 }
 
 .weather-tool-card__dot {

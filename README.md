@@ -2,23 +2,26 @@
 
 语言导航：**中文** | [English](./README.en.md)
 
-Agentdown 是一个面向 Vue 3 的 agent-native markdown UI runtime。  
-它把 `markdown-it` 的结构化解析能力、`@chenglou/pretext` 的文本布局能力，以及 AGUI 组件注入与事件驱动 runtime 组合在一起，用来构建更适合 AI、Agent、Tool、Team Mode 的前端界面。
+Agentdown 是一个面向流式输出的 Agent Markdown UI Runtime。  
+它把 `MarkdownRenderer` 的叙事层、`Protocol + Bridge + Assembler + Runtime` 的运行态链路，以及可注入的 Vue 组件组合在一起，让 AI Agent 的输出不只是静态文本。
 
-[在线文档](https://codexiaoke.github.io/agentdown/)  
+[在线文档](https://codexiaoke.github.io/agentdown/)
 
 ## 特性
 
-- 面向 `Vue 3 + TypeScript` 的 markdown UI runtime
-- 纯文本段落和标题优先走 `pretext`，适合更自然的长文本与流式内容展示
-- 基于 `markdown-it` 的结构化解析与 block 分发
-- 内置 `text / code / mermaid / thought / math / html / agui / approval / artifact / timeline` 渲染组件
-- 支持 `:::vue-component` 把运行态组件直接嵌入 markdown
-- 内置响应式 `AGUI runtime`，支持事件流、节点状态、父子关系和 hooks
-- 支持复杂 markdown 内容：表格、图片、链接、引用、列表、代码块、公式、Mermaid
-- 图片预览、Mermaid 全屏预览、拖拽、滚轮缩放
-- 默认样式尽量中性，方便接入自己的 Design System
-- 发布包内包含完整 `.d.ts` 类型声明
+- 面向 `Vue 3 + TypeScript` 的 Agent-native markdown 渲染与运行时
+- `markdown-it + pretext` 驱动的 narrative 层，适合长文本和流式内容
+- `defineProtocol()` 把任意后端事件映射成统一 `RuntimeCommand[]`
+- `createBridge()` 负责协议映射、stream 组装、批量 flush
+- `createMarkdownAssembler()` / `createPlainTextAssembler()` 处理 `stream.open / delta / close`
+- 内置 `createSseTransport()` / `createNdjsonTransport()` / `createWebSocketTransport()` / `createAsyncIterableTransport()`
+- 内置 `createRuntimeTranscript()` / `createRuntimeReplayPlayer()`，方便回放和导出
+- `createAgentRuntime()` 维护 `node / block / intent / history`
+- `RunSurface` 负责把 runtime block 渲染成正式聊天界面
+- 内置 `content.replace / tool.finish / artifact.upsert / approval.update / node.error` 这类高阶 helper
+- 支持 `text / code / mermaid / thought / math / html / agui / approval / artifact / timeline`
+- 支持 `:::vue-component` 在 markdown 中直接注入 Vue 组件
+- 默认样式中性，方便接入自己的 Design System
 
 ## 安装
 
@@ -33,153 +36,170 @@ import 'katex/dist/katex.min.css';
 
 ## 快速开始
 
+### 1. 先跑通 Markdown 叙事层
+
 ```vue
 <script setup lang="ts">
-import {
-  MarkdownRenderer,
-  createAguiRuntime,
-  runStarted,
-  toolStarted
-} from 'agentdown';
+import { MarkdownRenderer } from 'agentdown';
 import 'agentdown/style.css';
 import 'katex/dist/katex.min.css';
 
-import RunBoard from './RunBoard.vue';
-
-const runtime = createAguiRuntime();
-
 const source = `
-# 智能报价助手
+# Agentdown
 
-这是一次运行中的任务。
+这是一个最小示例。
 
-:::vue-component RunBoard {"ref":"run:pricing"}
+:::thought
+这里可以承载可折叠的思考过程。
+:::
 
-\`\`\`mermaid
-flowchart LR
-  User[用户] --> Agent[报价 Agent]
-  Agent --> Tool[pricing.lookup]
+\`\`\`ts
+console.log('hello agentdown');
 \`\`\`
 `;
-
-const aguiComponents = {
-  RunBoard: {
-    component: RunBoard,
-    minHeight: 120
-  }
-};
-
-runtime.emit(runStarted({
-  nodeId: 'run:pricing',
-  title: '报价运行',
-  message: '开始处理用户请求'
-}));
-
-runtime.emit(toolStarted({
-  nodeId: 'tool:pricing',
-  parentId: 'run:pricing',
-  toolName: 'pricing.lookup',
-  title: '查询价格库'
-}));
 </script>
 
 <template>
-  <MarkdownRenderer
-    :source="source"
-    :agui-runtime="runtime"
-    :agui-components="aguiComponents"
-  />
+  <MarkdownRenderer :source="source" />
 </template>
 ```
 
-## 核心能力
-
-### 1. Markdown 负责叙事层
-
-你可以像平时一样写 markdown 内容：
-
-- 标题和段落
-- 表格和图片
-- 列表和引用
-- 代码块
-- Mermaid 图表
-- 数学公式
-- `:::thought`
-- `:::approval`
-- `:::artifact`
-- `:::timeline`
-
-### 2. Runtime 负责状态层
-
-你可以通过事件驱动一次 run 的生命周期：
+### 2. 再把流式事件接进 Runtime
 
 ```ts
 import {
-  createAguiRuntime,
-  runStarted,
-  agentStarted,
-  toolStarted,
-  toolFinished,
-  runFinished
+  cmd,
+  createHelperProtocolFactory,
+  createAgentRuntime,
+  createBridge,
+  createMarkdownAssembler,
+  defineEventProtocol
 } from 'agentdown';
 
-const runtime = createAguiRuntime();
+type Packet =
+  | { event: 'RunStarted'; runId: string; title: string }
+  | { event: 'ContentOpen'; streamId: string; slot: string }
+  | { event: 'ContentDelta'; streamId: string; text: string }
+  | { event: 'ContentClose'; streamId: string }
+  | { event: 'ToolCall'; id: string; name: string }
+  | { event: 'ToolCompleted'; id: string; name: string; content: Record<string, unknown> };
 
-runtime.emit(runStarted({
-  nodeId: 'run:demo',
-  title: 'Demo Run'
-}));
+const runtime = createAgentRuntime();
 
-runtime.emit(agentStarted({
-  nodeId: 'agent:planner',
-  parentId: 'run:demo',
-  title: 'Planner'
-}));
+const protocol = defineEventProtocol<Packet>({
+  RunStarted: (event) =>
+    cmd.run.start({
+      id: event.runId,
+      title: event.title
+    }),
+  ContentOpen: (event) =>
+    cmd.content.open({
+      streamId: event.streamId,
+      slot: event.slot
+    }),
+  ContentDelta: (event) => cmd.content.append(event.streamId, event.text),
+  ContentClose: (event) => cmd.content.close(event.streamId),
+  ToolCall: (event, context) =>
+    cmd.tool.start({
+      id: event.id,
+      title: event.name,
+      renderer: 'tool.weather',
+      at: context.now()
+    }),
+  ToolCompleted: (event, context) =>
+    cmd.tool.finish({
+      id: event.id,
+      title: event.name,
+      result: event.content,
+      at: context.now()
+    })
+});
 
-runtime.emit(toolStarted({
-  nodeId: 'tool:search',
-  parentId: 'agent:planner',
-  toolName: 'web.search'
-}));
+const bridge = createBridge({
+  runtime,
+  protocol,
+  assemblers: {
+    markdown: createMarkdownAssembler()
+  }
+});
 
-runtime.emit(toolFinished({
-  nodeId: 'tool:search',
-  parentId: 'agent:planner',
-  toolName: 'web.search'
-}));
+bridge.push([
+  { event: 'RunStarted', runId: 'run:weather', title: '天气助手' },
+  { event: 'ContentOpen', streamId: 'stream:answer', slot: 'main' },
+  { event: 'ContentDelta', streamId: 'stream:answer', text: '我来为你查询天气' },
+  { event: 'ToolCall', id: 'tool:weather', name: '查询天气' },
+  {
+    event: 'ToolCompleted',
+    id: 'tool:weather',
+    name: '查询天气',
+    content: { city: '北京', condition: '晴', tempC: 26 }
+  },
+  { event: 'ContentClose', streamId: 'stream:answer' }
+]);
 
-runtime.emit(runFinished({
-  nodeId: 'run:demo',
-  title: 'Demo Run'
-}));
+console.log(runtime.snapshot());
 ```
 
-### 3. AGUI 组件直接绑定运行态
-
-在 markdown 中：
-
-```md
-:::vue-component RunBoard {"ref":"run:demo"}
-```
-
-在组件内部：
+如果后端不是 token append，而是直接返回“当前完整内容快照”，也可以直接用：
 
 ```ts
-import {
-  useAguiChildren,
-  useAguiEvents,
-  useAguiState,
-  type AgentNodeState
-} from 'agentdown';
-
-const state = useAguiState<AgentNodeState>();
-const children = useAguiChildren<AgentNodeState>();
-const events = useAguiEvents();
+cmd.content.replace({
+  id: 'block:assistant',
+  groupId: 'turn:1',
+  content: '我已经整理好了。\\n\\n- 北京晴\\n- 26°C',
+  kind: 'markdown'
+});
 ```
 
-## 组件覆写
+如果你已经有一套固定的事件规范，可以再往前一步，直接定义一个全局协议工厂：
 
-如果你想把 Agentdown 接入自己的设计系统，可以直接覆写内置组件：
+```ts
+const helperProtocolFactory = createHelperProtocolFactory<Packet, 'type'>({
+  eventKey: 'type',
+  defaults: {
+    'content.replace': {
+      kind: 'markdown'
+    },
+    'tool.start': {
+      renderer: 'tool.weather'
+    }
+  },
+  bindings: {
+    'content.replace': {
+      on: 'content.replace',
+      resolve: (event) => ({
+        id: event.blockId,
+        groupId: event.groupId,
+        content: event.markdown
+      })
+    },
+    'tool.start': {
+      on: 'tool.start',
+      resolve: (event) => ({
+        id: event.toolId,
+        title: event.label,
+        groupId: event.groupId
+      })
+    }
+  }
+});
+
+const protocol = helperProtocolFactory.createProtocol();
+```
+
+## 核心心智模型
+
+```text
+raw packet -> protocol -> bridge -> assembler -> runtime -> your UI
+```
+
+- `MarkdownRenderer` 负责静态/叙事型 markdown 渲染
+- `Protocol` 负责把任意后端事件转成统一命令
+- `Assembler` 负责安全处理 token 流，避免半截表格、代码块、公式乱渲染
+- `Runtime` 负责保存同步、可重放的运行态数据
+- `RunSurface` 负责把这些 block 真正渲染成聊天界面或卡片流
+
+## 覆写内置组件
 
 ```ts
 import {
@@ -189,63 +209,28 @@ import {
 
 import MyCodeBlock from './MyCodeBlock.vue';
 import MyThoughtBlock from './MyThoughtBlock.vue';
-import MyAguiShell from './MyAguiShell.vue';
 
 const builtinComponents: MarkdownBuiltinComponentOverrides = {
   code: MyCodeBlock,
-  thought: MyThoughtBlock,
-  agui: MyAguiShell
+  thought: MyThoughtBlock
 };
 ```
-
-可覆写的 key：
-
-- `text`
-- `code`
-- `mermaid`
-- `thought`
-- `math`
-- `html`
-- `agui`
-- `artifact`
-- `approval`
-- `timeline`
 
 ## 文档
 
 - 文档首页：[https://codexiaoke.github.io/agentdown/](https://codexiaoke.github.io/agentdown/)
 - 快速开始：[https://codexiaoke.github.io/agentdown/guide/getting-started](https://codexiaoke.github.io/agentdown/guide/getting-started)
-- Markdown 渲染：[https://codexiaoke.github.io/agentdown/guide/markdown-rendering](https://codexiaoke.github.io/agentdown/guide/markdown-rendering)
-- AGUI Runtime：[https://codexiaoke.github.io/agentdown/runtime/overview](https://codexiaoke.github.io/agentdown/runtime/overview)
-- 协议与事件：[https://codexiaoke.github.io/agentdown/runtime/protocol](https://codexiaoke.github.io/agentdown/runtime/protocol)
-- API 参考：[https://codexiaoke.github.io/agentdown/api/renderer](https://codexiaoke.github.io/agentdown/api/renderer)
-- FAQ：[https://codexiaoke.github.io/agentdown/reference/faq](https://codexiaoke.github.io/agentdown/reference/faq)
-- 发布清单：[https://codexiaoke.github.io/agentdown/reference/release](https://codexiaoke.github.io/agentdown/reference/release)
-
-文档源文件位于仓库的 [`./docs`](./docs) 目录，使用 `VitePress` 构建。
+- Runtime 概览：[https://codexiaoke.github.io/agentdown/runtime/overview](https://codexiaoke.github.io/agentdown/runtime/overview)
+- 协议映射：[https://codexiaoke.github.io/agentdown/runtime/protocol](https://codexiaoke.github.io/agentdown/runtime/protocol)
+- API 参考：[https://codexiaoke.github.io/agentdown/api/runtime](https://codexiaoke.github.io/agentdown/api/runtime)
 
 ## 开发
 
 ```bash
 npm install
 npm run dev
-```
-
-## 文档站开发
-
-```bash
 npm run docs:dev
-npm run docs:build
-npm run docs:preview
-```
-
-## 发布
-
-```bash
-npm run typecheck
 npm run build
-npm run pack:check
-npm publish
 ```
 
 ## License

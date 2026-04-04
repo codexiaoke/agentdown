@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { computed, inject } from 'vue';
-import { AGUI_RUNTIME_KEY } from '../core/aguiRuntime';
-import type { AguiRuntimeEvent, MarkdownApprovalStatus } from '../core/types';
+import { computed } from 'vue';
+import type { MarkdownApprovalStatus } from '../core/types';
 
 interface Props {
   title: string;
@@ -12,48 +11,10 @@ interface Props {
 }
 
 const props = defineProps<Props>();
-const runtime = inject(AGUI_RUNTIME_KEY, null);
-
-type ApprovalEvent = AguiRuntimeEvent & {
-  approvalId?: string;
-  decision?: MarkdownApprovalStatus;
-};
-
-const binding = computed(() => (props.refId && runtime ? runtime.binding(props.refId) : null));
-const state = computed(() => binding.value?.stateRef.value as { title?: string; message?: string; meta?: Record<string, unknown> } | null);
-const events = computed(() => binding.value?.eventsRef.value ?? []);
-
-function readStateMeta(key: string): string | undefined {
-  const value = state.value?.meta?.[key];
-  return typeof value === 'string' && value.trim() ? value : undefined;
-}
-
-const latestApprovalEvent = computed<ApprovalEvent | undefined>(() =>
-  [...events.value]
-    .reverse()
-    .find(event => event.type === 'approval.resolved' || event.type === 'approval.requested') as ApprovalEvent | undefined
-);
-
-const resolvedTitle = computed(() => state.value?.title ?? props.title);
-const resolvedMessage = computed(() => state.value?.message ?? latestApprovalEvent.value?.message ?? props.message);
-const resolvedApprovalId = computed(() => latestApprovalEvent.value?.approvalId ?? readStateMeta('approvalId') ?? props.approvalId);
-const resolvedStatus = computed<MarkdownApprovalStatus>(() => {
-  if (latestApprovalEvent.value?.type === 'approval.resolved') {
-    return latestApprovalEvent.value.decision ?? 'approved';
-  }
-
-  if (latestApprovalEvent.value?.type === 'approval.requested') {
-    return 'pending';
-  }
-
-  const stateDecision = readStateMeta('decision');
-
-  if (stateDecision === 'approved' || stateDecision === 'rejected' || stateDecision === 'changes_requested') {
-    return stateDecision;
-  }
-
-  return props.status ?? 'pending';
-});
+const resolvedTitle = computed(() => props.title);
+const resolvedMessage = computed(() => props.message);
+const resolvedApprovalId = computed(() => props.approvalId);
+const resolvedStatus = computed<MarkdownApprovalStatus>(() => props.status ?? 'pending');
 
 const statusLabel = computed(() => {
   switch (resolvedStatus.value) {

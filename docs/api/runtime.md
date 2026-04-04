@@ -1,84 +1,180 @@
 ---
-title: Runtime 与 Hooks
-description: createAguiRuntime、AguiRuntime 实例方法与常用 hooks 说明。
+title: Runtime 与 Bridge
+description: createAgentRuntime、createBridge、transport 与 runtime 读写接口说明。
 ---
 
-# Runtime 与 Hooks
+# Runtime 与 Bridge
 
-## `createAguiRuntime()`
+## `createAgentRuntime()`
 
 ```ts
-const runtime = createAguiRuntime(options?)
+const runtime = createAgentRuntime()
 ```
 
-### 参数
+当前版本的 runtime 没有旧式事件 reducer。  
+它专注于同步状态读写和快照能力。
 
-| 参数 | 类型 | 说明 |
-| --- | --- | --- |
-| `reducer` | `AguiRuntimeReducer` | 自定义事件归约器，用来扩展或覆盖默认状态映射 |
-
-## `AguiRuntime` 实例方法
+## `AgentRuntime` 实例方法
 
 | 方法 | 说明 |
 | --- | --- |
-| `ref(id)` | 获取某个节点的只读状态 ref |
-| `binding(id)` | 一次性拿到状态、子节点和事件的 binding |
-| `set(id, value)` | 直接写入完整状态 |
-| `patch(id, patch)` | 以浅合并方式更新状态 |
-| `emit(event)` | 推入一个事件，并触发归约 |
-| `children(parentId)` | 获取某个父节点的响应式子节点列表 |
-| `events(id?)` | 获取全局事件流或某个节点的事件流 |
-| `reset()` | 清空当前 runtime 保存的状态、关系和事件 |
+| `apply(commands)` | 应用一条或多条 `RuntimeCommand` |
+| `node(id)` | 获取单个 node |
+| `nodes()` | 获取全部 node |
+| `block(id)` | 获取单个 block |
+| `blocks(slot?)` | 获取全部 block 或某个 slot 的 block |
+| `children(nodeId)` | 获取某个 node 的直接子节点 |
+| `intents()` | 获取已记录 intent |
+| `history()` | 获取命令与 intent 历史 |
+| `emitIntent(intent)` | 写入结构化 UI intent |
+| `snapshot()` | 获取完整快照 |
+| `subscribe(listener)` | 监听 runtime 更新 |
+| `reset()` | 清空当前状态 |
 
-## 常用 hooks
-
-| Hook | 返回值 | 用途 |
-| --- | --- | --- |
-| `useAguiNode()` | 完整 AGUI 上下文 | 需要一次性拿全部信息时 |
-| `useAguiNodeId()` | 当前节点 id | 只关心自己是谁 |
-| `useAguiRuntime()` | 当前 runtime | 需要读全局事件或其他节点 |
-| `useAguiBinding()` | 当前节点 binding | 想直接拿 `stateRef / childrenRef / eventsRef` |
-| `useAguiState()` | 当前节点状态 | 最常用 |
-| `useAguiChildren()` | 当前节点子节点数组 | team mode、run board 很常用 |
-| `useAguiEvents()` | 当前节点事件流 | timeline、recent signals 很常用 |
-| `useAguiHasNode()` | 是否拿到 AGUI 上下文 | 让组件能在普通页面安全复用 |
-
-## 一个常见组件写法
+## `createBridge()`
 
 ```ts
-import { computed } from 'vue';
-import { useAguiChildren, useAguiEvents, useAguiState, type AgentNodeState } from 'agentdown';
-
-const state = useAguiState<AgentNodeState>();
-const children = useAguiChildren<AgentNodeState>();
-const events = useAguiEvents();
-
-const activeChildren = computed(() =>
-  children.value.filter((node) => node.status === 'running' || node.status === 'thinking')
-);
+const bridge = createBridge({
+  runtime,
+  protocol,
+  assemblers: {
+    markdown: createMarkdownAssembler()
+  }
+})
 ```
 
-## `useAguiRuntime()` 什么时候最有用
+Bridge 负责：
 
-当你在一个组件里不仅想看“自己这个节点”，还想看：
+- 接收 raw packet
+- 调用 `protocol.map()`
+- 把 `stream.*` 命令交给对应 assembler
+- 批量 flush 到 runtime
 
-- 全局事件流
-- 某个兄弟节点
-- 某个孙节点
-- 当前 run 下面的整棵树
+## `Bridge` 实例方法
 
-这时就可以结合 `runtime.children(id)`、`runtime.events()` 自己做派生计算。
+| 方法 | 说明 |
+| --- | --- |
+| `push(packetOrPackets)` | 推入一条或多条 raw packet |
+| `consume(source, options?)` | 从 transport 持续消费异步数据 |
+| `flush(reason?)` | 立即把待处理命令提交到 runtime |
+| `reset()` | 清空 bridge 状态并重置 assembler |
+| `close()` | 关闭 bridge |
+| `status()` | 获取当前状态 |
+| `snapshot()` | 获取 bridge 调试快照 |
 
-## `set()` 和 `patch()` 什么时候用
+## `createRuntimeTranscript()`
 
-### 推荐优先使用 `emit()`
+把当前 runtime 或 snapshot 导出成一份可序列化 transcript：
 
-因为 `emit()` 会同时留下事件记录，并且自动维护默认状态语义。
+```ts
+const transcript = createRuntimeTranscript(runtime)
+```
 
-### `set()` / `patch()` 更适合
+导出结果会包含：
 
-- 初始化某些本地状态
-- 做临时演示数据
-- 对非事件型数据做直接同步
+- `snapshot`
+- `history`
+- `messages`
 
-如果你的页面需要回放、审计、timeline，优先用事件而不是直接 patch。
+其中 `messages` 是按 `slot / groupId / role` 聚合后的消息视图，适合做导出、摘要和回放页。
+
+## `replayRuntimeHistory()`
+
+如果你只想根据 history 直接重建最终状态：
+
+```ts
+const replayedRuntime = replayRuntimeHistory(transcript.history)
+```
+
+## `createRuntimeReplayPlayer()`
+
+如果你想做可控回放：
+
+```ts
+const player = createRuntimeReplayPlayer(transcript.history)
+
+player.step()
+await player.play({ intervalMs: 320 })
+player.seek(10)
+player.reset()
+```
+
+它内部维护一个新的 runtime，适合接到 `RunSurface` 做可视化回放。
+
+## `createAsyncIterableTransport()`
+
+如果你的输入本身已经是 `AsyncIterable<TRawPacket>`，可以直接使用：
+
+```ts
+const transport = createAsyncIterableTransport<MyPacket>()
+```
+
+然后交给 `bridge.consume(source)`。
+
+## `createSseTransport()`
+
+适合直接消费标准 SSE 响应流：
+
+```ts
+const transport = createSseTransport<MyPacket>({
+  mode: 'json'
+})
+
+await bridge.consume('/api/stream', { signal })
+```
+
+默认支持三种模式：
+
+- `event`：返回完整 SSE message
+- `json`：对 `data` 做 `JSON.parse`
+- `text`：直接返回 `data` 字符串
+
+如果后端格式更特殊，也可以自定义 `parse(message, context)`。
+
+## `createNdjsonTransport()`
+
+适合消费按行输出的 NDJSON：
+
+```ts
+const transport = createNdjsonTransport<MyPacket>()
+
+await bridge.consume('/api/stream.ndjson', { signal })
+```
+
+默认每一行都会走 `JSON.parse`；如果你只是想拿原始文本，可以传 `mode: 'text'`。
+
+## `createWebSocketTransport()`
+
+适合消费持续连接的 WebSocket 消息流：
+
+```ts
+const transport = createWebSocketTransport<MyPacket>({
+  mode: 'json'
+})
+
+await bridge.consume('wss://example.com/agent', { signal })
+```
+
+默认支持三种模式：
+
+- `event`：返回完整 websocket message 包装对象
+- `json`：把收到的文本消息做 `JSON.parse`
+- `text`：把收到的消息解码成文本
+
+如果你需要登录握手、订阅频道或自定义协议，也可以用：
+
+- `protocols`
+- `onOpen(context)`
+- `parse(message, context)`
+
+## 一个常见的 UI 接法
+
+```ts
+const snapshot = runtime.snapshot()
+
+const unsubscribe = runtime.subscribe(() => {
+  render(runtime.snapshot())
+})
+```
+
+这让你可以把 runtime 接到聊天界面、工具面板、侧栏摘要或你自己的 `RunSurface` 上。

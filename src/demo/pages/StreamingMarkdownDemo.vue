@@ -1,22 +1,32 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 import { cmd, RunSurface } from '../../index';
-import { weatherRunPreset, type WeatherSsePayload } from '../presets/weatherPreset';
+import {
+  markdownStreamingPreset,
+  type MarkdownStreamingPacket
+} from '../presets/markdownStreamingPreset';
 
-const RUN_ID = 'run:weather';
-const TOOL_ID = 'tool-1';
-const STREAM_ID = 'stream:weather:answer';
-const USER_GROUP_ID = 'turn:user:weather';
-const ASSISTANT_GROUP_ID = 'turn:weather';
+const RUN_ID = 'run:streaming-markdown';
+const STREAM_ID = 'stream:streaming-markdown';
+const USER_GROUP_ID = 'turn:user:streaming-markdown';
+const ASSISTANT_GROUP_ID = 'turn:assistant:streaming-markdown';
 const playing = ref(false);
 const timers: number[] = [];
-const { runtime, bridge, surface } = weatherRunPreset.createSession();
+const { runtime, bridge, surface } = markdownStreamingPreset.createSession();
 
-const demoPackets: WeatherSsePayload[] = [
+function createTokenDeltas(text: string): MarkdownStreamingPacket[] {
+  return Array.from(text).map((token) => ({
+    event: 'ContentDelta',
+    streamId: STREAM_ID,
+    text: token
+  }));
+}
+
+const demoPackets: MarkdownStreamingPacket[] = [
   {
     event: 'RunStarted',
     runId: RUN_ID,
-    title: '天气助手'
+    title: 'Markdown 助手'
   },
   {
     event: 'ContentOpen',
@@ -24,27 +34,38 @@ const demoPackets: WeatherSsePayload[] = [
     slot: 'main',
     groupId: ASSISTANT_GROUP_ID
   },
+  ...createTokenDeltas('我先整理一份部署摘要。\n\n'),
   {
     event: 'ContentDelta',
     streamId: STREAM_ID,
-    text: '我来为你查询天气'
+    text: '```bash\n'
   },
   {
-    event: 'ToolCall',
-    name: '查询天气',
-    id: TOOL_ID
+    event: 'ContentDelta',
+    streamId: STREAM_ID,
+    text: 'pnpm install\npnpm build\n'
   },
   {
-    event: 'ToolCompleted',
-    name: '查询天气',
-    id: TOOL_ID,
-    content: {
-      city: '北京',
-      condition: '晴',
-      tempC: 26,
-      humidity: '42%'
-    }
+    event: 'ContentDelta',
+    streamId: STREAM_ID,
+    text: 'pnpm preview\n```\n'
   },
+  {
+    event: 'ContentDelta',
+    streamId: STREAM_ID,
+    text: '\n| 步骤 | 说明 |\n'
+  },
+  {
+    event: 'ContentDelta',
+    streamId: STREAM_ID,
+    text: '| --- | --- |\n'
+  },
+  {
+    event: 'ContentDelta',
+    streamId: STREAM_ID,
+    text: '| install | 安装依赖 |\n| build | 打包项目 |\n'
+  },
+  ...createTokenDeltas('\n最后再检查环境变量是否齐全。'),
   {
     event: 'ContentClose',
     streamId: STREAM_ID
@@ -67,29 +88,32 @@ function clearTimers() {
   playing.value = false;
 }
 
+function seedConversation() {
+  runtime.apply(cmd.message.text({
+    id: 'block:user:streaming-markdown',
+    role: 'user',
+    text: '给我一份部署说明，最好带上命令和步骤表格',
+    groupId: USER_GROUP_ID,
+    at: Date.now()
+  }));
+}
+
 function resetDemo() {
   bridge.reset();
   seedConversation();
-}
-
-function seedConversation() {
-  const now = Date.now();
-
-  runtime.apply(cmd.message.text({
-    id: 'block:user:weather',
-    role: 'user',
-    text: '帮我查一下北京今天天气',
-    groupId: USER_GROUP_ID,
-    at: now
-  }));
 }
 
 function replayDemo() {
   clearTimers();
   resetDemo();
   playing.value = true;
+  let elapsed = 0;
 
   demoPackets.forEach((payload, index) => {
+    const delay = payload.event === 'ContentDelta' && payload.text.length <= 1
+      ? 90
+      : 320;
+    elapsed += delay;
     const timerId = globalThis.setTimeout(() => {
       bridge.push(payload);
 
@@ -97,7 +121,7 @@ function replayDemo() {
         bridge.flush('demo-complete');
         playing.value = false;
       }
-    }, 650 * (index + 1));
+    }, elapsed);
 
     timers.push(timerId);
   });
@@ -115,8 +139,8 @@ onBeforeUnmount(() => {
 <template>
   <section class="demo-page">
     <header class="demo-page__header">
-      <h1>天气对话</h1>
-      <p>用户提问后，助手先输出一句话，再插入工具卡片，工具完成后原地更新结果。</p>
+      <h1>流式 Markdown</h1>
+      <p>代码块和表格不会先显示半截源码，只有结构完整后才会稳定渲染出来。</p>
     </header>
 
     <RunSurface

@@ -1,6 +1,6 @@
 ---
 title: 组件覆写
-description: 用自己的 Design System 替换 Agentdown 的默认代码块、思考块、HTML 块和 AGUI 外壳。
+description: 用自己的 Design System 替换 Agentdown 的默认 block 组件与自定义 Vue 组件外壳。
 ---
 
 # 组件覆写
@@ -72,11 +72,11 @@ const builtinComponents: MarkdownBuiltinComponentOverrides = {
 默认 `AguiComponentWrapper` 做了四件关键事情：
 
 1. 按名称从 `aguiComponents` 中解析真实组件
-2. 读取 markdown 里的 `ref`
-3. 自动把 `ref` 绑定到 `runtime.binding(ref)`
-4. 通过 provide/inject 暴露 `useAguiState()`、`useAguiEvents()` 等 hooks 所需上下文
+2. 透传 markdown 指令中声明的 props
+3. 处理最小高度占位
+4. 在找不到组件时给出明确占位提示
 
-如果你完全重写 `agui` 组件，建议保留这四层能力，不然内部组件就只能吃 props，没法直接用 hooks。
+如果你完全重写 `agui` 组件，建议至少保留这四层能力，这样 markdown 里的自定义组件接入会更顺手。
 
 ## `aguiComponents` 的两种注册方式
 
@@ -101,27 +101,26 @@ const aguiComponents = {
 
 `minHeight` 用来控制 markdown 里 AGUI block 的初始占位高度，避免布局在异步状态更新时抖动得太厉害。
 
-## 组件内部拿状态的两种方式
+## 运行中的值怎么传进自定义组件
 
-### 推荐：直接用 hooks
+当前版本不再自动提供旧式 runtime hooks。  
+更推荐的做法有两种：
 
-```ts
-const state = useAguiState<AgentNodeState>();
-const events = useAguiEvents();
+### 1. 静态 props 走 `:::vue-component`
+
+```md
+:::vue-component WeatherCard {"city":"北京","condition":"晴"}
 ```
 
-### 兼容：读取 wrapper 透传 props
+### 2. 运行态数据走 `block.data`
 
-默认 wrapper 也会把这些值透传给实际组件：
+也就是：
 
-- `agui`
-- `aguiRefId`
-- `aguiState`
-- `aguiChildren`
-- `aguiEvents`
-- `aguiRuntime`
+- 后端事件先映射成 `cmd.block.upsert()` / `cmd.block.patch()`
+- 你的 UI 层按 `renderer` 渲染对应组件
+- 组件从 `block.data` 中读取当前值
 
-如果你希望组件在普通页面和 AGUI 场景里复用，这种写法会更柔和。
+这更适合工具卡片、artifact、approval 这类持续更新的交互块。
 
 ## 一条很实用的原则
 

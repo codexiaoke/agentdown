@@ -1,12 +1,14 @@
 ---
 title: MarkdownRenderer
-description: MarkdownRenderer 的 props、用途和常见接法。
+description: MarkdownRenderer 的 props、用途和在新架构中的职责边界。
 ---
 
 # MarkdownRenderer
 
 `MarkdownRenderer` 是 Agentdown 的主入口组件。  
 它负责把 markdown 解析成 block 列表，并分发给对应的内置或自定义组件。
+
+在当前架构里它只负责叙事层，不再直接承担运行态同步逻辑。
 
 ## 最小用法
 
@@ -24,7 +26,6 @@ description: MarkdownRenderer 的 props、用途和常见接法。
 | `thoughtTitle` | `string` | `Thought Process` | `:::thought` 默认标题 |
 | `aguiComponents` | `AguiComponentMap` | `{}` | 可被 `:::vue-component` 引用的组件映射表 |
 | `builtinComponents` | `MarkdownBuiltinComponentOverrides` | `{}` | 覆写默认 block 组件 |
-| `aguiRuntime` | `AguiRuntime \| null` | `null` | AGUI 运行态实例 |
 | `plugins` | `MarkdownEnginePlugin[]` | `[]` | 额外注入到 `markdown-it` 的插件 |
 
 ## 对外行为
@@ -33,18 +34,26 @@ description: MarkdownRenderer 的 props、用途和常见接法。
 
 1. 在 `source` 变化时重新解析 block
 2. 在容器宽度变化时重新计算 pretext 文本布局
-3. 通过 `provide(AGUI_RUNTIME_KEY, aguiRuntime)` 把 runtime 注入到 AGUI wrapper
+3. 按 block 类型把内容分发给内置或覆写组件
 
 ## 最常见的组合写法
 
 ```vue
 <MarkdownRenderer
   :source="source"
-  :agui-runtime="runtime"
   :agui-components="aguiComponents"
   :builtin-components="builtinComponents"
 />
 ```
+
+## 它不负责什么
+
+- 不负责解析后端 SSE / WebSocket / NDJSON
+- 不负责把 raw packet 映射成运行态命令
+- 不负责 token 流稳定化
+- 不负责保存 node / block / history
+
+这部分能力由 `defineProtocol()`、`createBridge()`、assembler 和 `createAgentRuntime()` 负责。
 
 ## 什么时候需要传 `lineHeight` 和 `font`
 

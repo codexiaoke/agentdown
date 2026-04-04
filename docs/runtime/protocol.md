@@ -1,117 +1,209 @@
 ---
-title: 协议与事件
-description: Agentdown 内置核心事件、默认状态映射与推荐事件流。
+title: 协议映射
+description: 用 defineEventProtocol 和 cmd 高阶 helper 把任意后端事件映射成 Agentdown RuntimeCommand。
 ---
 
-# 协议与事件
+# 协议映射
 
-Agentdown 当前公开了一组核心事件 helpers，它们是第一版 agent 协议的基础。
+Agentdown 不要求后端必须返回某一种固定事件格式。  
+你的后端可以返回任何 JSON，只要你把它映射成统一 `RuntimeCommand[]` 就可以。
 
-## 核心事件类型
+如果你的项目已经收敛出一套稳定的语义事件名，也可以直接用 `defineHelperProtocol()` 或 `createHelperProtocolFactory()` 来减少重复样板。
 
-| 事件 | 用途 | 默认 kind / 状态 |
-| --- | --- | --- |
-| `run.started` | 整个运行开始 | `run / running` |
-| `run.finished` | 整个运行结束 | `run / done` |
-| `user.message.created` | 记录用户输入 | `user / done` |
-| `agent.assigned` | agent 被分配任务 | `agent / assigned` |
-| `agent.started` | agent 开始执行 | `agent / thinking`，`leader / running` |
-| `agent.thinking` | agent 进入思考态 | `agent / thinking` |
-| `agent.blocked` | agent 被阻塞 | 默认不改状态，建议通过 reducer 映射 |
-| `agent.finished` | agent 完成 | `agent / done` |
-| `team.finished` | 一个 team 分支完成 | `agent / done` |
-| `tool.started` | 工具开始 | `tool / running` |
-| `tool.finished` | 工具结束 | `tool / done` |
-| `artifact.created` | 产物创建 | 默认只补字段，不改状态 |
-| `approval.requested` | 请求人工审批 | 默认只补字段，不改状态 |
-| `approval.resolved` | 审批结束 | 默认只补字段，不改状态 |
-| `handoff.created` | 交接给其他角色 | 默认只补字段，不改状态 |
-| `node.error` | 节点出错 | `agent / error` |
+## 核心心智模型
 
-## 推荐的最小事件流
-
-一个单 agent + tool 的常见流程：
-
-```ts
-runtime.emit(runStarted({
-  nodeId: 'run:pricing',
-  title: '报价运行'
-}));
-
-runtime.emit(userMessageCreated({
-  nodeId: 'msg:user:1',
-  parentId: 'run:pricing',
-  message: '帮我做一个中文报价'
-}));
-
-runtime.emit(agentStarted({
-  nodeId: 'agent:planner',
-  parentId: 'run:pricing',
-  title: 'Planner'
-}));
-
-runtime.emit(toolStarted({
-  nodeId: 'tool:pricing',
-  parentId: 'agent:planner',
-  toolName: 'pricing.lookup'
-}));
-
-runtime.emit(toolFinished({
-  nodeId: 'tool:pricing',
-  parentId: 'agent:planner',
-  toolName: 'pricing.lookup',
-  message: '返回 4 条报价结果'
-}));
-
-runtime.emit(agentFinished({
-  nodeId: 'agent:planner',
-  parentId: 'run:pricing',
-  title: 'Planner'
-}));
-
-runtime.emit(runFinished({
-  nodeId: 'run:pricing',
-  title: '报价运行'
-}));
+```text
+raw event -> RuntimeCommand[]
 ```
 
-## 为什么 `agent.blocked` 默认不直接变成 `waiting_tool`
+常见命令包括：
 
-因为“阻塞”的业务语义其实很依赖上下文：
+- `cmd.node.upsert()`
+- `cmd.node.patch()`
+- `cmd.block.upsert()`
+- `cmd.block.patch()`
+- `cmd.stream.open()`
+- `cmd.stream.delta()`
+- `cmd.stream.close()`
+- `cmd.event.record()`
 
-- 可能是在等 tool
-- 可能是在等人工审批
-- 可能是在等另一个 agent
-- 也可能只是暂停
-
-所以 Agentdown 选择把它暴露为标准事件，但把最终状态语义交给你自己的 reducer。
-
-## `artifact`、`approval`、`handoff` 为什么默认也不强绑定状态
-
-首版的重点是先把事件 schema 稳住，而不是过早把业务 UI 设计死。  
-这几类事件已经有 helpers 和字段，但真正的产品语义还需要结合你的场景收敛。
-
-## 用户可以自定义事件吗
-
-可以。  
-你并不一定非要用内置 helpers，`runtime.emit()` 接受任意 `AguiRuntimeEvent`：
+## 一个最小示例
 
 ```ts
-runtime.emit({
-  type: 'agent.streaming.delta',
-  nodeId: 'agent:writer',
-  message: '新的 token 到达'
+import { cmd, defineEventProtocol } from 'agentdown';
+
+type Packet =
+  | { event: 'RunContent'; text: string }
+  | { event: 'ToolCall'; id: string; name: string }
+  | { event: 'ToolCompleted'; id: string; name: string; content: Record<string, unknown> };
+
+const protocol = defineEventProtocol<Packet>({
+  RunContent: (event) => [
+    cmd.content.open({
+      streamId: 'stream:main',
+      slot: 'main'
+    }),
+    cmd.content.append('stream:main', event.text),
+    cmd.content.close('stream:main')
+  ],
+  ToolCall: (event, context) =>
+    cmd.tool.start({
+      id: event.id,
+      title: event.name,
+      renderer: 'tool.weather',
+      at: context.now()
+    }),
+  ToolCompleted: (event, context) =>
+    cmd.tool.finish({
+      id: event.id,
+      title: event.name,
+      result: event.content,
+      at: context.now()
+    })
 });
 ```
 
-如果你想把这类自定义事件映射成特定状态，就在 `createAguiRuntime({ reducer })` 里处理。
+## 用 Helper Protocol 工厂做全局规范
 
-## `applyEvent` 是做什么的
+```ts
+import { createHelperProtocolFactory } from 'agentdown';
 
-`applyEvent` 是 runtime 内部真正执行事件归约的函数，外部 API 暴露成了 `runtime.emit`。  
-大多数使用者并不需要直接关心它，只要记住：
+const helperProtocolFactory = createHelperProtocolFactory<Packet, 'type'>({
+  eventKey: 'type',
+  defaults: {
+    'content.replace': {
+      kind: 'markdown'
+    },
+    'tool.start': {
+      renderer: 'tool.weather'
+    }
+  },
+  bindings: {
+    'content.replace': {
+      on: 'content.replace',
+      resolve: (event) => ({
+        id: event.blockId,
+        groupId: event.groupId,
+        content: event.markdown
+      })
+    },
+    'tool.start': {
+      on: 'tool.start',
+      resolve: (event) => ({
+        id: event.toolId,
+        title: event.label,
+        groupId: event.groupId
+      })
+    },
+    'tool.finish': {
+      on: 'tool.finish',
+      resolve: (event) => ({
+        id: event.toolId,
+        title: event.label,
+        result: event.payload
+      })
+    }
+  }
+});
 
-- 发事件用 `runtime.emit`
-- 自定义语义用 `reducer`
+const protocol = helperProtocolFactory.createProtocol();
+```
 
-下一页继续看 [Reducer 扩展](/runtime/reducer)。
+这样“事件名怎么映射”可以全局定义一次，后面多个 preset 直接复用；如果个别页面有特殊需求，再用 `createProtocol(overrides)` 局部补充。
+
+## 用户可以完全自定义事件名
+
+你完全可以用你自己的事件协议，例如：
+
+```ts
+type Packet =
+  | { type: 'content.append'; token: string }
+  | { type: 'content.replace'; markdown: string }
+  | { type: 'tool.start'; toolId: string; label: string }
+  | { type: 'tool.update'; toolId: string; payload: Record<string, unknown> }
+  | { type: 'tool.finish'; toolId: string; payload: Record<string, unknown> }
+  | { type: 'artifact.upsert'; artifactId: string; kind: string }
+  | { type: 'approval.update'; approvalId: string; status: string }
+  | { type: 'node.error'; nodeId: string; message: string };
+```
+
+只要规则里能识别它们，就可以映射成统一命令。
+
+例如直接这样写：
+
+```ts
+const protocol = defineEventProtocol<'type', Packet>('type', {
+  'content.replace': (event, context) =>
+    cmd.content.replace({
+      id: 'block:assistant',
+      groupId: 'turn:1',
+      content: event.markdown,
+      kind: 'markdown',
+      at: context.now()
+    }),
+  'tool.start': (event, context) =>
+    cmd.tool.start({
+      id: event.toolId,
+      title: event.label,
+      renderer: 'tool.weather',
+      at: context.now()
+    }),
+  'tool.finish': (event, context) =>
+    cmd.tool.finish({
+      id: event.toolId,
+      result: event.payload,
+      at: context.now()
+    }),
+  'artifact.upsert': (event, context) =>
+    cmd.artifact.upsert({
+      id: `artifact:${event.artifactId}`,
+      title: '生成产物',
+      artifactId: event.artifactId,
+      artifactKind: event.kind,
+      at: context.now()
+    }),
+  'approval.update': (event, context) =>
+    cmd.approval.update({
+      id: `approval:${event.approvalId}`,
+      title: '等待审批',
+      approvalId: event.approvalId,
+      status: event.status,
+      at: context.now()
+    }),
+  'node.error': (event, context) =>
+    cmd.node.error({
+      id: event.nodeId,
+      message: event.message,
+      at: context.now()
+    })
+});
+```
+
+## 什么时候用 `stream.*`
+
+适合持续增长的文本流：
+
+- assistant token 输出
+- markdown 片段持续追加
+- 长文生成中的尾部草稿
+
+如果你更喜欢可读性高一点的写法，也可以用：
+
+- `cmd.stream.write(...)`
+- `cmd.stream.end(...)`
+
+## 什么时候直接用 `block.*`
+
+适合结构已经稳定或本来就是组件态的数据：
+
+- 工具卡片
+- artifact 卡片
+- approval 卡片
+- 业务自定义 widget
+
+## `when()` 的意义
+
+`defineEventProtocol()` 适合最常见的基于 `event` 字段分发的后端协议。  
+如果你的协议更复杂，再退回 `defineProtocol() + when()` 即可。
+
+继续看 [Streaming 组装](/runtime/reducer) 可以理解 markdown token 为什么不会立刻乱渲染。

@@ -3,6 +3,9 @@ import './styles/theme.css';
 export { default as DefaultMarkdownApprovalBlock } from './components/ApprovalBlock.vue';
 export { default as DefaultMarkdownArtifactBlock } from './components/ArtifactBlock.vue';
 export { default as MarkdownRenderer } from './components/MarkdownRenderer.vue';
+export { default as RunSurface } from './components/RunSurface.vue';
+export { default as DefaultRunSurfaceAssistantShell } from './components/RunSurfaceAssistantShell.vue';
+export { default as DefaultRunSurfaceUserBubble } from './components/RunSurfaceUserBubble.vue';
 export { default as DefaultMarkdownAguiBlock } from './components/AguiComponentWrapper.vue';
 export { default as DefaultMarkdownCodeBlock } from './components/CodeBlock.vue';
 export { default as DefaultMarkdownHtmlBlock } from './components/HtmlBlock.vue';
@@ -12,51 +15,35 @@ export { default as DefaultMarkdownTextBlock } from './components/PretextTextBlo
 export { default as DefaultMarkdownThoughtBlock } from './components/ThoughtBlock.vue';
 export { default as DefaultMarkdownTimelineBlock } from './components/TimelineBlock.vue';
 export { defaultMarkdownBuiltinComponents } from './components/defaultMarkdownComponents';
-export {
-  agentAssigned,
-  agentBlocked,
-  agentFinished,
-  agentStarted,
-  agentThinking,
-  approvalRequested,
-  approvalResolved,
-  artifactCreated,
-  handoffCreated,
-  nodeError,
-  runFinished,
-  runStarted,
-  teamFinished,
-  toolFinished,
-  toolStarted,
-  userMessageCreated
-} from './core/agentEvents';
-export {
-  useAguiBinding,
-  useAguiChildren,
-  useAguiEvents,
-  useAguiHasNode,
-  useAguiNode,
-  useAguiNodeId,
-  useAguiRuntime,
-  useAguiState
-} from './composables/useAguiNode';
-export { AGUI_RUNTIME_KEY, createAguiRuntime } from './core/aguiRuntime';
 export { createMarkdownEngine } from './core/createMarkdownEngine';
 export { parseMarkdown } from './core/parseMarkdown';
+export { createMarkdownAssembler, createPlainTextAssembler } from './runtime/assemblers';
+export { createBridge } from './runtime/createBridge';
+export { defineAgentdownPreset } from './runtime/definePreset';
+export {
+  createRuntimeReplayPlayer,
+  createRuntimeTranscript,
+  createRuntimeTranscriptMessages,
+  replayRuntimeHistory
+} from './runtime/replay';
+export {
+  createAsyncIterableTransport,
+  createNdjsonTransport,
+  createSseTransport,
+  createWebSocketTransport
+} from './runtime/transports';
+export {
+  cmd,
+  createHelperProtocolFactory,
+  defineEventProtocol,
+  defineHelperProtocol,
+  defineProtocol,
+  when
+} from './runtime/defineProtocol';
+export { createAgentRuntime } from './runtime/createAgentRuntime';
 export type {
   AguiComponentMap,
-  AguiBinding,
   AguiComponentRegistration,
-  AguiNodePatch,
-  AguiNodeKind,
-  AguiNodeStatus,
-  AguiRuntime,
-  AguiRuntimeEvent,
-  AguiRuntimeReducer,
-  AguiRuntimeReducerContext,
-  AguiRuntimeReducerResult,
-  AgentNodeState,
-  CreateAguiRuntimeOptions,
   MarkdownAguiBlock,
   MarkdownApprovalBlock,
   MarkdownApprovalStatus,
@@ -74,33 +61,117 @@ export type {
   MarkdownTextBlock,
   MarkdownTimelineBlock,
   MarkdownThoughtBlock,
-  ParseMarkdownOptions,
-  StatePatch
+  ParseMarkdownOptions
 } from './core/types';
 export type {
-  AgentAssignedEvent,
-  AgentBlockedEvent,
-  AgentFinishedEvent,
-  AgentStartedEvent,
-  AgentThinkingEvent,
-  ApprovalEventInput,
-  ApprovalRequestedEvent,
-  ApprovalResolvedEvent,
-  ArtifactEventInput,
-  ArtifactCreatedEvent,
-  CoreAguiEvent,
-  CoreAguiEventType,
-  CoreEventInput,
-  HandoffCreatedEvent,
-  HandoffEventInput,
-  KindEventInput,
-  NodeErrorEvent,
-  RunFinishedEvent,
-  RunStartedEvent,
-  TeamFinishedEvent,
-  ToolEventInput,
-  ToolFinishedEvent,
-  ToolStartedEvent,
-  UserMessageCreatedEvent
-} from './core/agentEvents';
-export type { AguiNodeContext } from './composables/useAguiNode';
+  AgentRuntime,
+  AssemblerContext,
+  BlockInsertCommand,
+  BlockPatchCommand,
+  BlockRemoveCommand,
+  BlockUpsertCommand,
+  Bridge,
+  BridgeError,
+  BridgeHooks,
+  BridgeOptions,
+  BridgeSnapshot,
+  BridgeStage,
+  BridgeStatus,
+  ConsumeOptions,
+  EventRecordCommand,
+  FlushScheduler,
+  NodePatchCommand,
+  NodeRemoveCommand,
+  NodeUpsertCommand,
+  ProtocolContext,
+  ProtocolRule,
+  RuntimeCommand,
+  RuntimeCommandHistoryEntry,
+  RuntimeData,
+  RuntimeHistoryEntry,
+  RuntimeIntent,
+  RuntimeIntentHistoryEntry,
+  RuntimeNode,
+  RuntimeProtocol,
+  RuntimeSnapshot,
+  StreamAbortCommand,
+  StreamAssembler,
+  StreamCloseCommand,
+  StreamDeltaCommand,
+  StreamOpenCommand,
+  SurfaceBlock,
+  TextAssemblerOptions,
+  TransportAdapter,
+  TransportContext
+} from './runtime/types';
+export type {
+  AgentdownPreset,
+  AgentdownPresetOptions,
+  AgentdownPresetOverrides,
+  AgentdownSession
+} from './runtime/definePreset';
+export type {
+  CreateRuntimeTranscriptOptions,
+  ReplayRuntimeHistoryOptions,
+  RuntimeReplayPlayOptions,
+  RuntimeReplayPlayer,
+  RuntimeReplayStepResult,
+  RuntimeTranscript,
+  RuntimeTranscriptMessage
+} from './runtime/replay';
+export type {
+  ApprovalUpdateInput,
+  ContentAbortInput,
+  ContentAppendInput,
+  ContentCloseInput,
+  ContentKind,
+  ContentOpenInput,
+  ContentReplaceInput,
+  DraftMode,
+  HelperProtocolBinding,
+  HelperProtocolBindings,
+  HelperProtocolDefaults,
+  HelperProtocolFactory,
+  HelperProtocolOptions,
+  HelperProtocolOverrides,
+  HelperProtocolSemanticEvent,
+  MessageArtifactInput,
+  MessageBlockInput,
+  MessageTextInput,
+  NodeErrorInput,
+  RunFinishInput,
+  RunStartInput,
+  ToolStartInput,
+  ToolUpdateInput
+} from './runtime/defineProtocol';
+export type {
+  FetchTransportSource,
+  NdjsonTransportContext,
+  NdjsonTransportMode,
+  NdjsonTransportOptions,
+  SseTransportContext,
+  SseTransportMessage,
+  SseTransportMode,
+  SseTransportOptions,
+  WebSocketTransportContext,
+  WebSocketTransportMessage,
+  WebSocketTransportMode,
+  WebSocketTransportOptions,
+  WebSocketTransportSource
+} from './runtime/transports';
+export type {
+  RunSurfaceDraftPlaceholder,
+  RunSurfaceDraftPlaceholderContext,
+  RunSurfaceDraftPlaceholderRegistration,
+  RunSurfaceMessageShell,
+  RunSurfaceMessageShellContext,
+  RunSurfaceMessageShellMap,
+  RunSurfaceMessageShellRegistration,
+  RunSurfaceRendererContext,
+  RunSurfaceRendererMode,
+  RunSurfaceRendererMap,
+  RunSurfaceRendererProps,
+  RunSurfaceRendererRegistration,
+  RunSurfaceRole,
+  RunSurfaceOptions
+} from './surface/types';

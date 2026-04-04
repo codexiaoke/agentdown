@@ -1,12 +1,10 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import MarkdownBlockList from './MarkdownBlockList.vue';
 import { defaultMarkdownBuiltinComponents } from './defaultMarkdownComponents';
-import { AGUI_RUNTIME_KEY } from '../core/aguiRuntime';
 import { parseMarkdown } from '../core/parseMarkdown';
 import type {
   AguiComponentMap,
-  AguiRuntime,
   MarkdownBuiltinComponentOverrides,
   MarkdownEnginePlugin
 } from '../core/types';
@@ -18,7 +16,6 @@ interface Props {
   thoughtTitle?: string;
   aguiComponents?: AguiComponentMap;
   builtinComponents?: MarkdownBuiltinComponentOverrides;
-  aguiRuntime?: AguiRuntime | null;
   plugins?: MarkdownEnginePlugin[];
 }
 
@@ -28,11 +25,8 @@ const props = withDefaults(defineProps<Props>(), {
   thoughtTitle: 'Thought Process',
   aguiComponents: () => ({}),
   builtinComponents: () => ({}),
-  aguiRuntime: null,
   plugins: () => []
 });
-
-provide(AGUI_RUNTIME_KEY, props.aguiRuntime);
 
 const containerRef = ref<HTMLElement | null>(null);
 const width = ref(0);

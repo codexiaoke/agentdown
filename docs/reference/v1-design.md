@@ -5,8 +5,8 @@ description: Agentdown V1 的产品定位、核心架构、协议边界与非目
 
 # V1 产品设计
 
-> 本文定义 Agentdown 的 V1 目标形态，用于统一产品定位、架构边界和后续实现方向。  
-> 当前 0.x 版本仍以 `MarkdownRenderer` + `createAguiRuntime()` 为主，本文中的 `bridge`、`protocol`、`assembler`、`RunSurface` 是 V1 的收敛设计，而不是“已经全部实现”的现状描述。
+> 本文定义 Agentdown 当前主线架构与后续收敛方向。  
+> `Protocol`、`Bridge`、`Assembler`、`Runtime` 已经是正式设计基线；`RunSurface`、更多 transport 与更强的流式稳定化仍在继续完善中。
 
 ## 一句话定位
 
@@ -71,12 +71,15 @@ Transport -> Protocol -> Assembler -> Runtime -> RunSurface
 - 不做 UI 状态更新
 - 不假设后端一定是 SSE
 
-V1 内置：
+当前已经提供：
+
+- `createAsyncIterableTransport()`
+
+计划补齐：
 
 - `createSseTransport()`
 - `createNdjsonTransport()`
 - `createWebSocketTransport()`
-- `createAsyncIterableTransport()`
 
 ### 2. Protocol
 

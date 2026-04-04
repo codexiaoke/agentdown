@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, type Component } from 'vue';
 import BuiltinBlocksDemo from './pages/BuiltinBlocksDemo.vue';
+import ProtocolHelpersDemo from './pages/ProtocolHelpersDemo.vue';
+import ReplayTranscriptDemo from './pages/ReplayTranscriptDemo.vue';
 import SseWeatherDemo from './pages/SseWeatherDemo.vue';
+import StreamingMarkdownDemo from './pages/StreamingMarkdownDemo.vue';
+import UserFileDemo from './pages/UserFileDemo.vue';
 
 interface DemoRoute {
   path: string;
@@ -14,7 +18,7 @@ const routes: DemoRoute[] = [
   {
     path: '/blocks',
     title: '内置块总览',
-    description: '把 text / thought / code / agui / artifact / approval / timeline 走一遍。',
+    description: '把 text / thought / code / agui / artifact / approval 走一遍。',
     component: BuiltinBlocksDemo
   },
   {
@@ -22,6 +26,30 @@ const routes: DemoRoute[] = [
     title: 'SSE 天气示例',
     description: '演示后端 SSE JSON 如何映射到 runtime，再驱动自定义组件。',
     component: SseWeatherDemo
+  },
+  {
+    path: '/protocol-helpers',
+    title: '高阶 Helper',
+    description: '演示 helper protocol factory，统一管理 content.replace、artifact.upsert、approval.update。',
+    component: ProtocolHelpersDemo
+  },
+  {
+    path: '/replay-transcript',
+    title: 'Replay / Transcript',
+    description: '演示导出 transcript，再把 history 回放到一个新的 runtime。',
+    component: ReplayTranscriptDemo
+  },
+  {
+    path: '/streaming-markdown',
+    title: '流式 Markdown',
+    description: '演示 code/table 只在结构完整后稳定渲染，不提前显示半截源码。',
+    component: StreamingMarkdownDemo
+  },
+  {
+    path: '/user-file',
+    title: '用户上传文件',
+    description: '演示用户消息也可以是 artifact block，而不只是纯文本。',
+    component: UserFileDemo
   }
 ];
 

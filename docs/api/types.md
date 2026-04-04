@@ -1,6 +1,6 @@
 ---
 title: 核心类型
-description: Agentdown 当前最值得优先掌握的 TypeScript 类型。
+description: Agentdown 当前最值得优先掌握的 Markdown、Runtime、Protocol 和 Stream 类型。
 ---
 
 # 核心类型
@@ -62,136 +62,155 @@ interface ParseMarkdownOptions {
 }
 ```
 
-## AGUI 相关
+## Runtime 相关
+
+### `RuntimeNode`
+
+```ts
+interface RuntimeNode<TData = Record<string, unknown>> {
+  id: string
+  type: string
+  status?: string
+  parentId?: string | null
+  title?: string
+  message?: string
+  data: TData
+  startedAt?: number
+  updatedAt?: number
+  endedAt?: number
+}
+```
+
+### `SurfaceBlock`
+
+```ts
+interface SurfaceBlock<TData = Record<string, unknown>> {
+  id: string
+  slot: string
+  type: string
+  renderer: string
+  state: 'draft' | 'stable'
+  nodeId?: string | null
+  groupId?: string | null
+  content?: string
+  data: TData
+  createdAt?: number
+  updatedAt?: number
+}
+```
+
+### `RuntimeIntent`
+
+```ts
+interface RuntimeIntent<TPayload = Record<string, unknown>> {
+  id: string
+  type: string
+  nodeId?: string | null
+  blockId?: string | null
+  payload: TPayload
+  at: number
+}
+```
+
+### `RuntimeCommand`
+
+```ts
+type RuntimeCommand =
+  | { type: 'node.upsert'; node: RuntimeNode }
+  | { type: 'node.patch'; id: string; patch: Partial<RuntimeNode> }
+  | { type: 'node.remove'; id: string }
+  | { type: 'block.insert'; block: SurfaceBlock; beforeId?: string; afterId?: string }
+  | { type: 'block.upsert'; block: SurfaceBlock }
+  | { type: 'block.patch'; id: string; patch: Partial<SurfaceBlock> }
+  | { type: 'block.remove'; id: string }
+  | { type: 'stream.open'; streamId: string; slot: string; assembler: string }
+  | { type: 'stream.delta'; streamId: string; text: string }
+  | { type: 'stream.close'; streamId: string }
+  | { type: 'stream.abort'; streamId: string; reason?: string }
+  | { type: 'event.record'; event: Record<string, unknown> }
+```
+
+### `AgentRuntime`
+
+```ts
+interface AgentRuntime {
+  apply(commands: RuntimeCommand | RuntimeCommand[]): void
+  node(id: string): RuntimeNode | undefined
+  nodes(): RuntimeNode[]
+  block(id: string): SurfaceBlock | undefined
+  blocks(slot?: string): SurfaceBlock[]
+  children(nodeId: string): RuntimeNode[]
+  intents(): RuntimeIntent[]
+  history(): RuntimeHistoryEntry[]
+  emitIntent(intent: Omit<RuntimeIntent, 'id' | 'at'>): RuntimeIntent
+  snapshot(): RuntimeSnapshot
+  subscribe(listener: () => void): () => void
+  reset(): void
+}
+```
+
+## Protocol 相关
+
+### `ProtocolContext`
+
+```ts
+interface ProtocolContext {
+  now(): number
+  makeId(prefix?: string): string
+}
+```
+
+### `ProtocolRule`
+
+```ts
+interface ProtocolRule<TRawEvent> {
+  name?: string
+  match: (event: TRawEvent, context: ProtocolContext) => boolean
+  map: (input: {
+    event: TRawEvent
+    context: ProtocolContext
+  }) => RuntimeCommand | RuntimeCommand[] | null | void
+}
+```
+
+### `RuntimeProtocol`
+
+```ts
+interface RuntimeProtocol<TRawPacket = unknown> {
+  map(input: {
+    packet: TRawPacket
+    context: ProtocolContext
+  }): RuntimeCommand | RuntimeCommand[] | null | void
+}
+```
+
+## Stream 相关
+
+### `StreamAssembler`
+
+```ts
+interface StreamAssembler {
+  open(command: StreamOpenCommand, context: AssemblerContext): RuntimeCommand | RuntimeCommand[] | null | void
+  delta(command: StreamDeltaCommand, context: AssemblerContext): RuntimeCommand | RuntimeCommand[] | null | void
+  close(command: StreamCloseCommand, context: AssemblerContext): RuntimeCommand | RuntimeCommand[] | null | void
+  abort?(command: StreamAbortCommand, context: AssemblerContext): RuntimeCommand | RuntimeCommand[] | null | void
+  reset?(): void
+}
+```
+
+## 组件注入相关
 
 ### `AguiComponentMap`
 
 ```ts
-type AguiComponentMap = Record<string, Component | AguiComponentRegistration>;
+type AguiComponentMap = Record<string, Component | AguiComponentRegistration>
 ```
 
-其中完整注册对象长这样：
+### `AguiComponentRegistration`
 
 ```ts
 interface AguiComponentRegistration {
-  component: Component;
-  minHeight?: number;
+  component: Component
+  minHeight?: number
 }
 ```
-
-### `AgentNodeState`
-
-```ts
-interface AgentNodeState {
-  id: string;
-  kind: AguiNodeKind;
-  status: AguiNodeStatus;
-  title: string;
-  parentId?: string;
-  message?: string;
-  toolName?: string;
-  startedAt?: number;
-  endedAt?: number;
-  childrenIds: string[];
-  meta: Record<string, unknown>;
-}
-```
-
-### `AguiNodeKind`
-
-```ts
-type AguiNodeKind = 'run' | 'user' | 'leader' | 'agent' | 'tool' | 'system';
-```
-
-### `AguiNodeStatus`
-
-```ts
-type AguiNodeStatus =
-  | 'idle'
-  | 'thinking'
-  | 'assigned'
-  | 'running'
-  | 'waiting_tool'
-  | 'done'
-  | 'error';
-```
-
-### `AguiRuntimeEvent`
-
-```ts
-interface AguiRuntimeEvent {
-  type: string;
-  nodeId: string;
-  parentId?: string;
-  kind?: AguiNodeKind;
-  title?: string;
-  message?: string;
-  toolName?: string;
-  meta?: Record<string, unknown>;
-  at?: number;
-}
-```
-
-这是所有事件的基础形态。  
-核心 events helpers 只是基于这个接口进一步补了更精确的字段。
-
-### `AguiBinding`
-
-```ts
-interface AguiBinding<TState = unknown, TEvent = AguiRuntimeEvent> {
-  id: string;
-  stateRef: Readonly<ShallowRef<TState | null>>;
-  childrenRef: Readonly<ComputedRef<TState[]>>;
-  eventsRef: Readonly<ShallowRef<TEvent[]>>;
-}
-```
-
-它是 runtime 和组件之间真正的“桥”。
-
-### `AguiRuntime`
-
-```ts
-interface AguiRuntime {
-  ref(id): Readonly<ShallowRef<TState | null>>;
-  binding(id): AguiBinding<TState, TEvent>;
-  set(id, value): void;
-  patch(id, patch): void;
-  emit(event): void;
-  children(parentId): Readonly<ComputedRef<TState[]>>;
-  events(id?): Readonly<ShallowRef<AguiRuntimeEvent[]>>;
-  reset(): void;
-}
-```
-
-## reducer 相关
-
-### `AguiRuntimeReducerContext`
-
-```ts
-interface AguiRuntimeReducerContext {
-  event: AguiRuntimeEvent;
-  at: number;
-  previousState: AgentNodeState | null;
-  defaultPatch: Readonly<AguiNodePatch>;
-}
-```
-
-### `AguiRuntimeReducerResult`
-
-```ts
-interface AguiRuntimeReducerResult {
-  patch?: AguiNodePatch;
-  replaceDefault?: boolean;
-}
-```
-
-## 一条使用建议
-
-如果你希望组件内的类型体验更顺手，最推荐的组合通常是：
-
-```ts
-const state = useAguiState<AgentNodeState>();
-const children = useAguiChildren<AgentNodeState>();
-```
-
-这样你在模板和计算属性里都会拿到非常直接的类型提示。

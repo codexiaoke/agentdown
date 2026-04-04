@@ -1,115 +1,162 @@
 ---
-title: 事件 Helpers
-description: Agentdown 核心事件 helpers、输入字段与推荐使用方式。
+title: 协议辅助函数
+description: defineProtocol、when 和 cmd 的用法说明。
 ---
 
-# 事件 Helpers
+# 协议辅助函数
 
-Agentdown 在包入口导出了当前首版推荐使用的核心事件 helpers。
-
-## 基础 helpers
+## `defineProtocol()`
 
 ```ts
-runStarted()
-runFinished()
-userMessageCreated()
-agentAssigned()
-agentStarted()
-agentThinking()
-agentBlocked()
-agentFinished()
-teamFinished()
-toolStarted()
-toolFinished()
-artifactCreated()
-approvalRequested()
-approvalResolved()
-handoffCreated()
-nodeError()
+const protocol = defineProtocol<Packet>([
+  // rules
+])
 ```
 
-## 共享输入字段
+它接收一组规则，并把原始包映射成统一命令。
 
-大多数 helpers 都继承了这组基础字段：
-
-| 字段 | 说明 |
-| --- | --- |
-| `nodeId` | 当前事件作用的节点 id |
-| `parentId` | 当前节点的父节点 id |
-| `title` | 展示标题 |
-| `message` | 展示文案 |
-| `meta` | 扩展信息 |
-| `at` | 事件时间戳，未传时 runtime 自动补 |
-
-## 特殊事件字段
-
-### 工具事件
-
-`toolStarted()` 和 `toolFinished()` 额外需要：
-
-| 字段 | 说明 |
-| --- | --- |
-| `toolName` | 工具名，例如 `web.search` |
-
-### artifact 事件
-
-`artifactCreated()` 额外支持：
-
-| 字段 | 说明 |
-| --- | --- |
-| `artifactId` | 产物 id |
-| `artifactKind` | `file / diff / report / image / json / table` |
-| `label` | 产物标签 |
-| `href` | 产物链接或文件地址 |
-
-### approval 事件
-
-`approvalRequested()` 与 `approvalResolved()` 额外支持：
-
-| 字段 | 说明 |
-| --- | --- |
-| `approvalId` | 审批项 id |
-| `decision` | `approved / rejected / changes_requested` |
-
-### handoff 事件
-
-`handoffCreated()` 额外支持：
-
-| 字段 | 说明 |
-| --- | --- |
-| `target` | 交接目标，例如 `human`、`agent:writer`、`team:review` |
-
-## 推荐实践
-
-- 如果这个事件已经有官方 helper，优先直接用 helper
-- 如果这个事件是你业务特有的，再自己发自定义事件
-- 需要做 UI 语义映射时，不要在组件里硬编码，优先放进 reducer
-
-## 自定义事件示例
+## `when()`
 
 ```ts
-runtime.emit({
-  type: 'agent.streaming.delta',
-  nodeId: 'agent:writer',
-  parentId: 'run:copy',
-  message: '收到新的文本分片',
-  meta: {
-    deltaLength: 42
+when(match, map, name?)
+```
+
+它是一个类型友好的 helper，适合配合 TypeScript 的类型守卫使用。
+
+示例：
+
+```ts
+type Packet =
+  | { event: 'ToolCall'; id: string; name: string }
+  | { event: 'ToolCompleted'; id: string; name: string; content: Record<string, unknown> };
+
+function isToolCall(packet: Packet): packet is Extract<Packet, { event: 'ToolCall' }> {
+  return packet.event === 'ToolCall';
+}
+
+const rule = when(
+  isToolCall,
+  ({ event, context }) =>
+    cmd.node.upsert({
+      id: event.id,
+      type: 'tool',
+      status: 'running',
+      title: event.name,
+      data: {
+        createdAt: context.now()
+      }
+    }),
+  'tool-call'
+);
+```
+
+## `defineHelperProtocol()`
+
+```ts
+const protocol = defineHelperProtocol<Packet, 'type'>({
+  eventKey: 'type',
+  defaults: {
+    'content.replace': {
+      kind: 'markdown'
+    }
+  },
+  bindings: {
+    'content.replace': {
+      on: 'content.replace',
+      resolve: (event) => ({
+        id: event.blockId,
+        groupId: event.groupId,
+        content: event.markdown
+      })
+    },
+    'tool.finish': {
+      on: 'tool.finish',
+      resolve: (event) => ({
+        id: event.toolId,
+        title: event.name,
+        result: event.payload
+      })
+    }
   }
 });
 ```
 
-## 类型导出
+它适合“语义事件名已经固定”的项目，可以少写很多 `cmd.*` 样板。
 
-包入口还导出了首版常用的事件类型，方便你给 reducer、组件和事件日志补上精确类型：
+## `createHelperProtocolFactory()`
 
-- `CoreAguiEvent`
-- `CoreAguiEventType`
-- `RunStartedEvent`
-- `AgentStartedEvent`
-- `ToolStartedEvent`
-- `ArtifactCreatedEvent`
-- `ApprovalRequestedEvent`
-- `ApprovalResolvedEvent`
-- `HandoffCreatedEvent`
-- `NodeErrorEvent`
+```ts
+const factory = createHelperProtocolFactory<Packet, 'type'>({
+  eventKey: 'type',
+  defaults: {
+    'tool.start': {
+      renderer: 'tool.weather'
+    }
+  },
+  bindings: {
+    'tool.start': {
+      on: 'tool.start',
+      resolve: (event) => ({
+        id: event.toolId,
+        title: event.label
+      })
+    }
+  }
+});
+
+const protocol = factory.createProtocol();
+```
+
+它适合全局定义一套规范，再在不同 preset 或页面里复用。
+
+## `cmd`
+
+`cmd` 用来构造标准命令对象。
+
+### `cmd.node.*`
+
+- `cmd.node.upsert(node)`
+- `cmd.node.patch(id, patch)`
+- `cmd.node.remove(id)`
+
+### `cmd.block.*`
+
+- `cmd.block.insert(block, options?)`
+- `cmd.block.upsert(block)`
+- `cmd.block.patch(id, patch)`
+- `cmd.block.remove(id)`
+
+### `cmd.stream.*`
+
+- `cmd.stream.open(command)`
+- `cmd.stream.delta(streamId, text)`
+- `cmd.stream.write(streamId, text)`
+- `cmd.stream.close(streamId)`
+- `cmd.stream.end(streamId)`
+- `cmd.stream.abort(streamId, reason?)`
+
+### `cmd.event.record()`
+
+用来把原始事件或调试信息记录进 runtime history。
+
+### 常用高阶 helper
+
+- `cmd.run.start(input)`
+- `cmd.run.finish(input)`
+- `cmd.content.open(input)`
+- `cmd.content.append(streamId, text)`
+- `cmd.content.replace(input)`
+- `cmd.content.close(streamId)`
+- `cmd.tool.start(input)`
+- `cmd.tool.update(input)`
+- `cmd.tool.finish(input)`
+- `cmd.artifact.upsert(input)`
+- `cmd.approval.update(input)`
+- `cmd.node.error(input)`
+
+这些 helper 不是 core protocol 的强制语义，而是为了让协议映射层少写重复样板。
+
+## 一条建议
+
+把“后端长什么样”留在 protocol 里，把“前端怎么展示”留给 block renderer。  
+这样库本身会更通用，业务代码也更容易维护。

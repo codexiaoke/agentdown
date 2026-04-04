@@ -1,5 +1,5 @@
 import type MarkdownIt from 'markdown-it';
-import type { Component, ComputedRef, ShallowRef } from 'vue';
+import type { Component } from 'vue';
 
 export type MarkdownHeadingTag =
   | 'p'
@@ -144,119 +144,6 @@ export interface MarkdownTimelineBlock {
   limit: number;
   /** 没有事件时显示的文案。 */
   emptyText?: string;
-}
-
-export type AguiNodeKind = 'run' | 'user' | 'leader' | 'agent' | 'tool' | 'system';
-
-export type AguiNodeStatus = 'idle' | 'thinking' | 'assigned' | 'running' | 'waiting_tool' | 'done' | 'error';
-
-export interface AgentNodeState {
-  /** 节点唯一标识，通常和 markdown 中的 ref 对齐。 */
-  id: string;
-  /** 节点种类，如 run、agent、tool。 */
-  kind: AguiNodeKind;
-  /** 节点当前状态。 */
-  status: AguiNodeStatus;
-  /** 节点显示标题。 */
-  title: string;
-  /** 父节点 id，用于组织层级关系。 */
-  parentId?: string;
-  /** 节点当前说明文案。 */
-  message?: string;
-  /** 节点对应的工具名，仅 tool 类节点常用。 */
-  toolName?: string;
-  /** 节点开始时间戳。 */
-  startedAt?: number;
-  /** 节点结束时间戳。 */
-  endedAt?: number;
-  /** 子节点 id 列表。 */
-  childrenIds: string[];
-  /** 用户自定义附加信息。 */
-  meta: Record<string, unknown>;
-}
-
-export type StatePatch<T extends object> = {
-  [K in keyof T]?: T[K] | undefined;
-};
-
-export type AguiNodePatch = StatePatch<AgentNodeState>;
-
-export interface AguiRuntimeEvent {
-  /** 事件名，如 agent.started、tool.finished。 */
-  type: string;
-  /** 当前事件作用的节点 id。 */
-  nodeId: string;
-  /** 当前事件声明的父节点 id。 */
-  parentId?: string;
-  /** 当前事件声明的节点种类。 */
-  kind?: AguiNodeKind;
-  /** 当前事件携带的标题。 */
-  title?: string;
-  /** 当前事件携带的文案。 */
-  message?: string;
-  /** 当前事件关联的工具名。 */
-  toolName?: string;
-  /** 当前事件附加的自定义信息。 */
-  meta?: Record<string, unknown>;
-  /** 事件发生时间，未提供时由 runtime 自动补。 */
-  at?: number;
-}
-
-export interface AguiRuntimeReducerContext {
-  /** 当前进入 reducer 的原始事件。 */
-  event: AguiRuntimeEvent;
-  /** 标准化后的事件时间。 */
-  at: number;
-  /** 当前节点归约前的上一份状态。 */
-  previousState: AgentNodeState | null;
-  /** 内置规则先算出的默认 patch。 */
-  defaultPatch: Readonly<AguiNodePatch>;
-}
-
-export interface AguiRuntimeReducerResult {
-  /** 自定义补丁内容。 */
-  patch?: AguiNodePatch;
-  /** 是否完全替换内置默认 patch。 */
-  replaceDefault?: boolean;
-}
-
-export type AguiRuntimeReducer =
-  | ((context: AguiRuntimeReducerContext) => AguiNodePatch | AguiRuntimeReducerResult | null | void)
-  | null;
-
-export interface CreateAguiRuntimeOptions {
-  /** 自定义事件归约器，用来扩展或覆盖默认状态映射。 */
-  reducer?: AguiRuntimeReducer;
-}
-
-export interface AguiBinding<TState = unknown, TEvent = AguiRuntimeEvent> {
-  /** 当前 binding 对应的节点 id。 */
-  id: string;
-  /** 当前节点的响应式状态引用。 */
-  stateRef: Readonly<ShallowRef<TState | null>>;
-  /** 当前节点的响应式子节点列表。 */
-  childrenRef: Readonly<ComputedRef<TState[]>>;
-  /** 当前节点的响应式事件流。 */
-  eventsRef: Readonly<ShallowRef<TEvent[]>>;
-}
-
-export interface AguiRuntime {
-  /** 获取某个节点的只读状态 ref。 */
-  ref<TState = unknown>(id: string): Readonly<ShallowRef<TState | null>>;
-  /** 获取某个节点的完整 binding。 */
-  binding<TState = unknown, TEvent = AguiRuntimeEvent>(id: string): AguiBinding<TState, TEvent>;
-  /** 直接覆盖某个节点的完整状态。 */
-  set<TState>(id: string, value: TState): void;
-  /** 以 patch 方式更新某个节点状态。 */
-  patch<TState extends object>(id: string, patch: StatePatch<TState>): void;
-  /** 推入一个事件，并触发内部归约。 */
-  emit(event: AguiRuntimeEvent): void;
-  /** 获取某个父节点下的响应式子节点列表。 */
-  children<TState = unknown>(parentId: string): Readonly<ComputedRef<TState[]>>;
-  /** 获取全局或某个节点下的响应式事件流。 */
-  events(id?: string): Readonly<ShallowRef<AguiRuntimeEvent[]>>;
-  /** 清空所有节点状态、关系和事件。 */
-  reset(): void;
 }
 
 export type MarkdownBlock =

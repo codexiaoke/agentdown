@@ -1,22 +1,22 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 import { cmd, RunSurface } from '../../index';
-import { weatherRunPreset, type WeatherSsePayload } from '../presets/weatherPreset';
+import { fileUploadPreset, type FileUploadDemoPacket } from '../presets/fileUploadPreset';
 
-const RUN_ID = 'run:weather';
-const TOOL_ID = 'tool-1';
-const STREAM_ID = 'stream:weather:answer';
-const USER_GROUP_ID = 'turn:user:weather';
-const ASSISTANT_GROUP_ID = 'turn:weather';
+const RUN_ID = 'run:file';
+const TOOL_ID = 'tool:file-parse';
+const STREAM_ID = 'stream:file:answer';
+const USER_GROUP_ID = 'turn:user:file';
+const ASSISTANT_GROUP_ID = 'turn:file:assistant';
 const playing = ref(false);
 const timers: number[] = [];
-const { runtime, bridge, surface } = weatherRunPreset.createSession();
+const { runtime, bridge, surface } = fileUploadPreset.createSession();
 
-const demoPackets: WeatherSsePayload[] = [
+const demoPackets: FileUploadDemoPacket[] = [
   {
     event: 'RunStarted',
     runId: RUN_ID,
-    title: '天气助手'
+    title: '文件助手'
   },
   {
     event: 'ContentOpen',
@@ -27,22 +27,25 @@ const demoPackets: WeatherSsePayload[] = [
   {
     event: 'ContentDelta',
     streamId: STREAM_ID,
-    text: '我来为你查询天气'
+    text: '我先读取你上传的文件'
   },
   {
     event: 'ToolCall',
-    name: '查询天气',
-    id: TOOL_ID
+    id: TOOL_ID,
+    name: '解析 PDF'
   },
   {
     event: 'ToolCompleted',
-    name: '查询天气',
     id: TOOL_ID,
+    name: '解析 PDF',
     content: {
-      city: '北京',
-      condition: '晴',
-      tempC: 26,
-      humidity: '42%'
+      fileName: '北京行程单.pdf',
+      pageCount: 4,
+      highlights: [
+        '文档包含 4 月 7 日到 4 月 9 日的差旅行程。',
+        '首日安排了北京朝阳区的客户拜访。',
+        '附件里包含酒店与返程高铁信息。'
+      ]
     }
   },
   {
@@ -67,21 +70,35 @@ function clearTimers() {
   playing.value = false;
 }
 
-function resetDemo() {
-  bridge.reset();
-  seedConversation();
-}
-
 function seedConversation() {
   const now = Date.now();
 
-  runtime.apply(cmd.message.text({
-    id: 'block:user:weather',
-    role: 'user',
-    text: '帮我查一下北京今天天气',
-    groupId: USER_GROUP_ID,
-    at: now
-  }));
+  runtime.apply([
+    cmd.message.text({
+      id: 'block:user:file:text',
+      role: 'user',
+      text: '帮我看看这个 PDF 里讲了什么',
+      groupId: USER_GROUP_ID,
+      at: now
+    }),
+    cmd.message.artifact({
+      id: 'block:user:file:artifact',
+      role: 'user',
+      groupId: USER_GROUP_ID,
+      title: '用户上传文件',
+      artifactKind: 'file',
+      artifactId: 'file:beijing-trip-pdf',
+      label: '北京行程单.pdf',
+      message: '一个 PDF 文件，想让助手帮忙快速提炼重点。',
+      href: 'https://example.com/beijing-trip.pdf',
+      at: now + 1
+    })
+  ]);
+}
+
+function resetDemo() {
+  bridge.reset();
+  seedConversation();
 }
 
 function replayDemo() {
@@ -97,7 +114,7 @@ function replayDemo() {
         bridge.flush('demo-complete');
         playing.value = false;
       }
-    }, 650 * (index + 1));
+    }, 700 * (index + 1));
 
     timers.push(timerId);
   });
@@ -115,8 +132,8 @@ onBeforeUnmount(() => {
 <template>
   <section class="demo-page">
     <header class="demo-page__header">
-      <h1>天气对话</h1>
-      <p>用户提问后，助手先输出一句话，再插入工具卡片，工具完成后原地更新结果。</p>
+      <h1>用户上传文件</h1>
+      <p>用户消息可以不只是 text，也可以直接是文件 block，然后助手继续流式回复和工具解析。</p>
     </header>
 
     <RunSurface

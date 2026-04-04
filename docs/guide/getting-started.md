@@ -1,6 +1,6 @@
 ---
 title: 快速开始
-description: 在 Vue 3 项目中接入 Agentdown，完成 markdown 渲染、Mermaid、AGUI runtime 与组件注入。
+description: 在 Vue 3 项目中接入 Agentdown，完成 markdown 渲染、协议映射、stream 组装与 runtime 更新。
 ---
 
 # 快速开始
@@ -53,63 +53,83 @@ flowchart LR
 </template>
 ```
 
-## 接入 AGUI Runtime
+## 接入 Runtime 主链路
 
 如果你只需要纯 markdown 渲染，到这里已经够了。  
-如果你还需要让组件随着 agent 事件实时变化，就把 runtime 一起接上。
+如果你还需要把后端流式事件接进一个可持续更新的 UI，就把 `Protocol + Bridge + Assembler + Runtime` 一起接上。
 
-```vue
-<script setup lang="ts">
+```ts
 import {
-  MarkdownRenderer,
-  createAguiRuntime,
-  runStarted,
-  agentStarted,
-  toolStarted
+  cmd,
+  createAgentRuntime,
+  createBridge,
+  createMarkdownAssembler,
+  defineEventProtocol
 } from 'agentdown';
 
-const runtime = createAguiRuntime();
+type Packet =
+  | { event: 'RunContent'; text: string }
+  | { event: 'ToolCall'; id: string; name: string }
+  | { event: 'ToolCompleted'; id: string; name: string; content: Record<string, unknown> };
 
-const source = `
-:::vue-component DemoRunBoard {"ref":"run:demo"}
-`;
+const runtime = createAgentRuntime();
 
-runtime.emit(runStarted({
-  nodeId: 'run:demo',
-  title: '中文演示运行',
-  message: '等待 leader 分配任务'
-}));
+const protocol = defineEventProtocol<Packet>({
+  RunContent: (event) => [
+    cmd.content.open({
+      streamId: 'stream:assistant',
+      slot: 'main'
+    }),
+    cmd.content.append('stream:assistant', event.text),
+    cmd.content.close('stream:assistant')
+  ],
+  ToolCall: (event, context) =>
+    cmd.tool.start({
+      id: event.id,
+      title: event.name,
+      renderer: 'tool.weather',
+      at: context.now()
+    }),
+  ToolCompleted: (event, context) =>
+    cmd.tool.finish({
+      id: event.id,
+      title: event.name,
+      result: event.content,
+      at: context.now()
+    })
+});
 
-runtime.emit(agentStarted({
-  nodeId: 'agent:planner',
-  parentId: 'run:demo',
-  title: 'Planner',
-  kind: 'leader',
-  message: '拆解任务中'
-}));
+const bridge = createBridge({
+  runtime,
+  protocol,
+  assemblers: {
+    markdown: createMarkdownAssembler()
+  }
+});
 
-runtime.emit(toolStarted({
-  nodeId: 'tool:search',
-  parentId: 'agent:planner',
-  title: '搜索知识库',
-  toolName: 'knowledge.search'
-}));
-</script>
-
-<template>
-  <MarkdownRenderer
-    :source="source"
-    :agui-runtime="runtime"
-    :agui-components="{ DemoRunBoard }"
-  />
-</template>
+bridge.push([
+  { event: 'RunContent', text: '我来为你查询天气' },
+  { event: 'ToolCall', id: 'tool:weather', name: '查询天气' },
+  {
+    event: 'ToolCompleted',
+    id: 'tool:weather',
+    name: '查询天气',
+    content: { city: '北京', condition: '晴', tempC: 26 }
+  }
+]);
 ```
 
 ## 一个推荐的项目接入顺序
 
 1. 先用 `MarkdownRenderer` 跑通内容渲染。
-2. 再把 `aguiRuntime` 和 `:::vue-component` 接上。
-3. 最后按你的 Design System 覆写 `code / thought / html / agui` 等内置组件。
+2. 再定义你的 `raw packet -> RuntimeCommand[]` 映射规则。
+3. 用 `createBridge()` 和 assembler 接好流式链路。
+4. 最后按你的 Design System 覆写 `code / thought / html / agui` 等内置组件。
+
+## 关于 UI 渲染
+
+`createAgentRuntime()` 只负责保存同步状态。  
+你可以通过 `runtime.snapshot()` / `runtime.subscribe()` 把 block 渲染成聊天界面、工具卡片区、侧边栏或你自己的 RunSurface。
 
 ## 本地文档站
 
@@ -124,5 +144,6 @@ npm run docs:preview
 ## 下一步看什么
 
 - 想理解内容是怎么被拆成 block 的：看 [Markdown 渲染](/guide/markdown-rendering)
+- 想理解 runtime 里到底保存了什么：看 [Runtime 概览](/runtime/overview)
+- 想理解自定义后端事件怎么映射：看 [协议映射](/runtime/protocol)
 - 想把默认 UI 换成自己的设计系统：看 [组件覆写](/guide/component-overrides)
-- 想理解 runtime 的事件与状态模型：看 [AGUI Runtime 概览](/runtime/overview)
