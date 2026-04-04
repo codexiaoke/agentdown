@@ -75,3 +75,5 @@ Agentdown 的目标不是“能渲染 markdown 的 AGUI”，而是：
 - 文档本身就是 run 协议
 - markdown 不只是内容层，也是 agent UI 的声明层
 - `:::agent`、`:::tool`、`:::artifact`、`:::approval`、`:::timeline` 形成稳定 DSL
+
+如果你想先看已经收敛出的目标架构，请先阅读 [V1 产品设计](/reference/v1-design)。

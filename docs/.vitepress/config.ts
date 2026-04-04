@@ -75,6 +75,7 @@ export default defineConfig({
         {
           text: '参考',
           items: [
+            { text: 'V1 产品设计', link: '/reference/v1-design' },
             { text: 'FAQ', link: '/reference/faq' },
             { text: '发布清单', link: '/reference/release' },
             { text: '路线图', link: '/reference/roadmap' }
