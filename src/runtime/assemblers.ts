@@ -13,6 +13,9 @@ import type {
   TextAssemblerOptions
 } from './types';
 
+/**
+ * 纯文本流在 assembler 内部维护的会话状态。
+ */
 interface TextStreamSession {
   blockId: string;
   content: string;
@@ -26,16 +29,25 @@ interface TextStreamSession {
   stableRenderer: string;
 }
 
+/**
+ * markdown 流在文本会话基础上追加的解析状态。
+ */
 interface MarkdownStreamSession extends TextStreamSession {
   committedLength: number;
   stableBlockCount: number;
 }
 
+/**
+ * 从数据对象中安全读取非空字符串字段。
+ */
 function readString(data: Record<string, unknown> | undefined, key: string): string | undefined {
   const value = data?.[key];
   return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
+/**
+ * 从数据对象中安全读取普通对象字段。
+ */
 function readRecord(data: Record<string, unknown> | undefined, key: string): Record<string, unknown> | undefined {
   const value = data?.[key];
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -43,6 +55,9 @@ function readRecord(data: Record<string, unknown> | undefined, key: string): Rec
     : undefined;
 }
 
+/**
+ * 基于 stream.open 命令初始化一段文本流会话。
+ */
 function createTextSession(
   command: StreamOpenCommand,
   context: AssemblerContext,
@@ -62,6 +77,9 @@ function createTextSession(
   };
 }
 
+/**
+ * 为一段刚打开的文本流创建初始 draft block。
+ */
 function createDraftInsertCommand(command: StreamOpenCommand, session: TextStreamSession): RuntimeCommand[] {
   const block: SurfaceBlock = {
     id: session.blockId,
@@ -94,6 +112,9 @@ function createDraftInsertCommand(command: StreamOpenCommand, session: TextStrea
   ];
 }
 
+/**
+ * 生成一次文本 draft 内容更新命令。
+ */
 function createDraftPatchCommand(session: TextStreamSession, updatedAt: number): RuntimeCommand[] {
   return [
     {
@@ -107,6 +128,9 @@ function createDraftPatchCommand(session: TextStreamSession, updatedAt: number):
   ];
 }
 
+/**
+ * 生成一次流中止后的 draft 补丁命令。
+ */
 function createAbortPatchCommand(session: TextStreamSession, updatedAt: number, reason?: string): RuntimeCommand[] {
   return [
     {
@@ -126,6 +150,9 @@ function createAbortPatchCommand(session: TextStreamSession, updatedAt: number, 
   ];
 }
 
+/**
+ * 创建一个最基础的纯文本 assembler。
+ */
 function createTextAssembler(options: Required<TextAssemblerOptions>): StreamAssembler {
   const sessions = new Map<string, TextStreamSession>();
 
@@ -183,6 +210,9 @@ function createTextAssembler(options: Required<TextAssemblerOptions>): StreamAss
   };
 }
 
+/**
+ * 把一个 markdown block 转成 surface block。
+ */
 function markdownBlockToSurfaceBlock(
   block: MarkdownBlock,
   session: MarkdownStreamSession,
@@ -238,6 +268,9 @@ function markdownBlockToSurfaceBlock(
   return next;
 }
 
+/**
+ * 更新 markdown draft 区域中尚未稳定提交的尾部内容。
+ */
 function patchDraftRemainder(session: MarkdownStreamSession, updatedAt: number): RuntimeCommand[] {
   const remainder = session.content.slice(session.committedLength);
 
@@ -256,6 +289,9 @@ function patchDraftRemainder(session: MarkdownStreamSession, updatedAt: number):
   ];
 }
 
+/**
+ * 把一段已经结构完整的 markdown 解析并插入为稳定 block。
+ */
 function appendStableMarkdownBlocks(
   session: MarkdownStreamSession,
   chunk: string,
@@ -281,6 +317,9 @@ function appendStableMarkdownBlocks(
   return commands;
 }
 
+/**
+ * 同步 markdown 流会话，把稳定内容和 draft 尾部一起刷新。
+ */
 function syncStreamingMarkdownSession(session: MarkdownStreamSession, at: number): RuntimeCommand[] {
   const nextBoundary = findStreamingMarkdownBoundary(session.content);
   const commands: RuntimeCommand[] = [];
@@ -295,6 +334,9 @@ function syncStreamingMarkdownSession(session: MarkdownStreamSession, at: number
   return commands;
 }
 
+/**
+ * 创建一个默认的纯文本 assembler。
+ */
 export function createPlainTextAssembler(options: TextAssemblerOptions = {}): StreamAssembler {
   return createTextAssembler({
     type: options.type ?? 'text',
@@ -303,6 +345,9 @@ export function createPlainTextAssembler(options: TextAssemblerOptions = {}): St
   });
 }
 
+/**
+ * 创建一个支持稳定块边界识别的 markdown assembler。
+ */
 export function createMarkdownAssembler(options: TextAssemblerOptions = {}): StreamAssembler {
   const sessions = new Map<string, MarkdownStreamSession>();
   const defaults: Required<TextAssemblerOptions> = {

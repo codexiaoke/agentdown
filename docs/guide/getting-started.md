@@ -119,6 +119,73 @@ bridge.push([
 ]);
 ```
 
+## 在 Vue 组件里直接接 SSE
+
+如果你的页面本身就是一个 Vue 组件，很多时候不需要手动管理 `bridge.consume()`。  
+直接用内置 hook 会更顺手：
+
+```ts
+import {
+  RunSurface,
+  createMarkdownAssembler,
+  useSseBridge
+} from 'agentdown'
+
+const {
+  runtime,
+  connect,
+  consuming,
+  error
+} = useSseBridge<Packet>({
+  source: '/api/agent/sse',
+  protocol,
+  assemblers: {
+    markdown: createMarkdownAssembler()
+  },
+  request: {
+    body: {
+      message: '帮我查一下北京天气'
+    }
+  },
+  transport: {
+    mode: 'json'
+  }
+})
+
+await connect(undefined, {
+  request: {
+    body: {
+      message: '帮我再查一次'
+    }
+  }
+})
+```
+
+你会直接拿到：
+
+- `runtime`：可以直接传给 `RunSurface`
+- `start()` / `stop()` / `restart()`：适合接按钮或页面生命周期
+- `consuming` / `error` / `status`：适合接 loading、错误提示和调试面板
+
+如果你只是想先收一层 SSE 数据，不急着接 runtime，也可以先用：
+
+- `useSse()`
+
+如果不是网络请求，而是本地 async generator / mock 数据流，也可以直接换成：
+
+- `useAsyncIterableBridge()`
+
+如果你页面上同时要用：
+
+- `runtime`
+- `surface`
+- transcript 导出 / 导入
+- replay 控制
+
+那可以直接再往上一层，用：
+
+- `useAgentSession()`
+
 ## 一个推荐的项目接入顺序
 
 1. 先用 `MarkdownRenderer` 跑通内容渲染。

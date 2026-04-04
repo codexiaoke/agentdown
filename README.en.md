@@ -15,7 +15,9 @@ Documentation: [https://codexiaoke.github.io/agentdown/](https://codexiaoke.gith
 - `createBridge()` to orchestrate protocol mapping, stream assembly and batched flushes
 - `createMarkdownAssembler()` and `createPlainTextAssembler()` for `stream.open / delta / close`
 - Built-in `createSseTransport()`, `createNdjsonTransport()`, `createWebSocketTransport()`, and `createAsyncIterableTransport()`
-- Built-in `createRuntimeTranscript()` and `createRuntimeReplayPlayer()` for replay and export flows
+- Built-in Vue composables such as `useSse()`, `useSseBridge()`, `useNdjsonBridge()`, `useWebSocketBridge()`, `useAsyncIterableBridge()`, and `useRuntimeTranscript()`
+- Also includes a page-level `useAgentSession()` wrapper for `runtime / bridge / transcript / replay`
+- Built-in `createRuntimeTranscript()`, `parseRuntimeTranscript()`, and `createRuntimeReplayPlayer()` for replay, import, and export flows, including structured `messages / tools / artifacts / approvals`
 - `createAgentRuntime()` for `node / block / intent / history`
 - `RunSurface` as the formal runtime-driven chat surface
 - High-level helpers such as `content.replace`, `tool.finish`, `artifact.upsert`, `approval.update`, and `node.error`
@@ -115,6 +117,57 @@ bridge.push([
 console.log(runtime.snapshot());
 ```
 
+If you are wiring SSE directly inside a Vue component, the composable form is usually simpler:
+
+```ts
+const {
+  runtime,
+  connect,
+  consuming,
+  error
+} = useSseBridge<Packet>({
+  source: '/api/agent/sse',
+  protocol,
+  assemblers: {
+    markdown: createMarkdownAssembler()
+  },
+  request: {
+    body: {
+      message: 'Check Beijing weather'
+    }
+  },
+  transport: {
+    mode: 'json'
+  }
+})
+
+await connect(undefined, {
+  request: {
+    body: {
+      message: 'Check once more'
+    }
+  }
+})
+```
+
+If you do not need the bridge yet and just want a standalone SSE hook:
+
+```ts
+const { status, lastMessage, connect, abort } = useSse<MyPacket>({
+  onMessage: (packet) => {
+    console.log(packet)
+  }
+})
+
+await connect('/api/chat/sse', {
+  request: {
+    body: {
+      message: 'hello'
+    }
+  }
+})
+```
+
 If your backend sends full content snapshots instead of token appends, you can also do:
 
 ```ts
@@ -124,6 +177,25 @@ cmd.content.replace({
   content: 'I already prepared it.\\n\\n- Beijing is sunny\\n- 26°C',
   kind: 'markdown'
 });
+```
+
+For replay or export:
+
+```ts
+const transcript = createRuntimeTranscript(runtime)
+
+console.log(transcript.messages)
+console.log(transcript.tools)
+console.log(transcript.artifacts)
+console.log(transcript.approvals)
+```
+
+If you want to load exported JSON back into the app:
+
+```ts
+const importedTranscript = parseRuntimeTranscript(jsonText)
+
+const player = createRuntimeReplayPlayer(importedTranscript.history)
 ```
 
 If your app already has a stable event convention, you can also define a reusable global protocol factory:

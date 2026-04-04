@@ -17,8 +17,14 @@ import type {
 } from './types';
 import { compactObject, toArray } from './utils';
 
+/**
+ * 从原始事件类型中提取某个事件键对应的字符串字面量联合。
+ */
 type EventValueOf<TRawEvent, TEventKey extends keyof TRawEvent> = Extract<TRawEvent[TEventKey], string>;
 
+/**
+ * 基于事件名分发时的 handler 映射表。
+ */
 type EventProtocolHandlers<
   TRawEvent extends Record<TEventKey, string>,
   TEventKey extends keyof TRawEvent
@@ -29,6 +35,9 @@ type EventProtocolHandlers<
   ) => RuntimeCommand | RuntimeCommand[] | null | void;
 }>;
 
+/**
+ * `cmd.run.start()` 所需的输入结构。
+ */
 export interface RunStartInput {
   id: string;
   title?: string;
@@ -40,6 +49,9 @@ export interface RunStartInput {
   status?: string;
 }
 
+/**
+ * `cmd.run.finish()` 所需的输入结构。
+ */
 export interface RunFinishInput {
   id: string;
   title?: string;
@@ -49,10 +61,16 @@ export interface RunFinishInput {
   status?: string;
 }
 
+/**
+ * 打开一段流式内容所需的输入结构。
+ */
 export interface ContentOpenInput extends Omit<StreamOpenCommand, 'type' | 'assembler'> {
   assembler?: string;
 }
 
+/**
+ * 创建一个工具节点和工具 block 时的输入结构。
+ */
 export interface ToolStartInput {
   id: string;
   title: string;
@@ -69,6 +87,9 @@ export interface ToolStartInput {
   status?: string;
 }
 
+/**
+ * 更新一个工具节点和工具 block 时的输入结构。
+ */
 export interface ToolUpdateInput {
   id: string;
   title?: string;
@@ -83,8 +104,14 @@ export interface ToolUpdateInput {
   result?: unknown;
 }
 
+/**
+ * message block 支持的角色类型。
+ */
 type MessageRole = 'assistant' | 'user' | 'system';
 
+/**
+ * 通用消息 block 的输入结构。
+ */
 export interface MessageBlockInput {
   id: string;
   role?: MessageRole;
@@ -99,10 +126,16 @@ export interface MessageBlockInput {
   at?: number;
 }
 
+/**
+ * 纯文本消息的快捷输入结构。
+ */
 export interface MessageTextInput extends Omit<MessageBlockInput, 'type' | 'renderer' | 'content'> {
   text: string;
 }
 
+/**
+ * artifact 消息的快捷输入结构。
+ */
 export interface MessageArtifactInput extends Omit<MessageBlockInput, 'type' | 'renderer' | 'content'> {
   title: string;
   artifactKind: string;
@@ -113,15 +146,28 @@ export interface MessageArtifactInput extends Omit<MessageBlockInput, 'type' | '
   refId?: string;
 }
 
+/**
+ * 内容替换支持的目标内容类型。
+ */
 export type ContentKind = 'text' | 'markdown';
+
+/**
+ * draft block 在界面中的推荐展示模式。
+ */
 export type DraftMode = 'text' | 'preview' | 'hidden';
 
+/**
+ * 使用完整内容替换当前消息时的输入结构。
+ */
 export interface ContentReplaceInput extends Omit<MessageBlockInput, 'type' | 'renderer' | 'content'> {
   content: string;
   kind?: ContentKind;
   mode?: DraftMode;
 }
 
+/**
+ * 更新审批 block 时的输入结构。
+ */
 export interface ApprovalUpdateInput extends Omit<MessageBlockInput, 'type' | 'renderer' | 'content'> {
   title: string;
   approvalId?: string;
@@ -130,6 +176,9 @@ export interface ApprovalUpdateInput extends Omit<MessageBlockInput, 'type' | 'r
   refId?: string;
 }
 
+/**
+ * 标记节点错误状态时的输入结构。
+ */
 export interface NodeErrorInput {
   id: string;
   title?: string;
@@ -141,15 +190,24 @@ export interface NodeErrorInput {
   at?: number;
 }
 
+/**
+ * 向已打开流追加文本时的输入结构。
+ */
 export interface ContentAppendInput {
   streamId: string;
   text: string;
 }
 
+/**
+ * 关闭流时的输入结构。
+ */
 export interface ContentCloseInput {
   streamId: string;
 }
 
+/**
+ * 中止流时的输入结构。
+ */
 export interface ContentAbortInput extends ContentCloseInput {
   reason?: string;
 }
@@ -174,6 +232,9 @@ export type HelperProtocolSemanticEvent =
   | 'node.error'
   | 'event.record';
 
+/**
+ * helper 语义事件到具体输入结构的映射。
+ */
 type HelperProtocolInputByEvent = {
   'run.start': RunStartInput;
   'run.finish': RunFinishInput;
@@ -191,18 +252,27 @@ type HelperProtocolInputByEvent = {
   'event.record': RuntimeData;
 };
 
+/**
+ * 单条 helper binding 的定义结构。
+ */
 export interface HelperProtocolBinding<TRawEvent, TInput> {
   on?: string | string[];
   match?: (event: TRawEvent, context: ProtocolContext) => boolean;
   resolve: (event: TRawEvent, context: ProtocolContext) => TInput | TInput[] | null | void;
 }
 
+/**
+ * helper 语义事件到 binding 列表的映射。
+ */
 export type HelperProtocolBindings<TRawEvent> = Partial<{
   [TEventName in HelperProtocolSemanticEvent]:
     | HelperProtocolBinding<TRawEvent, HelperProtocolInputByEvent[TEventName]>
     | Array<HelperProtocolBinding<TRawEvent, HelperProtocolInputByEvent[TEventName]>>;
 }>;
 
+/**
+ * helper protocol 支持的默认输入值集合。
+ */
 export type HelperProtocolDefaults = Partial<{
   [TEventName in Exclude<HelperProtocolSemanticEvent, 'content.append' | 'content.close' | 'content.abort' | 'event.record'>]:
     Partial<HelperProtocolInputByEvent[TEventName]>;
@@ -213,6 +283,9 @@ export type HelperProtocolDefaults = Partial<{
   'event.record': RuntimeData;
 }>;
 
+/**
+ * 创建 helper protocol 时的配置项。
+ */
 export interface HelperProtocolOptions<
   TRawEvent,
   TEventKey extends string = 'event'
@@ -222,6 +295,9 @@ export interface HelperProtocolOptions<
   bindings: HelperProtocolBindings<TRawEvent>;
 }
 
+/**
+ * 覆盖 helper protocol 配置时可传入的局部选项。
+ */
 export interface HelperProtocolOverrides<
   TRawEvent,
   TEventKey extends string = 'event'
@@ -231,6 +307,9 @@ export interface HelperProtocolOverrides<
   bindings?: HelperProtocolBindings<TRawEvent>;
 }
 
+/**
+ * helper protocol 工厂接口。
+ */
 export interface HelperProtocolFactory<
   TRawEvent,
   TEventKey extends string = 'event'
@@ -239,6 +318,9 @@ export interface HelperProtocolFactory<
   createProtocol(overrides?: HelperProtocolOverrides<TRawEvent, TEventKey>): RuntimeProtocol<TRawEvent>;
 }
 
+/**
+ * 合并多份 runtime data。
+ */
 function mergeData(...records: Array<RuntimeData | undefined>): RuntimeData {
   const merged: RuntimeData = {};
 
@@ -253,10 +335,16 @@ function mergeData(...records: Array<RuntimeData | undefined>): RuntimeData {
   return merged;
 }
 
+/**
+ * 生成工具 block 的默认 blockId。
+ */
 function toolBlockId(id: string, blockId?: string): string {
   return blockId ?? `block:${id}`;
 }
 
+/**
+ * 统一推导消息 block 的 type、renderer 和 role。
+ */
 function resolveMessageBlockShape(input: MessageBlockInput) {
   const type = input.type ?? input.renderer ?? 'text';
   const renderer = input.renderer ?? input.type ?? 'text';
@@ -269,6 +357,9 @@ function resolveMessageBlockShape(input: MessageBlockInput) {
   };
 }
 
+/**
+ * 生成一条消息 block insert 命令。
+ */
 function createMessageInsertCommand(
   input: MessageBlockInput,
   options: Omit<BlockInsertCommand, 'type' | 'block'> = {}
@@ -297,6 +388,9 @@ function createMessageInsertCommand(
   );
 }
 
+/**
+ * 生成一条消息 block upsert 命令。
+ */
 function createMessageUpsertCommand(input: MessageBlockInput) {
   const shape = resolveMessageBlockShape(input);
 
@@ -319,6 +413,9 @@ function createMessageUpsertCommand(input: MessageBlockInput) {
   });
 }
 
+/**
+ * 生成一条消息 block patch 命令。
+ */
 function createMessagePatchCommand(input: MessageBlockInput): BlockPatchCommand {
   const shape = resolveMessageBlockShape(input);
 
@@ -340,6 +437,9 @@ function createMessagePatchCommand(input: MessageBlockInput): BlockPatchCommand 
   });
 }
 
+/**
+ * 快速生成一条纯文本消息插入命令。
+ */
 function createMessageTextCommand(
   input: MessageTextInput,
   options: Omit<BlockInsertCommand, 'type' | 'block'> = {}
@@ -355,6 +455,9 @@ function createMessageTextCommand(
   );
 }
 
+/**
+ * 生成 artifact block 默认 data。
+ */
 function createArtifactData(input: MessageArtifactInput): RuntimeData {
   return {
     kind: 'artifact',
@@ -368,6 +471,9 @@ function createArtifactData(input: MessageArtifactInput): RuntimeData {
   };
 }
 
+/**
+ * 快速生成一条 artifact 消息插入命令。
+ */
 function createMessageArtifactCommand(
   input: MessageArtifactInput,
   options: Omit<BlockInsertCommand, 'type' | 'block'> = {}
@@ -386,6 +492,9 @@ function createMessageArtifactCommand(
   );
 }
 
+/**
+ * 生成 artifact 消息的 upsert patch 命令。
+ */
 function createArtifactUpsertCommand(input: MessageArtifactInput): BlockPatchCommand {
   return createMessagePatchCommand({
     ...input,
@@ -399,6 +508,9 @@ function createArtifactUpsertCommand(input: MessageArtifactInput): BlockPatchCom
   });
 }
 
+/**
+ * 生成 approval block 默认 data。
+ */
 function createApprovalData(input: ApprovalUpdateInput): RuntimeData {
   return {
     kind: 'approval',
@@ -410,6 +522,9 @@ function createApprovalData(input: ApprovalUpdateInput): RuntimeData {
   };
 }
 
+/**
+ * 生成 approval block 的更新命令。
+ */
 function createApprovalUpdateCommand(input: ApprovalUpdateInput): BlockPatchCommand {
   return createMessagePatchCommand({
     ...input,
@@ -423,6 +538,9 @@ function createApprovalUpdateCommand(input: ApprovalUpdateInput): BlockPatchComm
   });
 }
 
+/**
+ * 生成内容整体替换命令，支持 text 和 markdown 两种模式。
+ */
 function createContentReplaceCommand(input: ContentReplaceInput): BlockPatchCommand {
   if ((input.kind ?? 'markdown') === 'text') {
     return createMessagePatchCommand({
@@ -542,6 +660,9 @@ function matchesHelperBinding<TRawEvent>(
   eventKey: string,
   binding: HelperProtocolBinding<TRawEvent, unknown>
 ): boolean {
+  /**
+   * 先按事件名做一层快速匹配。
+   */
   const matchByEventName = (() => {
     if (!binding.on) {
       return true;

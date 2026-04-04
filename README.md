@@ -15,7 +15,9 @@ Agentdown 是一个面向流式输出的 Agent Markdown UI Runtime。
 - `createBridge()` 负责协议映射、stream 组装、批量 flush
 - `createMarkdownAssembler()` / `createPlainTextAssembler()` 处理 `stream.open / delta / close`
 - 内置 `createSseTransport()` / `createNdjsonTransport()` / `createWebSocketTransport()` / `createAsyncIterableTransport()`
-- 内置 `createRuntimeTranscript()` / `createRuntimeReplayPlayer()`，方便回放和导出
+- 内置 `useSse()` / `useSseBridge()` / `useNdjsonBridge()` / `useWebSocketBridge()` / `useAsyncIterableBridge()` / `useRuntimeTranscript()` 等 Vue composables
+- 也提供页面级 `useAgentSession()`，把 `runtime / bridge / transcript / replay` 收成一个入口
+- 内置 `createRuntimeTranscript()` / `parseRuntimeTranscript()` / `createRuntimeReplayPlayer()`，方便回放、导入和导出，并直接产出 `messages / tools / artifacts / approvals`
 - `createAgentRuntime()` 维护 `node / block / intent / history`
 - `RunSurface` 负责把 runtime block 渲染成正式聊天界面
 - 内置 `content.replace / tool.finish / artifact.upsert / approval.update / node.error` 这类高阶 helper
@@ -140,6 +142,57 @@ bridge.push([
 console.log(runtime.snapshot());
 ```
 
+如果你在 Vue 组件里直接接 SSE，更推荐直接用 composable：
+
+```ts
+const {
+  runtime,
+  connect,
+  consuming,
+  error
+} = useSseBridge<Packet>({
+  source: '/api/agent/sse',
+  protocol,
+  assemblers: {
+    markdown: createMarkdownAssembler()
+  },
+  request: {
+    body: {
+      message: '帮我查一下北京天气'
+    }
+  },
+  transport: {
+    mode: 'json'
+  }
+})
+
+await connect(undefined, {
+  request: {
+    body: {
+      message: '帮我再查一次'
+    }
+  }
+})
+```
+
+如果你暂时还不需要 bridge，只想像普通业务 hook 一样直接收 SSE：
+
+```ts
+const { status, lastMessage, connect, abort } = useSse<MyPacket>({
+  onMessage: (packet) => {
+    console.log(packet)
+  }
+})
+
+await connect('/api/chat/sse', {
+  request: {
+    body: {
+      message: 'hello'
+    }
+  }
+})
+```
+
 如果后端不是 token append，而是直接返回“当前完整内容快照”，也可以直接用：
 
 ```ts
@@ -149,6 +202,25 @@ cmd.content.replace({
   content: '我已经整理好了。\\n\\n- 北京晴\\n- 26°C',
   kind: 'markdown'
 });
+```
+
+回放或导出时：
+
+```ts
+const transcript = createRuntimeTranscript(runtime)
+
+console.log(transcript.messages)
+console.log(transcript.tools)
+console.log(transcript.artifacts)
+console.log(transcript.approvals)
+```
+
+如果你要把导出的 JSON 再导回应用里：
+
+```ts
+const importedTranscript = parseRuntimeTranscript(jsonText)
+
+const player = createRuntimeReplayPlayer(importedTranscript.history)
 ```
 
 如果你已经有一套固定的事件规范，可以再往前一步，直接定义一个全局协议工厂：

@@ -9,11 +9,17 @@ import type {
   StreamAssembler
 } from './types';
 
+/**
+ * preset 内部允许覆盖的 bridge 配置。
+ */
 type PresetBridgeOptions<TRawPacket, TSource> = Omit<
   BridgeOptions<TRawPacket, TSource>,
   'runtime' | 'protocol' | 'assemblers'
 >;
 
+/**
+ * 定义一个 preset 时可配置的静态选项。
+ */
 export interface AgentdownPresetOptions<
   TRawPacket = unknown,
   TSource = AsyncIterable<TRawPacket> | Iterable<TRawPacket>
@@ -24,6 +30,9 @@ export interface AgentdownPresetOptions<
   surface?: RunSurfaceOptions;
 }
 
+/**
+ * 创建 preset 实例时可临时覆盖的配置。
+ */
 export interface AgentdownPresetOverrides<
   TRawPacket = unknown,
   TSource = AsyncIterable<TRawPacket> | Iterable<TRawPacket>
@@ -35,6 +44,9 @@ export interface AgentdownPresetOverrides<
   surface?: RunSurfaceOptions;
 }
 
+/**
+ * preset 派生出的完整运行会话。
+ */
 export interface AgentdownSession<
   TRawPacket = unknown,
   TSource = AsyncIterable<TRawPacket> | Iterable<TRawPacket>
@@ -45,6 +57,9 @@ export interface AgentdownSession<
   surface: RunSurfaceOptions;
 }
 
+/**
+ * preset 对外暴露的工厂接口。
+ */
 export interface AgentdownPreset<
   TRawPacket = unknown,
   TSource = AsyncIterable<TRawPacket> | Iterable<TRawPacket>
@@ -56,6 +71,9 @@ export interface AgentdownPreset<
   getSurfaceOptions(overrides?: RunSurfaceOptions): RunSurfaceOptions;
 }
 
+/**
+ * 合并基础 surface 配置和局部覆盖配置。
+ */
 function mergeSurfaceOptions(base: RunSurfaceOptions = {}, override: RunSurfaceOptions = {}): RunSurfaceOptions {
   return {
     ...base,
@@ -79,6 +97,9 @@ function mergeSurfaceOptions(base: RunSurfaceOptions = {}, override: RunSurfaceO
   };
 }
 
+/**
+ * 合并 preset 级和实例级 bridge 配置。
+ */
 function mergeBridgeOptions<TRawPacket, TSource>(
   base: PresetBridgeOptions<TRawPacket, TSource> = {},
   override: PresetBridgeOptions<TRawPacket, TSource> = {}
@@ -101,6 +122,9 @@ function mergeBridgeOptions<TRawPacket, TSource>(
   };
 }
 
+/**
+ * 定义一个可复用的 Agentdown preset。
+ */
 export function defineAgentdownPreset<
   TRawPacket = unknown,
   TSource = AsyncIterable<TRawPacket> | Iterable<TRawPacket>
@@ -111,14 +135,23 @@ export function defineAgentdownPreset<
   const baseBridge = options.bridge ?? {};
   const baseSurface = options.surface ?? {};
 
+  /**
+   * 创建 preset 默认 runtime。
+   */
   function createRuntime() {
     return createAgentRuntime();
   }
 
+  /**
+   * 获取合并后的 surface 渲染配置。
+   */
   function getSurfaceOptions(overrides: RunSurfaceOptions = {}) {
     return mergeSurfaceOptions(baseSurface, overrides);
   }
 
+  /**
+   * 用当前 preset 配置创建 bridge，并支持局部覆盖。
+   */
   function createBridgeWithOverrides(
     overrides: AgentdownPresetOverrides<TRawPacket, TSource> = {}
   ): Bridge<TRawPacket, TSource> {
@@ -137,6 +170,9 @@ export function defineAgentdownPreset<
     });
   }
 
+  /**
+   * 一次性创建 runtime、bridge 和 surface 配置。
+   */
   function createSession(
     overrides: AgentdownPresetOverrides<TRawPacket, TSource> = {}
   ): AgentdownSession<TRawPacket, TSource> {

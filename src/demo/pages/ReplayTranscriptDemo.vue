@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import {
   cmd,
-  createRuntimeReplayPlayer,
-  createRuntimeTranscript,
-  RunSurface
+  RunSurface,
+  useAgentSession
 } from '../../index';
 import {
   protocolHelpersPreset,
@@ -19,12 +18,20 @@ const ASSISTANT_BLOCK_ID = 'block:replay-transcript:assistant';
 const ARTIFACT_BLOCK_ID = 'block:replay-transcript:artifact';
 const APPROVAL_BLOCK_ID = 'block:replay-transcript:approval';
 
-const { runtime: sourceRuntime, bridge: sourceBridge, surface } = protocolHelpersPreset.createSession();
-const transcript = shallowRef(createRuntimeTranscript(sourceRuntime));
-const replayPlayer = shallowRef(createRuntimeReplayPlayer(transcript.value.history));
-const playing = ref(false);
-const replayPosition = ref(0);
-let playAbortController: AbortController | null = null;
+const session = useAgentSession(protocolHelpersPreset);
+const {
+  runtime: sourceRuntime,
+  surface,
+  activeTranscript: transcript,
+  importedTranscript,
+  activeTranscriptSource,
+  replay,
+  useExportedTranscript: loadExportedTranscript,
+  useImportedTranscript: loadImportedTranscript,
+  importTranscript,
+  downloadTranscript
+} = session;
+const importError = ref('');
 
 const demoPackets: ProtocolHelperPacket[] = [
   {
@@ -92,23 +99,50 @@ const demoPackets: ProtocolHelperPacket[] = [
   }
 ];
 
+const activeTranscriptLabel = computed(() =>
+  activeTranscriptSource.value === 'imported'
+    ? '已导入 transcript'
+    : activeTranscriptSource.value === 'custom'
+      ? '自定义 transcript'
+      : '当前导出 transcript'
+);
+const hasImportedTranscript = computed(() => importedTranscript.value !== null);
+const replayPosition = computed(() => replay.position.value);
+const replayTotal = computed(() => replay.total.value);
+const replayRuntime = computed(() => replay.runtime.value);
+const replayIsPlaying = computed(() => replay.playing.value);
+
 const transcriptSummary = computed(() => ({
   messageCount: transcript.value.messages.length,
   historyCount: transcript.value.history.length,
   blockCount: transcript.value.snapshot.blocks.length,
-  nodeCount: transcript.value.snapshot.nodes.length
+  nodeCount: transcript.value.snapshot.nodes.length,
+  toolCount: transcript.value.tools.length,
+  artifactCount: transcript.value.artifacts.length,
+  approvalCount: transcript.value.approvals.length
 }));
 
-function syncReplayMeta() {
-  replayPosition.value = replayPlayer.value.position();
-}
+const transcriptPreview = computed(() => {
+  return JSON.stringify(
+    {
+      messages: transcript.value.messages.map((message) => ({
+        id: message.id,
+        role: message.role,
+        blockKinds: message.blockKinds,
+        text: message.text
+      })),
+      tools: transcript.value.tools,
+      artifacts: transcript.value.artifacts,
+      approvals: transcript.value.approvals
+    },
+    null,
+    2
+  );
+});
 
-function stopReplay() {
-  playAbortController?.abort();
-  playAbortController = null;
-  playing.value = false;
-}
-
+/**
+ * 在原始 runtime 中预先插入一条用户消息。
+ */
 function seedSourceConversation() {
   sourceRuntime.apply(cmd.message.text({
     id: 'block:user:replay-transcript',
@@ -119,58 +153,87 @@ function seedSourceConversation() {
   }));
 }
 
-function rebuildTranscript() {
-  transcript.value = createRuntimeTranscript(sourceRuntime);
-  replayPlayer.value = createRuntimeReplayPlayer(transcript.value.history);
-  syncReplayMeta();
-}
-
+/**
+ * 构造一段完整的源会话，并同步导出 transcript。
+ */
 function buildSourceRun() {
-  sourceBridge.reset();
+  session.reset();
   seedSourceConversation();
-  sourceBridge.push(demoPackets);
-  sourceBridge.flush('replay-demo-seed');
-  rebuildTranscript();
+  session.push(demoPackets);
+  session.flush('replay-demo-seed');
+  loadExportedTranscript();
 }
 
+/**
+ * 切换到当前 runtime 实时导出的 transcript。
+ */
+function useExportedTranscript() {
+  importError.value = '';
+  loadExportedTranscript();
+}
+
+/**
+ * 切换到最近一次导入的 transcript。
+ */
+function useImportedTranscript() {
+  importError.value = '';
+  loadImportedTranscript();
+}
+
+/**
+ * 把 replay player 重置回起点。
+ */
 function resetReplay() {
-  stopReplay();
-  replayPlayer.value.reset();
-  syncReplayMeta();
+  replay.reset();
 }
 
+/**
+ * 单步推进一次 replay。
+ */
 function stepReplay() {
-  stopReplay();
-  replayPlayer.value.step(1);
-  syncReplayMeta();
+  replay.step(1);
 }
 
+/**
+ * 以固定节奏自动播放整个 replay。
+ */
 async function playReplay() {
-  stopReplay();
-  playing.value = true;
-  playAbortController = new AbortController();
+  await replay.play({
+    intervalMs: 380
+  });
+}
+
+/**
+ * 下载当前激活的 transcript JSON。
+ */
+function handleDownloadTranscript() {
+  downloadTranscript();
+}
+
+/**
+ * 从本地文件中导入 transcript。
+ */
+async function importTranscriptFile(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+
+  if (!file) {
+    return;
+  }
+
+  importError.value = '';
 
   try {
-    await replayPlayer.value.play({
-      intervalMs: 380,
-      signal: playAbortController.signal,
-      onStep: () => {
-        syncReplayMeta();
-      }
-    });
+    importTranscript(await file.text());
+  } catch (error) {
+    importError.value = error instanceof Error ? error.message : 'Transcript 导入失败。';
   } finally {
-    playing.value = false;
-    playAbortController = null;
-    syncReplayMeta();
+    input.value = '';
   }
 }
 
 onMounted(() => {
   buildSourceRun();
-});
-
-onBeforeUnmount(() => {
-  stopReplay();
 });
 </script>
 
@@ -186,7 +249,100 @@ onBeforeUnmount(() => {
       <span>history {{ transcriptSummary.historyCount }}</span>
       <span>blocks {{ transcriptSummary.blockCount }}</span>
       <span>nodes {{ transcriptSummary.nodeCount }}</span>
+      <span>tools {{ transcriptSummary.toolCount }}</span>
+      <span>artifacts {{ transcriptSummary.artifactCount }}</span>
+      <span>approvals {{ transcriptSummary.approvalCount }}</span>
     </div>
+
+    <section class="demo-section">
+      <div class="demo-section__head">
+        <h2>Transcript 摘要</h2>
+        <p>除了 messages，现在也会直接导出 tools / artifacts / approvals，也可以直接下载、导入并切换回放源。</p>
+      </div>
+
+      <div class="demo-controls demo-controls--wrap">
+        <button
+          type="button"
+          class="demo-button"
+          @click="handleDownloadTranscript"
+        >
+          下载当前 transcript
+        </button>
+
+        <label class="demo-button demo-button--file">
+          导入 transcript
+          <input
+            type="file"
+            accept=".json,application/json"
+            @change="importTranscriptFile"
+          >
+        </label>
+
+        <button
+          type="button"
+          class="demo-button"
+          :class="{ 'demo-button--active': activeTranscriptSource === 'exported' }"
+          @click="useExportedTranscript"
+        >
+          当前导出
+        </button>
+
+        <button
+          type="button"
+          class="demo-button"
+          :class="{ 'demo-button--active': activeTranscriptSource === 'imported' }"
+          :disabled="!hasImportedTranscript"
+          @click="useImportedTranscript"
+        >
+          已导入
+        </button>
+      </div>
+
+      <p class="demo-source">
+        当前摘要 / 回放源：{{ activeTranscriptLabel }}
+      </p>
+
+      <p
+        v-if="importError"
+        class="demo-error"
+      >
+        {{ importError }}
+      </p>
+
+      <div class="demo-summary-grid">
+        <article class="demo-summary-card">
+          <h3>Tools</h3>
+          <p v-if="transcript.tools[0]">
+            {{ transcript.tools[0]?.title }} · {{ transcript.tools[0]?.status }}
+          </p>
+          <p v-else>
+            暂无 tool
+          </p>
+        </article>
+
+        <article class="demo-summary-card">
+          <h3>Artifacts</h3>
+          <p v-if="transcript.artifacts[0]">
+            {{ transcript.artifacts[0]?.title }} · {{ transcript.artifacts[0]?.artifactKind }}
+          </p>
+          <p v-else>
+            暂无 artifact
+          </p>
+        </article>
+
+        <article class="demo-summary-card">
+          <h3>Approvals</h3>
+          <p v-if="transcript.approvals[0]">
+            {{ transcript.approvals[0]?.title }} · {{ transcript.approvals[0]?.status }}
+          </p>
+          <p v-else>
+            暂无 approval
+          </p>
+        </article>
+      </div>
+
+      <pre class="demo-preview">{{ transcriptPreview }}</pre>
+    </section>
 
     <section class="demo-section">
       <div class="demo-section__head">
@@ -203,7 +359,7 @@ onBeforeUnmount(() => {
     <section class="demo-section">
       <div class="demo-section__head">
         <h2>回放结果</h2>
-        <p>当前位置 {{ replayPosition }} / {{ replayPlayer.total() }}</p>
+        <p>{{ activeTranscriptLabel }}，当前位置 {{ replayPosition }} / {{ replayTotal }}</p>
       </div>
 
       <div class="demo-controls">
@@ -226,15 +382,15 @@ onBeforeUnmount(() => {
         <button
           type="button"
           class="demo-button demo-button--primary"
-          :disabled="playing"
-          @click="playReplay"
+          :disabled="replayIsPlaying"
+          @click="playReplay().catch(() => {})"
         >
-          {{ playing ? '回放中...' : '自动回放' }}
+          {{ replayIsPlaying ? '回放中...' : '自动回放' }}
         </button>
       </div>
 
       <RunSurface
-        :runtime="replayPlayer.runtime"
+        :runtime="replayRuntime"
         v-bind="surface"
       />
     </section>
@@ -307,10 +463,58 @@ onBeforeUnmount(() => {
   line-height: 1.8;
 }
 
+.demo-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.demo-summary-card,
+.demo-preview {
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  background: #f8fafc;
+}
+
+.demo-summary-card {
+  padding: 14px 16px;
+}
+
+.demo-summary-card h3,
+.demo-summary-card p {
+  margin: 0;
+}
+
+.demo-summary-card h3 {
+  font-size: 14px;
+  letter-spacing: -0.02em;
+}
+
+.demo-summary-card p {
+  margin-top: 8px;
+  color: #475569;
+  line-height: 1.7;
+}
+
+.demo-preview {
+  margin: 0;
+  padding: 16px 18px;
+  overflow: auto;
+  color: #0f172a;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
 .demo-controls {
   display: flex;
   gap: 10px;
   margin-bottom: 18px;
+}
+
+.demo-controls--wrap {
+  flex-wrap: wrap;
+  margin-bottom: 12px;
 }
 
 .demo-button {
@@ -324,7 +528,25 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 
+.demo-button--file {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.demo-button--file input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
 .demo-button--primary {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.demo-button--active {
   background: #dbeafe;
   color: #1d4ed8;
 }
@@ -334,9 +556,28 @@ onBeforeUnmount(() => {
   cursor: default;
 }
 
+.demo-source,
+.demo-error {
+  margin: 0 0 16px;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.demo-source {
+  color: #475569;
+}
+
+.demo-error {
+  color: #b91c1c;
+}
+
 @media (max-width: 720px) {
   .demo-page {
     padding: 24px 16px 56px;
+  }
+
+  .demo-summary-grid {
+    grid-template-columns: 1fr;
   }
 
   .demo-controls {

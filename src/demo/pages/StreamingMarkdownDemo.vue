@@ -1,6 +1,11 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue';
-import { cmd, RunSurface } from '../../index';
+import { computed, onMounted } from 'vue';
+import {
+  cmd,
+  createMarkdownAssembler,
+  RunSurface,
+  useAsyncIterableBridge
+} from '../../index';
 import {
   markdownStreamingPreset,
   type MarkdownStreamingPacket
@@ -10,10 +15,12 @@ const RUN_ID = 'run:streaming-markdown';
 const STREAM_ID = 'stream:streaming-markdown';
 const USER_GROUP_ID = 'turn:user:streaming-markdown';
 const ASSISTANT_GROUP_ID = 'turn:assistant:streaming-markdown';
-const playing = ref(false);
-const timers: number[] = [];
-const { runtime, bridge, surface } = markdownStreamingPreset.createSession();
+const runtime = markdownStreamingPreset.createRuntime();
+const surface = markdownStreamingPreset.getSurfaceOptions();
 
+/**
+ * 把一段文本拆成逐字符 delta，模拟 token 级流式输出。
+ */
 function createTokenDeltas(text: string): MarkdownStreamingPacket[] {
   return Array.from(text).map((token) => ({
     event: 'ContentDelta',
@@ -76,18 +83,18 @@ const demoPackets: MarkdownStreamingPacket[] = [
   }
 ];
 
-function clearTimers() {
-  while (timers.length > 0) {
-    const timerId = timers.pop();
-
-    if (timerId !== undefined) {
-      globalThis.clearTimeout(timerId);
-    }
-  }
-
-  playing.value = false;
+/**
+ * 用定时器模拟 token 之间的流式间隔。
+ */
+function sleep(ms: number) {
+  return new Promise<void>((resolve) => {
+    globalThis.setTimeout(resolve, ms);
+  });
 }
 
+/**
+ * 预先插入一条用户消息，方便观察 assistant 的流式回复。
+ */
 function seedConversation() {
   runtime.apply(cmd.message.text({
     id: 'block:user:streaming-markdown',
@@ -98,41 +105,47 @@ function seedConversation() {
   }));
 }
 
-function resetDemo() {
-  bridge.reset();
-  seedConversation();
-}
-
-function replayDemo() {
-  clearTimers();
-  resetDemo();
-  playing.value = true;
-  let elapsed = 0;
-
-  demoPackets.forEach((payload, index) => {
+/**
+ * 逐条产出本地 mock packet，模拟后端流式返回。
+ */
+async function* createDemoPacketStream(): AsyncIterable<MarkdownStreamingPacket> {
+  for (const payload of demoPackets) {
     const delay = payload.event === 'ContentDelta' && payload.text.length <= 1
       ? 90
       : 320;
-    elapsed += delay;
-    const timerId = globalThis.setTimeout(() => {
-      bridge.push(payload);
 
-      if (index === demoPackets.length - 1) {
-        bridge.flush('demo-complete');
-        playing.value = false;
-      }
-    }, elapsed);
+    await sleep(delay);
+    yield payload;
+  }
+}
 
-    timers.push(timerId);
-  });
+const {
+  start,
+  reset,
+  consuming
+} = useAsyncIterableBridge<MarkdownStreamingPacket>({
+  runtime,
+  protocol: markdownStreamingPreset.protocol,
+  assemblers: {
+    markdown: createMarkdownAssembler()
+  }
+});
+
+const playing = computed(() => consuming.value);
+
+/**
+ * 重置 demo，并重新消费一轮本地 markdown 流。
+ */
+async function replayDemo() {
+  reset();
+  seedConversation();
+  await start(createDemoPacketStream());
 }
 
 onMounted(() => {
-  replayDemo();
-});
-
-onBeforeUnmount(() => {
-  clearTimers();
+  replayDemo().catch(() => {
+    // demo 页面里失败只需要安静结束，不需要打断整个界面。
+  });
 });
 </script>
 
@@ -152,7 +165,7 @@ onBeforeUnmount(() => {
       v-if="!playing"
       type="button"
       class="demo-page__replay"
-      @click="replayDemo"
+      @click="replayDemo().catch(() => {})"
     >
       重播
     </button>

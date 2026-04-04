@@ -7,6 +7,9 @@ import {
 import MessageLoadingBubble from '../components/MessageLoadingBubble.vue';
 import WeatherToolCard from '../components/WeatherToolCard.vue';
 
+/**
+ * SSE 天气 demo 使用的原始事件协议。
+ */
 export type WeatherSsePayload =
   | {
       event: 'RunStarted';
@@ -44,6 +47,9 @@ export type WeatherSsePayload =
       runId: string;
     };
 
+/**
+ * 把天气 SSE 事件协议映射到 Agentdown runtime。
+ */
 export const weatherRunPreset = defineAgentdownPreset<WeatherSsePayload>({
   protocol: defineEventProtocol<WeatherSsePayload>({
     RunStarted: (event) =>

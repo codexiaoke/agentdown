@@ -7,6 +7,9 @@ import SseWeatherDemo from './pages/SseWeatherDemo.vue';
 import StreamingMarkdownDemo from './pages/StreamingMarkdownDemo.vue';
 import UserFileDemo from './pages/UserFileDemo.vue';
 
+/**
+ * demo 路由的最小描述结构。
+ */
 interface DemoRoute {
   path: string;
   title: string;
@@ -24,7 +27,7 @@ const routes: DemoRoute[] = [
   {
     path: '/sse-weather',
     title: 'SSE 天气示例',
-    description: '演示后端 SSE JSON 如何映射到 runtime，再驱动自定义组件。',
+    description: '演示 useSseBridge 怎么把 SSE JSON 直接映射成聊天内容和工具组件。',
     component: SseWeatherDemo
   },
   {
@@ -36,13 +39,13 @@ const routes: DemoRoute[] = [
   {
     path: '/replay-transcript',
     title: 'Replay / Transcript',
-    description: '演示导出 transcript，再把 history 回放到一个新的 runtime。',
+    description: '演示 useAgentSession 怎么把 session、transcript 和 replay 收成一个入口。',
     component: ReplayTranscriptDemo
   },
   {
     path: '/streaming-markdown',
     title: '流式 Markdown',
-    description: '演示 code/table 只在结构完整后稳定渲染，不提前显示半截源码。',
+    description: '演示 useAsyncIterableBridge 接本地 token 流，code/table 只在结构完整后稳定渲染。',
     component: StreamingMarkdownDemo
   },
   {
@@ -53,6 +56,9 @@ const routes: DemoRoute[] = [
   }
 ];
 
+/**
+ * 把 hash 规范化成已存在的 demo 路由路径。
+ */
 function normalizeHash(hash: string): string {
   const normalized = hash.replace(/^#/, '') || routes[0]?.path || '/blocks';
   return routes.some(route => route.path === normalized) ? normalized : routes[0]?.path || '/blocks';
@@ -60,6 +66,9 @@ function normalizeHash(hash: string): string {
 
 const currentPath = ref(routes[0]?.path || '/blocks');
 
+/**
+ * 根据当前地址栏 hash 同步页面路由状态。
+ */
 function syncRoute() {
   const normalized = normalizeHash(window.location.hash);
   currentPath.value = normalized;

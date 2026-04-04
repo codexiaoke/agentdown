@@ -1,3 +1,6 @@
+/**
+ * 流式 markdown 按行拆分后的结构。
+ */
 interface StreamingMarkdownLine {
   content: string;
   start: number;
@@ -5,11 +8,17 @@ interface StreamingMarkdownLine {
   hasNewline: boolean;
 }
 
+/**
+ * 单个解析器消费到的边界结果。
+ */
 interface StreamingMarkdownParseResult {
   end: number;
   nextIndex: number;
 }
 
+/**
+ * draft markdown 在界面中建议采用的展示模式。
+ */
 export type StreamingMarkdownDraftMode = 'text' | 'preview' | 'hidden';
 
 const AGUI_DIRECTIVE_RE = /^\s*:::\s*vue-component\s+[A-Za-z][\w-]*(?:\s+.*)?$/;
@@ -20,6 +29,9 @@ const HEADING_RE = /^\s{0,3}#{1,6}(?:\s|$)/;
 const HR_RE = /^\s{0,3}(?:-{3,}|\*{3,}|_{3,})\s*$/;
 const TABLE_DIVIDER_RE = /^\s*\|?(?:\s*:?-+:?\s*\|)+(?:\s*:?-+:?\s*)\|?\s*$/;
 
+/**
+ * 把原始 markdown 字符串拆成带位置索引的行数组。
+ */
 function splitStreamingMarkdownLines(source: string): StreamingMarkdownLine[] {
   const lines: StreamingMarkdownLine[] = [];
   let start = 0;
@@ -50,10 +62,16 @@ function splitStreamingMarkdownLines(source: string): StreamingMarkdownLine[] {
   return lines;
 }
 
+/**
+ * 判断一行是否为空白行。
+ */
 function isBlankLine(line: StreamingMarkdownLine): boolean {
   return line.content.trim().length === 0;
 }
 
+/**
+ * 匹配 markdown 围栏代码块的起始 fence。
+ */
 function matchFence(line: string): { marker: '`' | '~'; length: number } | null {
   const match = line.match(/^\s{0,3}(`{3,}|~{3,})[^\n]*$/);
 
@@ -79,6 +97,9 @@ function matchFence(line: string): { marker: '`' | '~'; length: number } | null 
   };
 }
 
+/**
+ * 判断某一行是否为对应 fence 的结束行。
+ */
 function isFenceClose(line: string, marker: '`' | '~', length: number): boolean {
   const match = line.match(/^\s{0,3}(`{3,}|~{3,})\s*$/);
 
@@ -95,39 +116,66 @@ function isFenceClose(line: string, marker: '`' | '~', length: number): boolean 
   return fence[0] === marker && fence.length >= length;
 }
 
+/**
+ * 判断一行是否为数学块分隔符。
+ */
 function isMathBlockDelimiter(line: string): boolean {
   return line.trim() === '$$';
 }
 
+/**
+ * 判断一行是否已经构成完整的单行数学块。
+ */
 function isSingleLineMathBlock(line: StreamingMarkdownLine): boolean {
   const trimmed = line.content.trim();
   return line.hasNewline && trimmed.startsWith('$$') && trimmed.endsWith('$$') && trimmed !== '$$';
 }
 
+/**
+ * 判断一行是否为完整的单行指令块。
+ */
 function isSingleLineDirective(line: StreamingMarkdownLine): boolean {
   return line.hasNewline && (AGUI_DIRECTIVE_RE.test(line.content) || AGENT_DIRECTIVE_RE.test(line.content));
 }
 
+/**
+ * 判断一行是否为完整的标题或分割线。
+ */
 function isHeadingOrRule(line: StreamingMarkdownLine): boolean {
   return line.hasNewline && (HEADING_RE.test(line.content) || HR_RE.test(line.content));
 }
 
+/**
+ * 粗略判断一行能否作为表格表头。
+ */
 function isTableHeader(line: string): boolean {
   return line.includes('|') && line.trim().length > 0;
 }
 
+/**
+ * 判断一行是否为 markdown 表格分隔线。
+ */
 function isTableDivider(line: string): boolean {
   return TABLE_DIVIDER_RE.test(line);
 }
 
+/**
+ * 判断一行是否仍属于表格内容。
+ */
 function isTableRow(line: string): boolean {
   return line.trim().length > 0 && line.includes('|');
 }
 
+/**
+ * 判断一行是否只是表格分隔线的半截片段。
+ */
 function isTableDividerFragment(line: string): boolean {
   return /^[\s|:-]+$/.test(line) && line.trim().length > 0;
 }
 
+/**
+ * 判断一行是否会强制开启一个新的 markdown 结构块。
+ */
 function isHardBlockStart(line: StreamingMarkdownLine): boolean {
   return (
     !!matchFence(line.content)
@@ -140,6 +188,9 @@ function isHardBlockStart(line: StreamingMarkdownLine): boolean {
   );
 }
 
+/**
+ * 消费连续的空白行。
+ */
 function consumeBlankLines(lines: StreamingMarkdownLine[], index: number): StreamingMarkdownParseResult | null {
   const firstLine = lines[index];
 
@@ -167,6 +218,9 @@ function consumeBlankLines(lines: StreamingMarkdownLine[], index: number): Strea
   };
 }
 
+/**
+ * 消费一整个围栏代码块。
+ */
 function consumeFenceBlock(lines: StreamingMarkdownLine[], index: number): StreamingMarkdownParseResult | null {
   const openingLine = lines[index];
   const openingFence = openingLine ? matchFence(openingLine.content) : null;
@@ -197,6 +251,9 @@ function consumeFenceBlock(lines: StreamingMarkdownLine[], index: number): Strea
   return null;
 }
 
+/**
+ * 消费一个完整 thought 指令块，支持嵌套。
+ */
 function consumeThoughtBlock(lines: StreamingMarkdownLine[], index: number): StreamingMarkdownParseResult | null {
   const openingLine = lines[index];
 
@@ -239,6 +296,9 @@ function consumeThoughtBlock(lines: StreamingMarkdownLine[], index: number): Str
   return null;
 }
 
+/**
+ * 消费一个完整数学块。
+ */
 function consumeMathBlock(lines: StreamingMarkdownLine[], index: number): StreamingMarkdownParseResult | null {
   const line = lines[index];
 
@@ -281,6 +341,9 @@ function consumeMathBlock(lines: StreamingMarkdownLine[], index: number): Stream
   return null;
 }
 
+/**
+ * 消费一行即可闭合的结构块。
+ */
 function consumeSingleLineBlock(lines: StreamingMarkdownLine[], index: number): StreamingMarkdownParseResult | null {
   const line = lines[index];
 
@@ -298,6 +361,9 @@ function consumeSingleLineBlock(lines: StreamingMarkdownLine[], index: number): 
   };
 }
 
+/**
+ * 消费一个结构完整的 markdown 表格。
+ */
 function consumeTableBlock(lines: StreamingMarkdownLine[], index: number): StreamingMarkdownParseResult | null {
   const header = lines[index];
   const divider = lines[index + 1];
@@ -343,6 +409,9 @@ function consumeTableBlock(lines: StreamingMarkdownLine[], index: number): Strea
   };
 }
 
+/**
+ * 消费普通段落或未被其他结构命中的通用块。
+ */
 function consumeGenericBlock(lines: StreamingMarkdownLine[], index: number): StreamingMarkdownParseResult | null {
   if (!lines[index]) {
     return null;
@@ -383,6 +452,9 @@ function consumeGenericBlock(lines: StreamingMarkdownLine[], index: number): Str
   return null;
 }
 
+/**
+ * 找出当前流式 markdown 中已经结构完整、可安全渲染的边界。
+ */
 export function findStreamingMarkdownBoundary(source: string): number {
   if (source.length === 0) {
     return 0;
@@ -413,6 +485,9 @@ export function findStreamingMarkdownBoundary(source: string): number {
   return boundary;
 }
 
+/**
+ * 把流式 markdown 拆成已提交部分和 draft 部分。
+ */
 export function splitStreamingMarkdown(source: string): {
   committed: string;
   draft: string;
@@ -425,6 +500,9 @@ export function splitStreamingMarkdown(source: string): {
   };
 }
 
+/**
+ * 推断 draft 尾部更适合如何显示。
+ */
 export function resolveStreamingMarkdownDraftMode(source: string): StreamingMarkdownDraftMode {
   if (source.trim().length === 0) {
     return 'hidden';

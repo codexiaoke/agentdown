@@ -11,6 +11,9 @@ import type {
 } from './types';
 import { coalesceStreamDeltas, createIdFactory, isAsyncIterable, isIterable, toArray, toAsyncIterable, trimLog } from './utils';
 
+/**
+ * 构造带阶段信息的 bridge 错误对象。
+ */
 function createBridgeError<TRawPacket>(
   stage: BridgeError<TRawPacket>['stage'],
   message: string,
@@ -39,7 +42,13 @@ function createBridgeError<TRawPacket>(
   return error;
 }
 
+/**
+ * 把 scheduler 配置统一转换成可执行调度器。
+ */
 function createSchedulerRunner(scheduler: BridgeOptions['scheduler']) {
+  /**
+   * 根据当前调度策略安排一次 flush。
+   */
   return function schedule(flush: () => void): void | (() => void) {
     if (scheduler === 'sync') {
       flush();
@@ -65,6 +74,9 @@ function createSchedulerRunner(scheduler: BridgeOptions['scheduler']) {
   };
 }
 
+/**
+ * 创建一个负责消费 packet、展开 stream、批量 flush 的 bridge。
+ */
 export function createBridge<TRawPacket = unknown, TSource = AsyncIterable<TRawPacket> | Iterable<TRawPacket>>(
   options: BridgeOptions<TRawPacket, TSource>
 ): Bridge<TRawPacket, TSource> {
@@ -104,6 +116,9 @@ export function createBridge<TRawPacket = unknown, TSource = AsyncIterable<TRawP
   let lastFlushAt: number | undefined;
   let lastError: BridgeError<TRawPacket> | undefined;
 
+  /**
+   * 清理当前已注册的调度器和延迟 flush 定时器。
+   */
   function clearScheduling() {
     scheduled = false;
 
@@ -118,6 +133,9 @@ export function createBridge<TRawPacket = unknown, TSource = AsyncIterable<TRawP
     }
   }
 
+  /**
+   * 统一记录 bridge 错误并抛出。
+   */
   function handleError(error: BridgeError<TRawPacket>): never {
     lastError = error;
     phase = 'errored';
@@ -125,6 +143,9 @@ export function createBridge<TRawPacket = unknown, TSource = AsyncIterable<TRawP
     throw error;
   }
 
+  /**
+   * 在批量阈值或延迟阈值内安排下一次 flush。
+   */
   function scheduleFlush() {
     if (pendingCommands.length === 0) {
       return;
@@ -147,6 +168,9 @@ export function createBridge<TRawPacket = unknown, TSource = AsyncIterable<TRawP
     }
   }
 
+  /**
+   * 把一批命令放入待 flush 队列。
+   */
   function enqueue(commands: RuntimeCommand[]) {
     pendingCommands.push(...commands);
 
@@ -158,6 +182,9 @@ export function createBridge<TRawPacket = unknown, TSource = AsyncIterable<TRawP
     scheduleFlush();
   }
 
+  /**
+   * 根据 streamId 找到当前正在处理它的 assembler。
+   */
   function resolveAssembler(command: Extract<RuntimeCommand, { type: 'stream.delta' | 'stream.close' | 'stream.abort' }>): StreamAssembler {
     const assemblerName = streamAssemblerById.get(command.streamId);
 
@@ -182,6 +209,9 @@ export function createBridge<TRawPacket = unknown, TSource = AsyncIterable<TRawP
     return assembler;
   }
 
+  /**
+   * 展开一条命令，必要时交给 assembler 继续转换。
+   */
   function expandCommand(command: RuntimeCommand): RuntimeCommand[] {
     switch (command.type) {
       case 'stream.open': {
@@ -224,6 +254,9 @@ export function createBridge<TRawPacket = unknown, TSource = AsyncIterable<TRawP
     }
   }
 
+  /**
+   * 对待执行命令做合并和 stream 展开。
+   */
   function normalizeQueuedCommands() {
     const commands = batchOptions.coalesceStreamDeltas
       ? coalesceStreamDeltas(pendingCommands)
@@ -239,6 +272,9 @@ export function createBridge<TRawPacket = unknown, TSource = AsyncIterable<TRawP
     return expanded;
   }
 
+  /**
+   * 记录一条原始 packet 调试日志。
+   */
   function recordPacket(packet: TRawPacket) {
     if (!debugOptions.recordRawPackets) {
       return;
@@ -251,6 +287,9 @@ export function createBridge<TRawPacket = unknown, TSource = AsyncIterable<TRawP
     }
   }
 
+  /**
+   * 记录一组映射后的命令调试日志。
+   */
   function recordMapped(commands: RuntimeCommand[]) {
     if (!debugOptions.recordMappedCommands) {
       return;
@@ -263,6 +302,9 @@ export function createBridge<TRawPacket = unknown, TSource = AsyncIterable<TRawP
     }
   }
 
+  /**
+   * 处理单条 packet：协议映射、调试记录、入队等待 flush。
+   */
   function pushPacket(packet: TRawPacket) {
     options.hooks?.onPacket?.(packet);
     recordPacket(packet);
@@ -285,6 +327,9 @@ export function createBridge<TRawPacket = unknown, TSource = AsyncIterable<TRawP
     enqueue(commands);
   }
 
+  /**
+   * 把当前待处理命令真正应用到 runtime。
+   */
   function flush(reason = 'manual') {
     if (pendingCommands.length === 0) {
       clearScheduling();
@@ -313,6 +358,9 @@ export function createBridge<TRawPacket = unknown, TSource = AsyncIterable<TRawP
     options.hooks?.onFlush?.(expanded ?? []);
   }
 
+  /**
+   * 持续消费 transport 或 iterable source。
+   */
   async function consume(source: TSource, consumeOptions: { signal?: AbortSignal } = {}) {
     phase = 'consuming';
     const signal = consumeOptions.signal ?? new AbortController().signal;
@@ -347,6 +395,9 @@ export function createBridge<TRawPacket = unknown, TSource = AsyncIterable<TRawP
     }
   }
 
+  /**
+   * 清空 bridge 状态、调试日志和 assembler 会话。
+   */
   function reset() {
     clearScheduling();
     pendingCommands.splice(0, pendingCommands.length);
@@ -364,12 +415,18 @@ export function createBridge<TRawPacket = unknown, TSource = AsyncIterable<TRawP
     lastFlushAt = undefined;
   }
 
+  /**
+   * 关闭当前 bridge，后续不再继续消费。
+   */
   function close() {
     flush('close');
     clearScheduling();
     phase = 'closed';
   }
 
+  /**
+   * 返回 bridge 当前运行状态。
+   */
   function status(): BridgeStatus {
     return {
       phase,
@@ -381,6 +438,9 @@ export function createBridge<TRawPacket = unknown, TSource = AsyncIterable<TRawP
     };
   }
 
+  /**
+   * 返回 bridge 当前调试快照。
+   */
   function snapshot(): BridgeSnapshot<TRawPacket> {
     return {
       status: status(),

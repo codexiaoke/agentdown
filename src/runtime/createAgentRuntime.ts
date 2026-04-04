@@ -13,6 +13,9 @@ import type {
 } from './types';
 import { cloneValue, compactObject, createIdFactory, toArray } from './utils';
 
+/**
+ * 规范化节点结构，并确保 data 可安全复用。
+ */
 function normalizeNode(node: RuntimeNode): RuntimeNode {
   return compactObject({
     ...node,
@@ -20,6 +23,9 @@ function normalizeNode(node: RuntimeNode): RuntimeNode {
   });
 }
 
+/**
+ * 规范化 block 结构，并确保 data 可安全复用。
+ */
 function normalizeBlock(block: SurfaceBlock): SurfaceBlock {
   return compactObject({
     ...block,
@@ -27,6 +33,9 @@ function normalizeBlock(block: SurfaceBlock): SurfaceBlock {
   });
 }
 
+/**
+ * 生成节点 patch 之后的完整节点对象。
+ */
 function normalizeNodePatch(node: RuntimeNode, patch: Partial<RuntimeNode>): RuntimeNode {
   const next = compactObject({
     ...node,
@@ -41,6 +50,9 @@ function normalizeNodePatch(node: RuntimeNode, patch: Partial<RuntimeNode>): Run
   return next;
 }
 
+/**
+ * 生成 block patch 之后的完整 block 对象。
+ */
 function normalizeBlockPatch(block: SurfaceBlock, patch: Partial<SurfaceBlock>): SurfaceBlock {
   const next = compactObject({
     ...block,
@@ -55,6 +67,9 @@ function normalizeBlockPatch(block: SurfaceBlock, patch: Partial<SurfaceBlock>):
   return next;
 }
 
+/**
+ * 在有序 ID 列表中插入或移动某个元素。
+ */
 function insertIntoOrder(order: string[], id: string, beforeId?: string, afterId?: string) {
   const filtered = order.filter((current) => current !== id);
 
@@ -80,6 +95,9 @@ function insertIntoOrder(order: string[], id: string, beforeId?: string, afterId
   return filtered;
 }
 
+/**
+ * 创建一个纯命令驱动的响应式 runtime。
+ */
 export function createAgentRuntime(): AgentRuntime {
   const makeId = createIdFactory();
   const listeners = new Set<() => void>();
@@ -94,12 +112,18 @@ export function createAgentRuntime(): AgentRuntime {
   const intentsList: RuntimeIntent[] = [];
   const historyEntries: RuntimeHistoryEntry[] = [];
 
+  /**
+   * 通知所有订阅者 runtime 已发生变化。
+   */
   function notify() {
     for (const listener of listeners) {
       listener();
     }
   }
 
+  /**
+   * 记录一条命令到 history。
+   */
   function recordCommand(command: RuntimeCommand) {
     const entry: RuntimeCommandHistoryEntry = {
       id: makeId('history'),
@@ -111,6 +135,9 @@ export function createAgentRuntime(): AgentRuntime {
     historyEntries.push(entry);
   }
 
+  /**
+   * 记录一条 intent 到 history。
+   */
   function recordIntent(intent: RuntimeIntent) {
     const entry: RuntimeIntentHistoryEntry = {
       id: makeId('history'),
@@ -122,6 +149,9 @@ export function createAgentRuntime(): AgentRuntime {
     historyEntries.push(entry);
   }
 
+  /**
+   * 创建或更新一个节点，并维护父子关系索引。
+   */
   function upsertNode(node: RuntimeNode) {
     const existing = nodesById.get(node.id);
     const normalized = existing ? normalizeNodePatch(existing, node) : normalizeNode(node);
@@ -151,6 +181,9 @@ export function createAgentRuntime(): AgentRuntime {
     }
   }
 
+  /**
+   * 局部更新一个节点；若节点不存在则按 patch 信息创建。
+   */
   function patchNode(id: string, patch: Partial<RuntimeNode>) {
     const existing = nodesById.get(id);
 
@@ -173,6 +206,9 @@ export function createAgentRuntime(): AgentRuntime {
     upsertNode(normalizeNodePatch(existing, patch));
   }
 
+  /**
+   * 删除一个节点，并同步清理排序和父子索引。
+   */
   function removeNode(id: string) {
     const existing = nodesById.get(id);
 
@@ -199,6 +235,9 @@ export function createAgentRuntime(): AgentRuntime {
     childIdsByParent.delete(id);
   }
 
+  /**
+   * 确保指定 slot 已经建立排序容器。
+   */
   function ensureSlot(slot: string) {
     if (!blockOrderBySlot.has(slot)) {
       blockOrderBySlot.set(slot, []);
@@ -206,6 +245,9 @@ export function createAgentRuntime(): AgentRuntime {
     }
   }
 
+  /**
+   * 按插入顺序把 block 放进对应 slot。
+   */
   function placeBlock(command: BlockInsertCommand) {
     const normalized = normalizeBlock(command.block);
     const previous = blocksById.get(normalized.id);
@@ -229,6 +271,9 @@ export function createAgentRuntime(): AgentRuntime {
     );
   }
 
+  /**
+   * 创建或覆盖一个 block。
+   */
   function upsertBlock(block: SurfaceBlock) {
     placeBlock({
       type: 'block.insert',
@@ -236,6 +281,9 @@ export function createAgentRuntime(): AgentRuntime {
     });
   }
 
+  /**
+   * 局部更新一个 block；若 block 不存在则按 patch 信息创建。
+   */
   function patchBlock(id: string, patch: BlockPatchCommand['patch']) {
     const existing = blocksById.get(id);
 
@@ -272,6 +320,9 @@ export function createAgentRuntime(): AgentRuntime {
     blocksById.set(id, next);
   }
 
+  /**
+   * 删除一个 block，并从 slot 排序里移除。
+   */
   function removeBlock(id: string) {
     const existing = blocksById.get(id);
 
@@ -288,6 +339,9 @@ export function createAgentRuntime(): AgentRuntime {
     );
   }
 
+  /**
+   * 应用一条或多条 runtime 命令。
+   */
   function apply(commands: RuntimeCommand | RuntimeCommand[]) {
     for (const command of toArray(commands)) {
       switch (command.type) {
@@ -327,11 +381,17 @@ export function createAgentRuntime(): AgentRuntime {
     notify();
   }
 
+  /**
+   * 按 ID 读取单个节点。
+   */
   function node(id: string): RuntimeNode | undefined {
     const value = nodesById.get(id);
     return value ? cloneValue(value) : undefined;
   }
 
+  /**
+   * 按插入顺序读取全部节点。
+   */
   function nodes(): RuntimeNode[] {
     return nodeOrder
       .map((id) => nodesById.get(id))
@@ -339,11 +399,17 @@ export function createAgentRuntime(): AgentRuntime {
       .map((value) => cloneValue(value));
   }
 
+  /**
+   * 按 ID 读取单个 block。
+   */
   function block(id: string): SurfaceBlock | undefined {
     const value = blocksById.get(id);
     return value ? cloneValue(value) : undefined;
   }
 
+  /**
+   * 读取指定 slot 或全部 slot 下的 block。
+   */
   function blocks(slot?: string): SurfaceBlock[] {
     if (slot) {
       const order = blockOrderBySlot.get(slot) ?? [];
@@ -356,6 +422,9 @@ export function createAgentRuntime(): AgentRuntime {
     return slotOrder.flatMap((slotKey) => blocks(slotKey));
   }
 
+  /**
+   * 读取某个节点的直接子节点列表。
+   */
   function children(nodeId: string): RuntimeNode[] {
     const ids = childIdsByParent.get(nodeId) ?? [];
     return ids
@@ -364,14 +433,23 @@ export function createAgentRuntime(): AgentRuntime {
       .map((value) => cloneValue(value));
   }
 
+  /**
+   * 返回当前收集到的所有 intent。
+   */
   function intents(): RuntimeIntent[] {
     return intentsList.map((intent) => cloneValue(intent));
   }
 
+  /**
+   * 返回完整 history 列表。
+   */
   function history(): RuntimeHistoryEntry[] {
     return historyEntries.map((entry) => cloneValue(entry));
   }
 
+  /**
+   * 创建并记录一条新的 intent。
+   */
   function emitIntent(intentInput: Omit<RuntimeIntent, 'id' | 'at'>): RuntimeIntent {
     const intent: RuntimeIntent = compactObject({
       ...intentInput,
@@ -385,6 +463,9 @@ export function createAgentRuntime(): AgentRuntime {
     return cloneValue(intent);
   }
 
+  /**
+   * 导出当前 runtime 的完整快照。
+   */
   function snapshot(): RuntimeSnapshot {
     return {
       nodes: nodes(),
@@ -394,6 +475,9 @@ export function createAgentRuntime(): AgentRuntime {
     };
   }
 
+  /**
+   * 把 runtime 恢复到初始空状态。
+   */
   function reset() {
     nodesById.clear();
     nodeOrder.splice(0, nodeOrder.length);
@@ -406,6 +490,9 @@ export function createAgentRuntime(): AgentRuntime {
     notify();
   }
 
+  /**
+   * 订阅 runtime 变化，并返回取消订阅函数。
+   */
   function subscribe(listener: () => void) {
     listeners.add(listener);
 

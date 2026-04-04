@@ -58,6 +58,9 @@ const demoPackets: FileUploadDemoPacket[] = [
   }
 ];
 
+/**
+ * 清理当前 demo 里挂起的所有定时器。
+ */
 function clearTimers() {
   while (timers.length > 0) {
     const timerId = timers.pop();
@@ -70,6 +73,9 @@ function clearTimers() {
   playing.value = false;
 }
 
+/**
+ * 预先插入一条用户文本消息和一个文件 artifact。
+ */
 function seedConversation() {
   const now = Date.now();
 
@@ -96,11 +102,17 @@ function seedConversation() {
   ]);
 }
 
+/**
+ * 重置 runtime，并重新播种用户输入。
+ */
 function resetDemo() {
   bridge.reset();
   seedConversation();
 }
 
+/**
+ * 按顺序回放用户文件上传后的整段处理流程。
+ */
 function replayDemo() {
   clearTimers();
   resetDemo();

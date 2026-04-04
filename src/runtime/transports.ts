@@ -1,9 +1,19 @@
 import type { TransportAdapter } from './types';
 import { toArray, toAsyncIterable } from './utils';
 
+/**
+ * 支持同步或异步返回值的工具类型。
+ */
 type Awaitable<T> = T | Promise<T>;
 
+/**
+ * fetch 类 transport 支持的输入源类型。
+ */
 export type FetchTransportSource = RequestInfo | URL;
+
+/**
+ * WebSocket transport 支持的输入源描述。
+ */
 export type WebSocketTransportSource =
   | string
   | URL
@@ -12,10 +22,24 @@ export type WebSocketTransportSource =
       protocols?: string | string[];
     };
 
+/**
+ * SSE transport 的内置解析模式。
+ */
 export type SseTransportMode = 'event' | 'json' | 'text';
+
+/**
+ * NDJSON transport 的内置解析模式。
+ */
 export type NdjsonTransportMode = 'json' | 'text';
+
+/**
+ * WebSocket transport 的内置解析模式。
+ */
 export type WebSocketTransportMode = 'event' | 'json' | 'text';
 
+/**
+ * 标准 SSE message 结构。
+ */
 export interface SseTransportMessage {
   data: string;
   event?: string;
@@ -23,25 +47,40 @@ export interface SseTransportMessage {
   retry?: number;
 }
 
+/**
+ * SSE parser 执行时的上下文信息。
+ */
 export interface SseTransportContext<TSource = FetchTransportSource> {
   source: TSource;
 }
 
+/**
+ * NDJSON parser 执行时的上下文信息。
+ */
 export interface NdjsonTransportContext<TSource = FetchTransportSource> {
   source: TSource;
   lineNumber: number;
 }
 
+/**
+ * WebSocket message 的原始封装。
+ */
 export interface WebSocketTransportMessage {
   data: unknown;
   raw: MessageEvent;
 }
 
+/**
+ * WebSocket parser / onOpen 执行时的上下文信息。
+ */
 export interface WebSocketTransportContext<TSource = WebSocketTransportSource> {
   source: TSource;
   socket: WebSocket;
 }
 
+/**
+ * SSE transport 的配置项。
+ */
 export interface SseTransportOptions<
   TPacket = SseTransportMessage,
   TSource = FetchTransportSource
@@ -55,6 +94,9 @@ export interface SseTransportOptions<
   ) => Awaitable<TPacket | TPacket[] | null | void>;
 }
 
+/**
+ * NDJSON transport 的配置项。
+ */
 export interface NdjsonTransportOptions<
   TPacket = unknown,
   TSource = FetchTransportSource
@@ -68,6 +110,9 @@ export interface NdjsonTransportOptions<
   ) => Awaitable<TPacket | TPacket[] | null | void>;
 }
 
+/**
+ * WebSocket transport 的配置项。
+ */
 export interface WebSocketTransportOptions<
   TPacket = WebSocketTransportMessage,
   TSource = WebSocketTransportSource
@@ -83,6 +128,9 @@ export interface WebSocketTransportOptions<
   ) => Awaitable<TPacket | TPacket[] | null | void>;
 }
 
+/**
+ * 用于把事件监听转换成 async iterator 的轻量队列接口。
+ */
 interface AsyncQueue<T> {
   push(item: T): void;
   end(): void;
@@ -90,6 +138,9 @@ interface AsyncQueue<T> {
   [Symbol.asyncIterator](): AsyncIterator<T>;
 }
 
+/**
+ * 解析 fetch 实现，优先使用显式传入的 fetch。
+ */
 function resolveFetcher(fetcher?: typeof fetch): typeof fetch {
   if (fetcher) {
     return fetcher;
@@ -102,6 +153,9 @@ function resolveFetcher(fetcher?: typeof fetch): typeof fetch {
   throw new Error('Fetch API is not available. Please pass `fetch` explicitly in transport options.');
 }
 
+/**
+ * 统一解析 RequestInit，兼容对象和工厂函数两种写法。
+ */
 async function resolveRequestInit<TSource>(
   init: RequestInit | ((source: TSource) => Awaitable<RequestInit | undefined>) | undefined,
   source: TSource
@@ -117,15 +171,25 @@ async function resolveRequestInit<TSource>(
   return init;
 }
 
+/**
+ * 发起 transport 对应的 fetch 请求，并验证返回体可读。
+ */
 async function openResponse<TSource>(
   source: TSource,
   options: {
     fetch?: typeof fetch;
     init?: RequestInit | ((source: TSource) => Awaitable<RequestInit | undefined>);
-  }
+  },
+  signal?: AbortSignal
 ): Promise<Response> {
   const fetcher = resolveFetcher(options.fetch);
-  const init = await resolveRequestInit(options.init, source);
+  const resolvedInit = await resolveRequestInit(options.init, source);
+  const init = signal
+    ? {
+        ...resolvedInit,
+        signal
+      }
+    : resolvedInit;
   const response = await fetcher(source as FetchTransportSource, init);
 
   if (!response.ok) {
@@ -139,6 +203,9 @@ async function openResponse<TSource>(
   return response;
 }
 
+/**
+ * 解析 WebSocket 构造器，优先使用显式传入的实现。
+ */
 function resolveWebSocketConstructor(WebSocketCtor?: typeof WebSocket): typeof WebSocket {
   if (WebSocketCtor) {
     return WebSocketCtor;
@@ -151,6 +218,9 @@ function resolveWebSocketConstructor(WebSocketCtor?: typeof WebSocket): typeof W
   throw new Error('WebSocket API is not available. Please pass `WebSocket` explicitly in transport options.');
 }
 
+/**
+ * 统一解析 WebSocket protocols 配置。
+ */
 async function resolveWebSocketProtocols<TSource>(
   source: TSource,
   protocols:
@@ -170,6 +240,9 @@ async function resolveWebSocketProtocols<TSource>(
   return protocols;
 }
 
+/**
+ * 把多种 WebSocket source 形式规范化成最终连接地址。
+ */
 async function resolveWebSocketEndpoint<TSource = WebSocketTransportSource>(
   source: TSource,
   protocols:
@@ -199,6 +272,9 @@ async function resolveWebSocketEndpoint<TSource = WebSocketTransportSource>(
   };
 }
 
+/**
+ * 创建一个可由 push / end / fail 驱动的 async queue。
+ */
 function createAsyncQueue<T>(): AsyncQueue<T> {
   const values: T[] = [];
   const waiters: Array<{
@@ -208,6 +284,9 @@ function createAsyncQueue<T>(): AsyncQueue<T> {
   let ended = false;
   let failure: unknown;
 
+  /**
+   * 尽可能把积压的值或错误分发给等待中的消费者。
+   */
   function flushWaiters() {
     while (waiters.length > 0) {
       const waiter = waiters.shift();
@@ -336,6 +415,9 @@ async function* readTextLines(stream: ReadableStream<Uint8Array>): AsyncIterable
   }
 }
 
+/**
+ * 使用内置模式解析一条 SSE message。
+ */
 function defaultSseParser<TPacket>(
   mode: SseTransportMode,
   message: SseTransportMessage
@@ -351,6 +433,9 @@ function defaultSseParser<TPacket>(
   }
 }
 
+/**
+ * 使用内置模式解析一行 NDJSON。
+ */
 function defaultNdjsonParser<TPacket>(mode: NdjsonTransportMode, line: string): TPacket | TPacket[] | null | void {
   if (mode === 'text') {
     return line as TPacket;
@@ -359,6 +444,9 @@ function defaultNdjsonParser<TPacket>(mode: NdjsonTransportMode, line: string): 
   return JSON.parse(line) as TPacket;
 }
 
+/**
+ * 把 WebSocket 的各种二进制或文本数据统一解码为字符串。
+ */
 async function readWebSocketDataAsText(data: unknown): Promise<string> {
   if (typeof data === 'string') {
     return data;
@@ -379,6 +467,9 @@ async function readWebSocketDataAsText(data: unknown): Promise<string> {
   throw new Error('WebSocket message data is not text-decodable.');
 }
 
+/**
+ * 使用内置模式解析一条 WebSocket message。
+ */
 async function defaultWebSocketParser<TPacket>(
   mode: WebSocketTransportMode,
   message: WebSocketTransportMessage
@@ -419,7 +510,7 @@ export function createSseTransport<
 
   return {
     async *connect(source, context) {
-      const response = await openResponse(source, options);
+      const response = await openResponse(source, options, context.signal);
       const body = response.body;
       const signal = context.signal;
       let currentEvent = '';
@@ -428,6 +519,9 @@ export function createSseTransport<
       const dataLines: string[] = [];
       let hasEventFields = false;
 
+      /**
+       * 在遇到空行或流结束时，把当前缓存的 SSE 字段产出为一条消息。
+       */
       const flushEvent = async function* (): AsyncIterable<TPacket> {
         if (!hasEventFields) {
           return;
@@ -518,7 +612,7 @@ export function createNdjsonTransport<
 
   return {
     async *connect(source, context) {
-      const response = await openResponse(source, options);
+      const response = await openResponse(source, options, context.signal);
       const body = response.body;
       let lineNumber = 0;
 
@@ -583,6 +677,9 @@ export function createWebSocketTransport<
 
       let opened = false;
 
+      /**
+       * 连接打开后执行一次可选握手逻辑。
+       */
       const handleOpen = async () => {
         opened = true;
 
@@ -591,10 +688,16 @@ export function createWebSocketTransport<
         }
       };
 
+      /**
+       * 把 message 事件推入异步队列。
+       */
       const handleMessage = (event: MessageEvent) => {
         queue.push(event);
       };
 
+      /**
+       * 把 close 事件转换成正常结束或错误结束。
+       */
       const handleClose = (event: CloseEvent) => {
         if (signal.aborted || event.wasClean || event.code === 1000 || event.code === 1001) {
           queue.end();
@@ -604,6 +707,9 @@ export function createWebSocketTransport<
         queue.fail(new Error(`WebSocket closed unexpectedly with code ${event.code}.`));
       };
 
+      /**
+       * 把底层 socket error 统一转成队列错误。
+       */
       const handleError = () => {
         queue.fail(new Error('WebSocket transport encountered an error.'));
       };
@@ -612,12 +718,18 @@ export function createWebSocketTransport<
       socket.addEventListener('close', handleClose);
       socket.addEventListener('error', handleError);
 
+      /**
+       * 移除当前 transport 绑定的事件监听。
+       */
       const cleanup = () => {
         socket.removeEventListener('message', handleMessage);
         socket.removeEventListener('close', handleClose);
         socket.removeEventListener('error', handleError);
       };
 
+      /**
+       * 在外部 signal 中断时结束队列并关闭 socket。
+       */
       const abortListener = () => {
         queue.end();
 
@@ -631,12 +743,18 @@ export function createWebSocketTransport<
       try {
         if (socket.readyState === WebSocketCtor.CONNECTING) {
           await new Promise<void>((resolve, reject) => {
+            /**
+             * 等待 WebSocket 连接真正打开后继续后续流程。
+             */
             const openListener = () => {
               socket.removeEventListener('open', openListener);
               socket.removeEventListener('error', errorListener);
               handleOpen().then(resolve).catch(reject);
             };
 
+            /**
+             * 在打开前连接失败时拒绝当前等待。
+             */
             const errorListener = () => {
               socket.removeEventListener('open', openListener);
               socket.removeEventListener('error', errorListener);

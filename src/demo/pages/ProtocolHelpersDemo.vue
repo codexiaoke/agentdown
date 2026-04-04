@@ -94,6 +94,9 @@ const demoPackets: ProtocolHelperPacket[] = [
   }
 ];
 
+/**
+ * 清理当前 demo 里挂起的所有定时器。
+ */
 function clearTimers() {
   while (timers.length > 0) {
     const timerId = timers.pop();
@@ -107,6 +110,9 @@ function clearTimers() {
 }
 
 // 先种一条用户消息，让后面的 assistant/group block 更接近真实聊天场景。
+/**
+ * 预先插入一条用户消息，模拟真实对话上下文。
+ */
 function seedConversation() {
   runtime.apply(cmd.message.text({
     id: 'block:user:protocol-helpers',
@@ -117,12 +123,18 @@ function seedConversation() {
   }));
 }
 
+/**
+ * 重置 runtime，并重新播种初始用户消息。
+ */
 function resetDemo() {
   bridge.reset();
   seedConversation();
 }
 
 // 逐条推送 packet，方便直观看到 helper protocol 如何驱动整个界面。
+/**
+ * 按时间顺序回放整组 helper packet。
+ */
 function replayDemo() {
   clearTimers();
   resetDemo();

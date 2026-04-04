@@ -17,6 +17,21 @@ export { default as DefaultMarkdownTimelineBlock } from './components/TimelineBl
 export { defaultMarkdownBuiltinComponents } from './components/defaultMarkdownComponents';
 export { createMarkdownEngine } from './core/createMarkdownEngine';
 export { parseMarkdown } from './core/parseMarkdown';
+export { useAgentSession } from './composables/useAgentSession';
+export { createSseRequestInitResolver, useSse } from './composables/useSse';
+export {
+  useAsyncIterableBridge,
+  useBridgeTransport,
+  useNdjsonBridge,
+  useSseBridge,
+  useWebSocketBridge
+} from './composables/useBridgeTransport';
+export { useRuntimeSnapshot } from './composables/useRuntimeSnapshot';
+export { useRuntimeTranscript } from './composables/useRuntimeTranscript';
+export { useRuntimeReplayPlayer } from './composables/useRuntimeReplayPlayer';
+export { useRuntimeSnapshot as useAgentRuntimeSnapshot } from './composables/useRuntimeSnapshot';
+export { useRuntimeTranscript as useAgentRuntimeTranscript } from './composables/useRuntimeTranscript';
+export { useRuntimeReplayPlayer as useAgentRuntimeReplayPlayer } from './composables/useRuntimeReplayPlayer';
 export { createMarkdownAssembler, createPlainTextAssembler } from './runtime/assemblers';
 export { createBridge } from './runtime/createBridge';
 export { defineAgentdownPreset } from './runtime/definePreset';
@@ -24,6 +39,8 @@ export {
   createRuntimeReplayPlayer,
   createRuntimeTranscript,
   createRuntimeTranscriptMessages,
+  isRuntimeTranscript,
+  parseRuntimeTranscript,
   replayRuntimeHistory
 } from './runtime/replay';
 export {
@@ -63,6 +80,40 @@ export type {
   MarkdownThoughtBlock,
   ParseMarkdownOptions
 } from './core/types';
+export type {
+  AgentSessionTranscriptSource,
+  UseAgentSessionOptions,
+  UseAgentSessionResult
+} from './composables/useAgentSession';
+export type {
+  SseRequestOptions,
+  SseStatus,
+  UseSseConnectOptions,
+  UseSseOptions,
+  UseSseResult
+} from './composables/useSse';
+export type {
+  UseAsyncIterableBridgeOptions,
+  UseBridgeTransportOptions,
+  UseBridgeTransportResult,
+  UseNdjsonBridgeOptions,
+  UseSseBridgeConnectOptions,
+  UseSseBridgeOptions,
+  UseSseBridgeResult,
+  UseWebSocketBridgeOptions
+} from './composables/useBridgeTransport';
+export type {
+  UseRuntimeSnapshotResult,
+  UseRuntimeSnapshotResult as UseAgentRuntimeSnapshotResult
+} from './composables/useRuntimeSnapshot';
+export type {
+  UseRuntimeTranscriptResult,
+  UseRuntimeTranscriptResult as UseAgentRuntimeTranscriptResult
+} from './composables/useRuntimeTranscript';
+export type {
+  UseRuntimeReplayPlayerResult,
+  UseRuntimeReplayPlayerResult as UseAgentRuntimeReplayPlayerResult
+} from './composables/useRuntimeReplayPlayer';
 export type {
   AgentRuntime,
   AssemblerContext,
@@ -117,7 +168,10 @@ export type {
   RuntimeReplayPlayer,
   RuntimeReplayStepResult,
   RuntimeTranscript,
-  RuntimeTranscriptMessage
+  RuntimeTranscriptApproval,
+  RuntimeTranscriptArtifact,
+  RuntimeTranscriptMessage,
+  RuntimeTranscriptTool
 } from './runtime/replay';
 export type {
   ApprovalUpdateInput,

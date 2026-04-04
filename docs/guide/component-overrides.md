@@ -103,8 +103,16 @@ const aguiComponents = {
 
 ## 运行中的值怎么传进自定义组件
 
-当前版本不再自动提供旧式 runtime hooks。  
-更推荐的做法有两种：
+当前版本不再自动注入旧式 runtime hooks。  
+如果你在 Vue 页面层需要订阅 runtime，本身已经有：
+
+- `useRuntimeSnapshot()`
+- `useRuntimeTranscript()`
+- `useRuntimeReplayPlayer()`
+- `useSseBridge()` / `useNdjsonBridge()` / `useWebSocketBridge()`
+- `useAsyncIterableBridge()`
+
+而对“嵌入到 markdown 里的业务组件”来说，更推荐的做法还是下面两种：
 
 ### 1. 静态 props 走 `:::vue-component`
 

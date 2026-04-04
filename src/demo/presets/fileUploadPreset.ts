@@ -7,6 +7,9 @@ import {
 import FileSummaryCard from '../components/FileSummaryCard.vue';
 import MessageLoadingBubble from '../components/MessageLoadingBubble.vue';
 
+/**
+ * 用户上传文件 demo 使用的原始事件协议。
+ */
 export type FileUploadDemoPacket =
   | {
       event: 'RunStarted';
@@ -44,6 +47,9 @@ export type FileUploadDemoPacket =
       runId: string;
     };
 
+/**
+ * 把文件上传场景的事件协议映射到 Agentdown preset。
+ */
 export const fileUploadPreset = defineAgentdownPreset<FileUploadDemoPacket>({
   protocol: defineEventProtocol<FileUploadDemoPacket>({
     RunStarted: (event) =>

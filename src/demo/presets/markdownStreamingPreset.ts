@@ -6,6 +6,9 @@ import {
 } from '../../index';
 import MessageLoadingBubble from '../components/MessageLoadingBubble.vue';
 
+/**
+ * 流式 markdown demo 使用的原始事件协议。
+ */
 export type MarkdownStreamingPacket =
   | {
       event: 'RunStarted';
@@ -32,6 +35,9 @@ export type MarkdownStreamingPacket =
       runId: string;
     };
 
+/**
+ * 把 markdown token 流映射成带 assembler 的 Agentdown preset。
+ */
 export const markdownStreamingPreset = defineAgentdownPreset<MarkdownStreamingPacket>({
   protocol: defineEventProtocol<MarkdownStreamingPacket>({
     RunStarted: (event) =>

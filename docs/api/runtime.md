@@ -62,6 +62,147 @@ Bridge 负责：
 | `status()` | 获取当前状态 |
 | `snapshot()` | 获取 bridge 调试快照 |
 
+## `useSseBridge()`
+
+如果你在 Vue 组件里直接消费 SSE，最省事的写法通常是：
+
+```ts
+const {
+  runtime,
+  connect,
+  disconnect,
+  consuming,
+  error,
+  status
+} = useSseBridge<Packet>({
+  source: '/api/agent/sse',
+  protocol,
+  assemblers: {
+    markdown: createMarkdownAssembler()
+  },
+  request: {
+    body: {
+      message: '帮我查一下北京天气'
+    }
+  },
+  transport: {
+    mode: 'json'
+  }
+})
+
+await connect(undefined, {
+  request: {
+    body: {
+      message: '再查一次'
+    }
+  }
+})
+```
+
+它内部会帮你：
+
+- 创建 `bridge`
+- 连接 `createSseTransport()`
+- 用 `request.body / request.headers / request.method` 这种更贴近业务的写法生成请求
+- 管理 `start / stop / restart`
+- 同时提供更贴近业务 hook 心智的 `connect / reconnect / disconnect`
+- 暴露响应式的 `status / error / consuming`
+
+## `useSse()`
+
+如果你暂时只需要一个更通用的 SSE hook，而不是直接接 Agentdown runtime：
+
+```ts
+const {
+  status,
+  lastMessage,
+  connect,
+  abort
+} = useSse<MyPacket>({
+  onMessage: (packet) => {
+    console.log(packet)
+  }
+})
+
+await connect('/api/chat/sse', {
+  request: {
+    body: {
+      message: 'hello'
+    }
+  }
+})
+```
+
+它更接近普通业务 composable 的写法，支持：
+
+- `connect() / restart() / abort()`
+- `status`
+- `lastMessage / messages / messageCount`
+- `request.body / request.headers / request.method`
+
+同一套模式也提供：
+
+- `useNdjsonBridge()`
+- `useWebSocketBridge()`
+- `useAsyncIterableBridge()`
+- `useBridgeTransport()`：如果你已经有一个现成 bridge
+
+## `useAsyncIterableBridge()`
+
+如果你的数据源本身就是 `async function*`、本地 mock 流或测试 packet 列表：
+
+```ts
+const { runtime, start } = useAsyncIterableBridge<Packet>({
+  protocol,
+  assemblers: {
+    markdown: createMarkdownAssembler()
+  }
+})
+
+await start(createPacketStream())
+```
+
+这对本地 demo、测试、离线 replay 源特别顺手。
+
+## `useRuntimeSnapshot()`
+
+```ts
+const { snapshot, blocks, nodes, history } = useRuntimeSnapshot(runtime)
+```
+
+适合把 `runtime.subscribe()` 包成 Vue 响应式状态。
+
+## `useAgentSession()`
+
+如果你就是在搭一个完整页面，想一次拿到：
+
+- `runtime`
+- `bridge`
+- `surface`
+- `exportedTranscript`
+- `activeTranscript`
+- `replay`
+
+可以直接用：
+
+```ts
+const session = useAgentSession(myPreset)
+
+session.push(packet)
+session.flush()
+session.useExportedTranscript()
+await session.replay.play()
+```
+
+它本质上是对：
+
+- `preset.createSession()`
+- `useRuntimeSnapshot()`
+- `useRuntimeTranscript()`
+- `useRuntimeReplayPlayer()`
+
+这几层的页面级组合封装。
+
 ## `createRuntimeTranscript()`
 
 把当前 runtime 或 snapshot 导出成一份可序列化 transcript：
@@ -75,8 +216,45 @@ const transcript = createRuntimeTranscript(runtime)
 - `snapshot`
 - `history`
 - `messages`
+- `tools`
+- `artifacts`
+- `approvals`
 
-其中 `messages` 是按 `slot / groupId / role` 聚合后的消息视图，适合做导出、摘要和回放页。
+其中：
+
+- `messages` 是按 `slot / groupId / role` 聚合后的消息视图
+- `tools` 是工具调用摘要，适合做审计、回放或侧栏工具面板
+- `artifacts` / `approvals` 是面向 UI 消费的结构化摘要
+
+适合直接拿来做导出、摘要页和 replay 面板。
+
+## `parseRuntimeTranscript()`
+
+把导出的 JSON 字符串或普通对象恢复成标准 transcript：
+
+```ts
+const transcript = parseRuntimeTranscript(jsonText)
+```
+
+如果导入内容缺少 `messages / tools / artifacts / approvals`，会基于 `snapshot` 自动补齐。
+
+## `isRuntimeTranscript()`
+
+如果你只想先做轻量判断：
+
+```ts
+if (isRuntimeTranscript(value)) {
+  console.log(value.history)
+}
+```
+
+## `useRuntimeTranscript()`
+
+```ts
+const { transcript } = useRuntimeTranscript(runtime)
+```
+
+适合接导出按钮、摘要面板或会话存档。
 
 ## `replayRuntimeHistory()`
 
@@ -100,6 +278,22 @@ player.reset()
 ```
 
 它内部维护一个新的 runtime，适合接到 `RunSurface` 做可视化回放。
+
+## `useRuntimeReplayPlayer()`
+
+```ts
+const {
+  runtime,
+  position,
+  total,
+  play,
+  pause,
+  step,
+  reset
+} = useRuntimeReplayPlayer(transcript)
+```
+
+适合接回放控制条或导入 transcript 后的预览页。
 
 ## `createAsyncIterableTransport()`
 

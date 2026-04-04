@@ -4,6 +4,9 @@ import {
 } from '../../index';
 import WeatherToolCard from '../components/WeatherToolCard.vue';
 
+/**
+ * helper protocol demo 使用的项目级语义事件。
+ */
 export type ProtocolHelperPacket =
   | {
       type: 'run.start';
@@ -160,6 +163,9 @@ export const helperProtocolFactory = createHelperProtocolFactory<ProtocolHelperP
   }
 });
 
+/**
+ * 演示 helper protocol factory 在 preset 中的直接复用。
+ */
 export const protocolHelpersPreset = defineAgentdownPreset<ProtocolHelperPacket>({
   protocol: helperProtocolFactory.createProtocol(),
   surface: {
