@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import MarkdownBlockList from './MarkdownBlockList.vue';
 import { parseMarkdown } from '../core/parseMarkdown';
+import { createStreamingMarkdownTextBlock } from '../core/streamingInlineFragments';
 import type {
   AguiComponentMap,
   MarkdownBlock,
@@ -345,16 +346,32 @@ const draftMode = computed(() => {
 });
 
 /**
- * 对 draft markdown 做一次安全预览解析。
+ * 对 draft markdown 生成可直接渲染的 block 列表。
+ *
+ * - `preview` 模式继续走完整 markdown 解析
+ * - `text` 模式走容错的 inline draft 预览，这样 `**加粗` 这类流式内容也能尽早显示样式
  */
 const draftPreviewBlocks = computed<MarkdownBlock[]>(() => {
-  if (!isDraftLike.value || draftMode.value !== 'preview' || fallbackText.value.trim().length === 0) {
+  if (!isDraftLike.value || fallbackText.value.trim().length === 0) {
     return [];
   }
 
-  return parseMarkdown(fallbackText.value, {
-    aguiComponents: props.aguiComponents
-  });
+  if (draftMode.value === 'preview') {
+    return parseMarkdown(fallbackText.value, {
+      aguiComponents: props.aguiComponents
+    });
+  }
+
+  if (draftMode.value === 'text') {
+    return [
+      createStreamingMarkdownTextBlock(
+        fallbackText.value,
+        `${props.block.id}:draft-text`
+      )
+    ];
+  }
+
+  return [];
 });
 
 /**
@@ -376,13 +393,12 @@ const shouldRenderDraft = computed(() => {
 });
 
 /**
- * 判断是否应该显示 markdown draft 预览。
+ * 判断是否应该显示解析后的 draft 内容。
  */
 const shouldRenderDraftPreview = computed(() => {
   return (
     !rendererRegistration.value
     && isDraftLike.value
-    && draftMode.value === 'preview'
     && renderableDraftPreviewBlocks.value.length > 0
   );
 });

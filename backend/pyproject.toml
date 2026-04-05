@@ -6,8 +6,13 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
   "agno>=2.5.14",
+  "autogen-agentchat>=0.7.5",
+  "autogen-ext>=0.7.5",
+  "crewai>=1.13.0",
   "fastapi>=0.115.0",
   "httpx>=0.28.0",
+  "langchain>=1.2.15",
+  "langchain-deepseek>=1.0.1",
   "openai>=2.30.0",
   "uvicorn>=0.35.0",
 ]

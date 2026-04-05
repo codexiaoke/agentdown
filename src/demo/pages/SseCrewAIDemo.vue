@@ -2,19 +2,20 @@
 import { computed, onMounted, ref } from 'vue';
 import {
   type AgentRuntime,
-  type AgnoEvent,
+  type CrewAIEvent,
   cmd,
   createSseTransport,
-  defineAgnoToolComponents,
-  defineAgnoPreset,
+  defineCrewAIToolComponents,
+  defineCrewAIPreset,
+  parseCrewAISseMessage,
   RunSurface,
   useBridgeTransport
 } from '../../index';
 import MessageLoadingBubble from '../components/MessageLoadingBubble.vue';
 import WeatherToolCard from '../components/WeatherToolCard.vue';
 
-const DEFAULT_PROMPT = '帮我查一下北京今天天气';
-const USER_GROUP_ID = 'turn:user:agno-weather';
+const DEFAULT_PROMPT = '帮我查一下北京天气，并说明工具调用过程。';
+const USER_GROUP_ID = 'turn:user:crewai-weather';
 
 /**
  * 去掉 URL 末尾多余的 `/`，方便后面安全拼接路径。
@@ -34,10 +35,10 @@ function resolveBackendBaseUrl(): string {
 }
 
 /**
- * 按统一规则拼出真实 Agno SSE endpoint。
+ * 按统一规则拼出真实 CrewAI SSE endpoint。
  */
-function buildAgnoEndpoint(): string {
-  return `${resolveBackendBaseUrl()}/api/stream/agno`;
+function buildCrewAIEndpoint(): string {
+  return `${resolveBackendBaseUrl()}/api/stream/crewai`;
 }
 
 /**
@@ -45,7 +46,7 @@ function buildAgnoEndpoint(): string {
  */
 function seedConversation(input: string, runtime: AgentRuntime) {
   runtime.apply(cmd.message.text({
-    id: 'block:user:agno-weather',
+    id: 'block:user:crewai-weather',
     role: 'user',
     text: input,
     groupId: USER_GROUP_ID,
@@ -54,8 +55,8 @@ function seedConversation(input: string, runtime: AgentRuntime) {
 }
 
 const prompt = ref(DEFAULT_PROMPT);
-const endpoint = buildAgnoEndpoint();
-const agnoTools = defineAgnoToolComponents({
+const endpoint = buildCrewAIEndpoint();
+const crewAITools = defineCrewAIToolComponents({
   'tool.weather': {
     match: ['weather', '天气'],
     mode: 'includes',
@@ -63,26 +64,26 @@ const agnoTools = defineAgnoToolComponents({
   }
 });
 
-const agnoPreset = defineAgnoPreset<string>({
+const crewAIPreset = defineCrewAIPreset<string>({
   protocolOptions: {
-    defaultRunTitle: 'Agno 助手',
-    toolRenderer: agnoTools.toolRenderer
+    defaultRunTitle: 'CrewAI 助手',
+    toolRenderer: crewAITools.toolRenderer
   },
   surface: {
     draftPlaceholder: {
       component: MessageLoadingBubble,
       props: {
-        label: 'Agno 正在思考'
+        label: 'CrewAI 正在思考'
       }
     },
-    renderers: agnoTools.renderers
+    renderers: crewAITools.renderers
   }
 });
 
-const { runtime, bridge, surface } = agnoPreset.createSession({
+const { runtime, bridge, surface } = crewAIPreset.createSession({
   bridge: {
-    transport: createSseTransport<AgnoEvent, string>({
-      mode: 'json',
+    transport: createSseTransport<CrewAIEvent, string>({
+      parse: parseCrewAISseMessage,
       init() {
         return {
           method: 'POST',
@@ -136,7 +137,7 @@ const busy = computed(() => status.value.phase === 'consuming');
 const transportError = computed(() => error.value?.message ?? '');
 
 /**
- * 重置当前会话，并重新连接真实 Agno backend。
+ * 重置当前会话，并重新连接真实 CrewAI backend。
  */
 async function replayDemo() {
   stop();
@@ -155,8 +156,8 @@ onMounted(() => {
 <template>
   <section class="demo-page">
     <header class="demo-page__header">
-      <h1>Agno 真实 SSE</h1>
-      <p>启动 FastAPI backend 后，这个页面会直接请求真实 `/api/stream/agno`，然后用 `defineAgnoPreset()` 把官方事件映射成聊天 UI。</p>
+      <h1>CrewAI 真实 SSE</h1>
+      <p>启动 FastAPI backend 后，这个页面会直接请求真实 `/api/stream/crewai`，然后用 `defineCrewAIPreset()` 把官方流式 chunk 和最终 `CrewOutput` 渲染成聊天内容和工具组件。</p>
     </header>
 
     <form
@@ -165,17 +166,17 @@ onMounted(() => {
     >
       <label
         class="demo-form__label"
-        for="agno-prompt"
+        for="crewai-prompt"
       >
         问题
       </label>
 
       <textarea
-        id="agno-prompt"
+        id="crewai-prompt"
         v-model="prompt"
         class="demo-form__input"
         rows="2"
-        placeholder="帮我查一下北京今天天气"
+        placeholder="帮我查一下北京天气，并说明工具调用过程。"
       />
 
       <div class="demo-form__meta">
@@ -256,65 +257,50 @@ onMounted(() => {
   border: 1px solid #dbe3ee;
   border-radius: 14px;
   padding: 12px 14px;
-  resize: vertical;
-  background: #f8fafc;
-  color: #0f172a;
   font: inherit;
-  line-height: 1.7;
+  resize: vertical;
+  box-sizing: border-box;
 }
 
 .demo-form__meta {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  justify-content: space-between;
+  gap: 12px;
   margin-top: 12px;
 }
 
 .demo-form__status {
-  border-radius: 999px;
-  padding: 4px 10px;
-  background: #e2e8f0;
-  color: #334155;
-  font-size: 12px;
+  color: #475569;
+  font-size: 13px;
 }
 
 .demo-form__endpoint {
-  overflow-wrap: anywhere;
-  color: #64748b;
+  color: #1d4ed8;
   font-size: 12px;
+  word-break: break-all;
 }
 
 .demo-page__replay {
   margin-top: 14px;
   border: 0;
   border-radius: 999px;
-  padding: 10px 14px;
-  background: #e8eef7;
-  color: #334155;
+  padding: 10px 16px;
+  background: #0f172a;
+  color: #ffffff;
   font: inherit;
-  font-size: 13px;
   cursor: pointer;
 }
 
 .demo-page__replay:disabled {
-  cursor: wait;
-  opacity: 0.72;
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .demo-page__error {
   margin: 0 0 20px;
-  border-radius: 14px;
-  padding: 12px 14px;
-  background: #fff1f2;
-  color: #be123c;
-  font-size: 13px;
-  line-height: 1.7;
-}
-
-@media (max-width: 720px) {
-  .demo-page {
-    padding: 24px 16px 56px;
-  }
+  color: #dc2626;
+  font-size: 14px;
 }
 </style>

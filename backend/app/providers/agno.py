@@ -22,6 +22,18 @@ async def stream_agno_events(context: ProviderContext) -> AsyncIterator[dict[str
 
             return lookup_live_weather(city)
 
+        def get_time() -> str:
+            """Return the current time."""
+
+            return "The current time is " + ":".join(map(str, [
+                2023,
+                1,
+                1,
+                1,
+                1,
+                1,
+            ]))
+
         agent = Agent(
             name="Agno Weather Agent",
             model=DeepSeek(
@@ -29,7 +41,7 @@ async def stream_agno_events(context: ProviderContext) -> AsyncIterator[dict[str
                 api_key=context.settings.deepseek_api_key,
                 base_url=context.settings.deepseek_base_url,
             ),
-            tools=[lookup_weather],
+            tools=[lookup_weather,get_time],
             instructions=(
                 "You are a weather assistant. "
                 "When the user asks about weather, you must call the lookup_weather tool before answering. "

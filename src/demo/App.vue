@@ -5,6 +5,9 @@ import LongDocumentDemo from './pages/LongDocumentDemo.vue';
 import PerformanceLabDemo from './pages/PerformanceLabDemo.vue';
 import ProtocolHelpersDemo from './pages/ProtocolHelpersDemo.vue';
 import ReplayTranscriptDemo from './pages/ReplayTranscriptDemo.vue';
+import SseAutoGenDemo from './pages/SseAutoGenDemo.vue';
+import SseCrewAIDemo from './pages/SseCrewAIDemo.vue';
+import SseLangChainDemo from './pages/SseLangChainDemo.vue';
 import SseWeatherDemo from './pages/SseWeatherDemo.vue';
 import StreamingMarkdownDemo from './pages/StreamingMarkdownDemo.vue';
 import UserFileDemo from './pages/UserFileDemo.vue';
@@ -43,6 +46,24 @@ const routes: DemoRoute[] = [
     title: 'Agno 真实 SSE',
     description: '直接请求真实 /api/stream/agno，并用官方事件适配层映射成聊天内容和工具组件。',
     component: SseWeatherDemo
+  },
+  {
+    path: '/sse-autogen',
+    title: 'AutoGen 真实 SSE',
+    description: '直接请求真实 /api/stream/autogen，并把官方 run_stream() 事件渲染成聊天内容和工具组件。',
+    component: SseAutoGenDemo
+  },
+  {
+    path: '/sse-langchain',
+    title: 'LangChain 真实 SSE',
+    description: '直接请求真实 /api/stream/langchain，并把官方 astream_events() 渲染成聊天内容和工具组件。',
+    component: SseLangChainDemo
+  },
+  {
+    path: '/sse-crewai',
+    title: 'CrewAI 真实 SSE',
+    description: '直接请求真实 /api/stream/crewai，并把官方流式 chunk + CrewOutput 渲染成聊天内容和工具组件。',
+    component: SseCrewAIDemo
   },
   {
     path: '/protocol-helpers',

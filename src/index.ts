@@ -20,7 +20,33 @@ export { createMarkdownEngine } from './core/createMarkdownEngine';
 export { parseMarkdown } from './core/parseMarkdown';
 export { useAgentSession } from './composables/useAgentSession';
 export { createSseRequestInitResolver, useSse } from './composables/useSse';
-export { createAgnoProtocol, defineAgnoPreset } from './adapters/agno';
+export {
+  createAgnoProtocol,
+  defineAgnoEventComponents,
+  defineAgnoPreset,
+  defineAgnoToolComponents
+} from './adapters/agno';
+export {
+  createCrewAIProtocol,
+  defineCrewAIEventComponents,
+  defineCrewAIPreset,
+  defineCrewAIToolComponents,
+  parseCrewAISseMessage
+} from './adapters/crewai';
+export {
+  createAutoGenProtocol,
+  defineAutoGenEventComponents,
+  defineAutoGenPreset,
+  defineAutoGenToolComponents
+} from './adapters/autogen';
+export {
+  createLangChainProtocol,
+  defineLangChainEventComponents,
+  defineLangChainPreset,
+  defineLangChainToolComponents
+} from './adapters/langchain';
+export { createEventComponentRegistry } from './adapters/eventComponentRegistry';
+export { createToolNameRegistry } from './adapters/toolNameRegistry';
 export {
   useAsyncIterableBridge,
   useBridgeTransport,
@@ -37,6 +63,7 @@ export { useRuntimeReplayPlayer as useAgentRuntimeReplayPlayer } from './composa
 export { createMarkdownAssembler, createPlainTextAssembler } from './runtime/assemblers';
 export { createBridge } from './runtime/createBridge';
 export { defineAgentdownPreset } from './runtime/definePreset';
+export { composeProtocols } from './runtime/composeProtocols';
 export {
   createRuntimeReplayPlayer,
   createRuntimeTranscript,
@@ -126,6 +153,70 @@ export type {
   AgnoToolRendererContext,
   AgnoToolRendererResolver
 } from './adapters/agno';
+export type {
+  EventComponentBlockInput,
+  EventComponentDefinition,
+  EventComponentDefinitionMap,
+  EventComponentRegistryOptions,
+  EventComponentRegistryResult,
+  EventComponentRegistrySharedOptions,
+  EventComponentResolveContext,
+  EventNameMatchMode,
+  EventNameMatcher
+} from './adapters/eventComponentRegistry';
+export type {
+  ToolNameComponentDefinition,
+  ToolNameComponentMap,
+  ToolNameMatchMode,
+  ToolNameMatcher,
+  ToolNameRegistryOptions,
+  ToolNameRegistryResult,
+  ToolNameRegistrySharedOptions
+} from './adapters/toolNameRegistry';
+export type {
+  CrewAIBlockIdResolver,
+  CrewAIChunkType,
+  CrewAIEvent,
+  CrewAIGroupIdResolver,
+  CrewAIMessage,
+  CrewAIMessageToolCall,
+  CrewAIMessageToolFunction,
+  CrewAIPresetOptions,
+  CrewAIProtocolOptions,
+  CrewAIRunTitleResolver,
+  CrewAIStreamIdResolver,
+  CrewAIStreamingToolCall,
+  CrewAITaskOutput,
+  CrewAIToolPayload,
+  CrewAIToolRendererContext,
+  CrewAIToolRendererResolver
+} from './adapters/crewai';
+export type {
+  AutoGenBlockIdResolver,
+  AutoGenEvent,
+  AutoGenGroupIdResolver,
+  AutoGenPresetOptions,
+  AutoGenProtocolOptions,
+  AutoGenRunTitleResolver,
+  AutoGenStreamIdResolver,
+  AutoGenToolCall,
+  AutoGenToolPayload,
+  AutoGenToolRendererContext,
+  AutoGenToolRendererResolver,
+  AutoGenToolResult
+} from './adapters/autogen';
+export type {
+  LangChainBlockIdResolver,
+  LangChainEvent,
+  LangChainGroupIdResolver,
+  LangChainPresetOptions,
+  LangChainProtocolOptions,
+  LangChainRunTitleResolver,
+  LangChainStreamIdResolver,
+  LangChainToolPayload,
+  LangChainToolRendererContext,
+  LangChainToolRendererResolver
+} from './adapters/langchain';
 export type {
   UseRuntimeReplayPlayerResult,
   UseRuntimeReplayPlayerResult as UseAgentRuntimeReplayPlayerResult

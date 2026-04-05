@@ -13,8 +13,13 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "agno" },
+    { name = "autogen-agentchat" },
+    { name = "autogen-ext" },
+    { name = "crewai" },
     { name = "fastapi" },
     { name = "httpx" },
+    { name = "langchain" },
+    { name = "langchain-deepseek" },
     { name = "openai" },
     { name = "uvicorn" },
 ]
@@ -33,12 +38,17 @@ frameworks = [
 requires-dist = [
     { name = "agno", specifier = ">=2.5.14" },
     { name = "agno", marker = "extra == 'frameworks'" },
+    { name = "autogen-agentchat", specifier = ">=0.7.5" },
     { name = "autogen-agentchat", marker = "extra == 'frameworks'" },
+    { name = "autogen-ext", specifier = ">=0.7.5" },
     { name = "autogen-ext", extras = ["openai"], marker = "extra == 'frameworks'" },
+    { name = "crewai", specifier = ">=1.13.0" },
     { name = "crewai", marker = "extra == 'frameworks'" },
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "httpx", specifier = ">=0.28.0" },
+    { name = "langchain", specifier = ">=1.2.15" },
     { name = "langchain", marker = "extra == 'frameworks'" },
+    { name = "langchain-deepseek", specifier = ">=1.0.1" },
     { name = "langchain-deepseek", marker = "extra == 'frameworks'" },
     { name = "openai", specifier = ">=2.30.0" },
     { name = "uvicorn", specifier = ">=0.35.0" },

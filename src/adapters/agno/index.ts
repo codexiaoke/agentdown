@@ -7,6 +7,8 @@
  */
 
 export { createAgnoProtocol, defineAgnoPreset } from './protocol';
+export { defineAgnoEventComponents } from './eventComponents';
+export { defineAgnoToolComponents } from './toolComponents';
 export type {
   AgnoBlockIdResolver,
   AgnoEvent,

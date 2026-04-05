@@ -8,7 +8,6 @@ from typing import Any
 from app.live_weather import lookup_live_weather
 from app.providers.base import (
     ProviderContext,
-    build_autogen_model_capabilities,
     build_autogen_model_info,
     build_openai_compatible_base_url,
     serialize_payload,
@@ -31,7 +30,6 @@ async def stream_autogen_events(context: ProviderContext) -> AsyncIterator[dict[
             model=context.settings.deepseek_model,
             api_key=context.settings.deepseek_api_key,
             base_url=build_openai_compatible_base_url(context.settings.deepseek_base_url),
-            model_capabilities=build_autogen_model_capabilities(),
             model_info=build_autogen_model_info(),
             temperature=0,
         )
