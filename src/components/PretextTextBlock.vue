@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { layoutWithLines, prepareWithSegments } from '@chenglou/pretext';
+import { layoutWithLines } from '@chenglou/pretext';
+import { getCachedPreparedTextWithSegments } from './pretextCache';
 import {
   layoutPretextRichTextLines,
   preparePretextRichTextItems,
@@ -42,9 +43,11 @@ const prepared = computed(() => {
     return null;
   }
 
-  return prepareWithSegments(props.text, typography.value.blockFont, {
-    whiteSpace: 'pre-wrap'
-  });
+  return getCachedPreparedTextWithSegments(
+    props.text,
+    typography.value.blockFont,
+    'pre-wrap'
+  );
 });
 
 /**

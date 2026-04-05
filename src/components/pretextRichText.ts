@@ -1,10 +1,10 @@
 import {
   layoutNextLine,
-  prepareWithSegments,
   walkLineRanges,
   type LayoutCursor,
   type PreparedTextWithSegments
 } from '@chenglou/pretext';
+import { getCachedPreparedTextWithSegments } from './pretextCache';
 import type { MarkdownHeadingTag, MarkdownInlineFragment } from '../core/types';
 
 /**
@@ -91,6 +91,16 @@ const INLINE_CODE_FONT_FAMILY = '"SFMono-Regular", "JetBrains Mono", "Fira Code"
  * 缓存不同字体下的折叠空格宽度，避免重复测量。
  */
 const collapsedSpaceWidthCache = new Map<string, number>();
+
+/**
+ * rich inline item 的共享缓存上限。
+ */
+const PREPARED_RICH_ITEMS_CACHE_LIMIT = 800;
+
+/**
+ * rich inline item 的共享缓存。
+ */
+const preparedRichItemsCache = new Map<string, PreparedPretextRichTextItem[]>();
 
 /**
  * 解析 `font` shorthand，提取出 pretext 布局需要的基础信息。
@@ -208,8 +218,8 @@ function measureCollapsedSpaceWidth(font: string): number {
     return cached;
   }
 
-  const joinedWidth = measureSingleLineWidth(prepareWithSegments('A A', font));
-  const compactWidth = measureSingleLineWidth(prepareWithSegments('AA', font));
+  const joinedWidth = measureSingleLineWidth(getCachedPreparedTextWithSegments('A A', font));
+  const compactWidth = measureSingleLineWidth(getCachedPreparedTextWithSegments('AA', font));
   const collapsedWidth = Math.max(0, joinedWidth - compactWidth);
 
   collapsedSpaceWidthCache.set(font, collapsedWidth);
@@ -262,6 +272,14 @@ export function preparePretextRichTextItems(
   fragments: MarkdownInlineFragment[],
   typography: PretextTypography
 ): PreparedPretextRichTextItem[] {
+  const cacheKey = createPreparedRichItemsCacheKey(fragments, typography);
+  const cached = preparedRichItemsCache.get(cacheKey);
+
+  if (cached) {
+    touchRichItemsCacheEntry(cacheKey, cached);
+    return cached;
+  }
+
   const items: PreparedPretextRichTextItem[] = [];
   const collapsedSpaceWidth = measureCollapsedSpaceWidth(typography.blockFont);
   let pendingGap = 0;
@@ -280,7 +298,7 @@ export function preparePretextRichTextItems(
 
       if (trimmedText.length > 0) {
         const measurementStyle = resolveFragmentMeasurementStyle(fragment, typography);
-        const prepared = prepareWithSegments(trimmedText, measurementStyle.font);
+        const prepared = getCachedPreparedTextWithSegments(trimmedText, measurementStyle.font);
         const wholeLine = layoutNextLine(prepared, LINE_START_CURSOR, UNBOUNDED_WIDTH);
 
         if (wholeLine) {
@@ -314,6 +332,7 @@ export function preparePretextRichTextItems(
     }
   }
 
+  rememberPreparedRichItems(cacheKey, items);
   return items;
 }
 
@@ -424,4 +443,48 @@ export function layoutPretextRichTextLines(
   }
 
   return lines;
+}
+
+/**
+ * 生成 rich inline item 共享缓存 key。
+ */
+function createPreparedRichItemsCacheKey(
+  fragments: MarkdownInlineFragment[],
+  typography: PretextTypography
+): string {
+  return `${typography.blockFont}\u0000${typography.lineHeight}\u0000${fragments.map((fragment) => {
+    return [
+      fragment.text,
+      fragment.strong ? '1' : '0',
+      fragment.em ? '1' : '0',
+      fragment.del ? '1' : '0',
+      fragment.code ? '1' : '0',
+      fragment.href ?? ''
+    ].join('\u0001');
+  }).join('\u0002')}`;
+}
+
+/**
+ * 触碰一次 rich inline item 缓存项，把它移到 map 尾部。
+ */
+function touchRichItemsCacheEntry(key: string, items: PreparedPretextRichTextItem[]): void {
+  preparedRichItemsCache.delete(key);
+  preparedRichItemsCache.set(key, items);
+}
+
+/**
+ * 写入新的 rich inline item 缓存，并在超过上限时淘汰最旧项。
+ */
+function rememberPreparedRichItems(key: string, items: PreparedPretextRichTextItem[]): void {
+  preparedRichItemsCache.set(key, items);
+
+  while (preparedRichItemsCache.size > PREPARED_RICH_ITEMS_CACHE_LIMIT) {
+    const oldestKey = preparedRichItemsCache.keys().next().value as string | undefined;
+
+    if (!oldestKey) {
+      break;
+    }
+
+    preparedRichItemsCache.delete(oldestKey);
+  }
 }

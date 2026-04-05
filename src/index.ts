@@ -76,6 +76,8 @@ export type {
   MarkdownHtmlBlock,
   MarkdownMathBlock,
   MarkdownMermaidBlock,
+  MarkdownRendererPerformanceOptions,
+  MarkdownRendererTelemetry,
   MarkdownTextBlock,
   MarkdownTimelineBlock,
   MarkdownThoughtBlock,

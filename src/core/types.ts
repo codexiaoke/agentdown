@@ -203,6 +203,61 @@ export interface MarkdownBuiltinComponents {
 /** 允许调用方按需覆盖默认 markdown 渲染组件。 */
 export type MarkdownBuiltinComponentOverrides = Partial<MarkdownBuiltinComponents>;
 
+/**
+ * MarkdownRenderer 的性能相关配置。
+ */
+export interface MarkdownRendererPerformanceOptions {
+  /**
+   * 单个 text block 超过该长度后按 slab 分段渲染。
+   * 传 `false` 可关闭 slab 拆分。
+   */
+  textSlabChars?: number | false;
+  /**
+   * 是否对长文档 block 启用视口窗口化。
+   */
+  virtualize?: boolean;
+  /**
+   * 视口窗口化观察器使用的 rootMargin。
+   */
+  virtualizeMargin?: string;
+}
+
+/**
+ * `MarkdownRenderer` 对外暴露的轻量性能遥测快照。
+ */
+export interface MarkdownRendererTelemetry {
+  /** 当前 markdown 源文本长度。 */
+  sourceLength: number;
+  /** 解析后的原始 block 总数。 */
+  parsedBlockCount: number;
+  /** 进入实际渲染链后的 block 总数。 */
+  renderableBlockCount: number;
+  /** 当前已经挂载到 DOM 中的 block 数量。 */
+  mountedBlockCount: number;
+  /** 当前挂载窗口起始索引。 */
+  mountedStartIndex: number;
+  /** 当前挂载窗口结束索引。 */
+  mountedEndIndex: number;
+  /** 已拿到真实高度测量结果的 block 数量。 */
+  measuredBlockCount: number;
+  /** 当前是否启用了窗口化。 */
+  virtualized: boolean;
+  /** 当前 text slab 配置。 */
+  textSlabChars: number | false;
+  /** 当前 renderer 宽度。 */
+  width: number;
+  /** 估算后的整篇虚拟总高度。 */
+  totalVirtualHeight: number;
+  /** 顶部 spacer 的当前高度。 */
+  topSpacerHeight: number;
+  /** 底部 spacer 的当前高度。 */
+  bottomSpacerHeight: number;
+  /** 当前视口同步执行次数。 */
+  viewportSyncPasses: number;
+  /** 当前窗口范围真正变化的次数。 */
+  windowRangeChangeCount: number;
+}
+
 export interface AguiComponentRegistration {
   /** 实际要渲染的 Vue 组件。 */
   component: Component;

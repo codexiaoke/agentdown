@@ -306,7 +306,7 @@ const source = createLongDocumentSource();
       </p>
 
       <p class="demo-page__note">
-        当前标题、普通段落以及包含粗体、斜体、删除线、链接、行内代码的常见 inline 文本，都会继续走 <code>@chenglou/pretext</code>。只有图片、复杂原生 HTML、表格、列表这类结构化内容才会回退成 html block。
+        当前标题、普通段落以及包含粗体、斜体、删除线、链接、行内代码的常见 inline 文本，都会继续走 <code>@chenglou/pretext</code>。这一页还显式开启了长文档 <code>text slab + viewport virtualize</code>，避免一次性把所有 block 都挂进 DOM。
       </p>
 
       <MarkdownRenderer
@@ -315,6 +315,11 @@ const source = createLongDocumentSource();
         :line-height="26"
         :allow-unsafe-html="true"
         :agui-components="aguiComponents"
+        :performance="{
+          textSlabChars: 1200,
+          virtualize: true,
+          virtualizeMargin: '1400px 0px'
+        }"
       />
     </section>
   </section>

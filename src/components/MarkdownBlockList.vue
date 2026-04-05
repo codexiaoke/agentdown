@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import MarkdownBlockRenderer from './MarkdownBlockRenderer.vue';
+import { getMarkdownBlockGapAfter } from './markdownBlockSpacing';
 import type { AguiComponentMap, MarkdownBlock, MarkdownBuiltinComponents } from '../core/types';
 
 interface Props {
@@ -16,100 +18,24 @@ defineProps<Props>();
 <template>
   <div class="agentdown-block-list">
     <template
-      v-for="block in blocks"
+      v-for="(block, index) in blocks"
       :key="block.id"
     >
-      <component
-        v-if="block.kind === 'text'"
-        :is="builtinComponents.text"
-        :tag="block.tag"
-        :text="block.text"
-        :fragments="block.fragments"
-        :width="width"
-        :line-height="lineHeight"
-        :font="font"
-      />
-
-      <component
-        v-else-if="block.kind === 'code'"
-        :is="builtinComponents.code"
-        :code="block.code"
-        :language="block.language"
-      />
-
-      <component
-        v-else-if="block.kind === 'mermaid'"
-        :is="builtinComponents.mermaid"
-        :code="block.code"
-      />
-
-      <component
-        v-else-if="block.kind === 'math'"
-        :is="builtinComponents.math"
-        :expression="block.expression"
-        :display-mode="block.displayMode"
-      />
-
-      <component
-        v-else-if="block.kind === 'thought'"
-        :is="builtinComponents.thought"
-        :title="block.title"
+      <div
+        class="agentdown-block-slot"
+        :style="{
+          paddingBottom: `${getMarkdownBlockGapAfter(block, blocks[index + 1])}px`
+        }"
       >
-        <MarkdownBlockList
-          :blocks="block.blocks"
+        <MarkdownBlockRenderer
+          :block="block"
           :width="width"
           :line-height="lineHeight"
           :font="font"
           :agui-components="aguiComponents"
           :builtin-components="builtinComponents"
         />
-      </component>
-
-      <component
-        v-else-if="block.kind === 'agui'"
-        :is="builtinComponents.agui"
-        :name="block.name"
-        :component-props="block.props"
-        :components="aguiComponents"
-        :min-height="block.minHeight"
-      />
-
-      <component
-        v-else-if="block.kind === 'artifact'"
-        :is="builtinComponents.artifact"
-        :title="block.title"
-        :message="block.message"
-        :artifact-id="block.artifactId"
-        :artifact-kind="block.artifactKind"
-        :label="block.label"
-        :href="block.href"
-        :ref-id="block.refId"
-      />
-
-      <component
-        v-else-if="block.kind === 'approval'"
-        :is="builtinComponents.approval"
-        :title="block.title"
-        :message="block.message"
-        :approval-id="block.approvalId"
-        :status="block.status"
-        :ref-id="block.refId"
-      />
-
-      <component
-        v-else-if="block.kind === 'timeline'"
-        :is="builtinComponents.timeline"
-        :title="block.title"
-        :limit="block.limit"
-        :empty-text="block.emptyText"
-        :ref-id="block.refId"
-      />
-
-      <component
-        v-else
-        :is="builtinComponents.html"
-        :html="block.html"
-      />
+      </div>
     </template>
   </div>
 </template>

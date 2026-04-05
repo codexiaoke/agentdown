@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, type Component } from 'vue';
 import BuiltinBlocksDemo from './pages/BuiltinBlocksDemo.vue';
 import LongDocumentDemo from './pages/LongDocumentDemo.vue';
+import PerformanceLabDemo from './pages/PerformanceLabDemo.vue';
 import ProtocolHelpersDemo from './pages/ProtocolHelpersDemo.vue';
 import ReplayTranscriptDemo from './pages/ReplayTranscriptDemo.vue';
 import SseWeatherDemo from './pages/SseWeatherDemo.vue';
@@ -30,6 +31,12 @@ const routes: DemoRoute[] = [
     title: '长文档总览',
     description: '一页覆盖常用 Markdown 和 Agentdown 扩展语法，并测试长文阅读效果。',
     component: LongDocumentDemo
+  },
+  {
+    path: '/performance-lab',
+    title: '性能实验室',
+    description: '切换基线和优化方案，直接观察 DOM、挂载块数与滚动窗口变化。',
+    component: PerformanceLabDemo
   },
   {
     path: '/sse-weather',
