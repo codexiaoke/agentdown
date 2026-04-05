@@ -1,8 +1,30 @@
-# 排除目录
+# Development dependencies and caches
 node_modules/
-src/
-test/
-# 排除文件
-.gitignore
-.env
+.vite/
+.turbo/
+coverage/
 *.log
+
+# Source and local app files
+src/
+public/
+backend/
+docs/
+test/
+tests/
+index.html
+env.d.ts
+vite.config.ts
+tsconfig*.json
+
+# Local tooling and repository metadata
+.git/
+.github/
+.claude/
+.DS_Store
+.env
+.env.*
+.gitignore
+
+# Package build is published from dist + metadata files
+# `package.json` "files" already whitelists the real publish payload.

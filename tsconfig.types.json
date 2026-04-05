@@ -16,6 +16,12 @@
     "src/**/*.vue"
   ],
   "exclude": [
-    "src/demo/**/*"
+    "src/demo/**/*",
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx",
+    "src/**/*.test.vue",
+    "src/**/*.spec.ts",
+    "src/**/*.spec.tsx",
+    "src/**/*.spec.vue"
   ]
 }
