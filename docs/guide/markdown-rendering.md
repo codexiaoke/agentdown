@@ -102,6 +102,35 @@ Agentdown 的渲染思路不是“把所有 token 都塞进一个大 HTML 字符
 
 这也是为什么 Agentdown 的默认样式会尽量克制：增强交互应该存在，但不应该把用户自己的视觉系统锁死。
 
+## 安全说明
+
+`MarkdownRenderer` 默认是：
+
+```ts
+// 默认不直接放开不受信任的原生 HTML。
+allowUnsafeHtml: false
+```
+
+也就是说，原生 HTML 的处理默认会尽量保持在安全边界内，而不是把不受信任的 HTML 直接全量注入到页面里。
+
+如果你的内容源是完全受信任的，并且你明确需要放开这条能力，才建议显式开启：
+
+```vue
+<MarkdownRenderer
+  :source="source"
+  // 只有在内容完全可信时，才建议显式打开。
+  :allow-unsafe-html="true"
+/>
+```
+
+如果内容来自：
+
+- 用户输入
+- 外部模型输出
+- 第三方系统回传
+
+更推荐继续保持默认值，再用 block / renderer / Vue 组件的方式承载交互能力。
+
 ## Mermaid 与 Math
 
 ### Mermaid
@@ -135,6 +164,7 @@ $$
 ```ts
 import anchor from 'markdown-it-anchor';
 
+// 通过 plugins 把额外 markdown-it 插件接进解析链路。
 <MarkdownRenderer
   :source="source"
   :plugins="[anchor]"

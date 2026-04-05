@@ -3,118 +3,161 @@ layout: home
 
 hero:
   name: Agentdown
-  text: Streaming Agent UI for Vue 3
-  tagline: 用 markdown 渲染叙事层，用 Protocol + Bridge + Runtime 驱动交互层，把后端流式事件变成真正的 Agent UI。
+  text: Streaming Agent UI Runtime for Vue 3
+  tagline: 用 Markdown 渲染叙事层，用 Protocol + Bridge + Runtime 接住真实 Agent 事件流，把纯文本输出升级成真正的交互界面。
   actions:
     - theme: brand
       text: 快速开始
       link: /guide/getting-started
     - theme: alt
-      text: 协议映射
-      link: /runtime/protocol
+      text: 官方适配器
+      link: /guide/framework-adapters
+    - theme: alt
+      text: 性能优化
+      link: /guide/performance
     - theme: alt
       text: GitHub
       link: https://github.com/codexiaoke/agentdown
 
 features:
-  - title: Protocol-Agnostic
-    details: 不绑定 Agno、LangGraph 或任何固定后端格式，开发者自己定义映射规则即可接入。
-  - title: Streaming-First
-    details: 通过 assembler 处理 token 流，尽量避免半截表格、代码块、公式和复杂结构提前乱渲染。
-  - title: AGUI Ready
-    details: 工具调用、产物、审批和自定义 Vue 组件都可以成为 block，而不只是纯文本附属品。
-  - title: Design System Friendly
-    details: 默认样式尽量克制，中性不强制；内置 block 组件都可以按需覆写。
+  - title: 协议不强绑
+    details: "后端返回什么事件，就映射什么事件。Agentdown 不要求你为了前端再设计一套统一后端协议。"
+  - title: 流式优先
+    details: "通过 assembler 和 draft/stable block，把 token 流收敛成更稳定的 UI，而不是一到 token 就乱渲染。"
+  - title: Agent 原生 UI
+    details: "工具调用、产物、审批和自定义组件都可以成为一等 block，而不是只能附着在纯文本后面。"
+  - title: 官方框架适配
+    details: "当前已内置 Agno、LangChain、AutoGen、CrewAI 的前端适配层，直接消费官方事件。"
+  - title: 性能主链
+    details: "内置 pretext、长文本 slab、长文窗口化、聊天分组窗口和重型 block lazy mount。"
+  - title: 设计系统友好
+    details: "`builtinComponents`、`renderers`、`messageShells` 都可以覆写，默认样式尽量克制。"
 ---
 
-<div class="ad-home-section">
-  <h2>为什么它适合 Agent 前端</h2>
-  <p>
-    Agentdown 不是“再做一个 markdown renderer”，而是把 <code>raw packet</code> 到 <code>interactive UI</code>
-    之间最重复、最容易出错的一段链路收敛起来。
-  </p>
+## 这不是又一个 Markdown Renderer
 
-  <div class="ad-home-grid">
-    <div class="ad-home-card">
-      <strong>内容仍然是 Markdown</strong>
-      <p>长文本、解释、引用、表格、代码、图片、Mermaid、公式都可以自然写在内容里。</p>
-    </div>
-    <div class="ad-home-card">
-      <strong>状态通过 Runtime 驱动</strong>
-      <p>tool、artifact、approval、自定义 widget 都可以变成稳定 block，并随着命令持续更新。</p>
-    </div>
-    <div class="ad-home-card">
-      <strong>后端协议不必统一</strong>
-      <p>你可以把 <code>content.append</code>、<code>tool.finish</code>、<code>artifact.upsert</code> 这些自定义事件映射成统一命令。</p>
-    </div>
-    <div class="ad-home-card">
-      <strong>适合做产品，不只是 Demo</strong>
-      <p>默认 UI 保持克制，你可以把代码块、思考块、自定义工具卡片全部接进自己的设计系统。</p>
-    </div>
-  </div>
-</div>
+Agentdown 的重点不是“把 markdown 显示出来”，而是把这一整段链路收敛起来：
 
-<div class="ad-home-section">
-  <h2>你会在这里用到的核心模块</h2>
-  <div class="ad-inline-tokens">
-    <span class="ad-inline-token">MarkdownRenderer</span>
-    <span class="ad-inline-token">RunSurface</span>
-    <span class="ad-inline-token">createAgentRuntime()</span>
-    <span class="ad-inline-token">defineProtocol()</span>
-    <span class="ad-inline-token">when()</span>
-    <span class="ad-inline-token">createBridge()</span>
-    <span class="ad-inline-token">createMarkdownAssembler()</span>
-    <span class="ad-inline-token">useSseBridge()</span>
-    <span class="ad-inline-token">:::vue-component</span>
-    <span class="ad-inline-token">cmd.block.upsert()</span>
-    <span class="ad-inline-token">builtinComponents</span>
-  </div>
+```text
+raw packet / SSE -> protocol -> bridge -> assembler -> runtime -> Agent UI
+```
 
-  <div class="ad-callout">
-    <strong>推荐阅读顺序：</strong>
-    先看「快速开始」，再看「Runtime 概览」和「协议映射」，最后进入 API 与 FAQ。
-  </div>
-</div>
+它特别适合下面这类页面：
 
-<div class="ad-home-section">
-  <h2>一个最小工作流</h2>
+- 聊天式 Agent 界面
+- 有工具卡片、artifact、approval 的运行态页面
+- 需要边输出边更新的 markdown 长文
+- 后端来自 Agno、LangChain、AutoGen、CrewAI 或你自己的 SSE 协议
+
+## 你可以拿它做什么
+
+- 用 `MarkdownRenderer` 先渲染静态或一次性 markdown 内容
+- 用 `RunSurface` 把 runtime 里的 block 渲染成聊天界面
+- 用 `defineEventProtocol()` 适配任意自定义后端事件
+- 用官方 preset 直接接真实框架事件
+- 用 `define*ToolComponents()` 按工具名挂接自定义卡片
+- 用 `define*EventComponents()` 在特定 SSE 事件到来时直接渲染组件
+
+## 当前官方适配器
+
+| 框架 | 入口 | 适合什么场景 |
+| --- | --- | --- |
+| Agno | `createAgnoProtocol()` / `defineAgnoPreset()` | 想直接消费官方 Agno SSE 事件 |
+| LangChain | `createLangChainProtocol()` / `defineLangChainPreset()` | 想直接消费 `astream_events()` |
+| AutoGen | `createAutoGenProtocol()` / `defineAutoGenPreset()` | 想消费官方 `run_stream()` 事件 |
+| CrewAI | `createCrewAIProtocol()` / `defineCrewAIPreset()` | 想消费官方 SSE chunk 和最终 `CrewOutput` |
+
+它们都遵循同一个原则：
+
+- 不要求后端包成 Agentdown 专属 JSON
+- 不要求你把框架事件二次统一
+- 前端直接适配官方事件，再按需覆写 UI
+
+## 推荐接入顺序
+
+1. 先用 [快速开始](/guide/getting-started) 跑通 `MarkdownRenderer`。
+2. 如果后端是自定义 SSE，就用 `defineEventProtocol()` 接入。
+3. 如果后端是主流框架，就直接用 [官方框架适配](/guide/framework-adapters)。
+4. 最后再根据设计系统覆写 `builtinComponents`、`renderers` 和 `messageShells`。
+
+## 性能为什么是主链能力
+
+Agentdown 从一开始就假设你会遇到这些问题：
+
+- 长文本持续流式输出
+- 文本和大组件混排
+- 文档很长
+- 会话很长
+- 不能让浏览器一次性挂满 DOM
+
+所以它默认提供：
+
+- pretext 文本渲染
+- markdown draft/stable 稳定化
+- `textSlabChars`
+- `virtualize`
+- `groupWindow`
+- `lazyMount`
+- `@telemetry`
+- 内置性能实验室 demo
+
+详情见 [性能优化](/guide/performance)。
+
+## 一个最小工作流
 
 ```ts
 import {
+  // `cmd` is the helper layer used by protocols to create runtime commands.
   cmd,
+  // Runtime stores nodes, blocks, intents, and history.
   createAgentRuntime,
+  // Bridge wires protocol mapping and stream assembly together.
   createBridge,
+  // Markdown assembler stabilizes streaming markdown blocks.
   createMarkdownAssembler,
-  defineProtocol,
-  when
+  // The lightest way to map event-based packets.
+  defineEventProtocol
 } from 'agentdown';
 
 type Packet =
   | { event: 'RunContent'; text: string }
+  | { event: 'RunCompleted' }
   | { event: 'ToolCall'; id: string; name: string }
   | { event: 'ToolCompleted'; id: string; name: string; content: Record<string, unknown> };
 
+// Create one runtime for the whole conversation/session.
 const runtime = createAgentRuntime();
 
-const protocol = defineProtocol<Packet>([
-  when(
-    (packet): packet is Extract<Packet, { event: 'RunContent' }> => packet.event === 'RunContent',
-    ({ event, context }) => [
-      cmd.stream.open({
-        streamId: 'stream:main',
-        slot: 'main',
-        assembler: 'markdown',
-        data: {
-          blockId: 'block:answer'
-        }
-      }),
-      cmd.stream.delta('stream:main', event.text),
-      cmd.stream.close('stream:main')
-    ],
-    'run-content'
-  )
-]);
+// Map backend packets into runtime commands.
+const protocol = defineEventProtocol<Packet>({
+  // Stream assistant text into a markdown block.
+  RunContent: (event) => [
+    cmd.content.open({
+      streamId: 'stream:assistant',
+      slot: 'main'
+    }),
+    cmd.content.append('stream:assistant', event.text)
+  ],
+  // Close the stream when this answer is done.
+  RunCompleted: () => cmd.content.close('stream:assistant'),
+  // Insert a tool block when the tool starts.
+  ToolCall: (event, context) =>
+    cmd.tool.start({
+      id: event.id,
+      title: event.name,
+      at: context.now()
+    }),
+  // Update that same tool block with the final payload.
+  ToolCompleted: (event, context) =>
+    cmd.tool.finish({
+      id: event.id,
+      title: event.name,
+      result: event.content,
+      at: context.now()
+    })
+});
 
+// Bridge is where protocol mapping and stream assembly actually run.
 const bridge = createBridge({
   runtime,
   protocol,
@@ -122,7 +165,12 @@ const bridge = createBridge({
     markdown: createMarkdownAssembler()
   }
 });
-
-bridge.push({ event: 'RunContent', text: '我来为你查询天气' });
 ```
-</div>
+
+## 下一步阅读
+
+- [快速开始](/guide/getting-started)
+- [官方框架适配](/guide/framework-adapters)
+- [Markdown 渲染](/guide/markdown-rendering)
+- [Runtime 概览](/runtime/overview)
+- [协议映射](/runtime/protocol)

@@ -1,21 +1,39 @@
 # Agentdown FastAPI Backend
 
-这是一个真实的 FastAPI SSE backend，不再包含 demo/mock 流。
+这个 `backend/` 目录提供的是一个真实的 FastAPI SSE backend，用来和前端适配层直接联调。
 
-它提供了这些真实流式接口：
+它不是 mock，也不是 demo 文本流，而是：
+
+- `DeepSeek` 大模型
+- 真实 Agent 框架
+- 真实工具调用
+- 原始框架事件直接透出
+
+当前提供这些 endpoint：
 
 - `/api/stream/agno`
 - `/api/stream/langchain`
 - `/api/stream/autogen`
 - `/api/stream/crewai`
 
-其中：
+## 设计原则
 
-- 所有 endpoint 都是 `DeepSeek + 真 Agent + 真工具调用`
-- 会直接返回各自框架原生事件风格，不再套一层统一协议
-- `lookup_weather` 会真的请求公开天气 API
+- 后端直接返回各框架官方事件风格
+- 不再包一层“Agentdown 统一后端协议”
+- 前端通过官方 adapter 直接消费这些事件
 
-## 运行
+也就是说，推荐前端入口分别是：
+
+- `defineAgnoPreset()` / `createAgnoProtocol()`
+- `defineLangChainPreset()` / `createLangChainProtocol()`
+- `defineAutoGenPreset()` / `createAutoGenProtocol()`
+- `defineCrewAIPreset()` / `createCrewAIProtocol()`
+
+其中 CrewAI 前端如果直接消费 SSE 文本，还要配合：
+
+- `parseCrewAISseMessage()`
+
+## 环境准备
 
 先复制环境变量模板：
 
@@ -23,7 +41,32 @@
 cp backend/.env.example backend/.env
 ```
 
-然后填写 `backend/.env` 里的 `DEEPSEEK_API_KEY`。
+至少需要填写：
+
+```env
+DEEPSEEK_API_KEY=your_key
+```
+
+可选项：
+
+```env
+DEEPSEEK_MODEL=deepseek-chat
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+```
+
+建议带工具调用的场景优先使用 `deepseek-chat`。
+
+## 安装真实框架依赖
+
+如果你要联调真实 Agno、LangChain、AutoGen、CrewAI，请安装 frameworks 依赖组：
+
+```bash
+uv sync --project backend --extra frameworks
+```
+
+## 启动
+
+最简单的方式：
 
 ```bash
 python3 backend/run.py
@@ -35,15 +78,17 @@ python3 backend/run.py
 uv run --project backend uvicorn app.main:app --app-dir backend --reload --port 8000
 ```
 
-上面两种启动方式都会自动读取 `backend/.env`。
+这两种方式都会自动读取 `backend/.env`。
 
-启动后可以先访问：
+## 健康检查
 
 ```bash
 curl http://127.0.0.1:8000/api/health
 ```
 
-## 发送一个 SSE 请求
+## 请求示例
+
+### Agno
 
 ```bash
 curl -N \
@@ -54,39 +99,58 @@ curl -N \
   }'
 ```
 
-如果你要测试真实框架模式，需要自己额外安装对应依赖，并设置 `DeepSeek` 环境变量：
+### LangChain
 
 ```bash
-DEEPSEEK_API_KEY=your_key
-DEEPSEEK_MODEL=deepseek-chat
-DEEPSEEK_BASE_URL=https://api.deepseek.com
+curl -N \
+  -X POST http://127.0.0.1:8000/api/stream/langchain \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "message": "帮我查一下北京天气，并说明工具调用过程。"
+  }'
 ```
 
-推荐直接安装真实框架依赖组：
+### AutoGen
 
 ```bash
-uv sync --project backend --extra frameworks
+curl -N \
+  -X POST http://127.0.0.1:8000/api/stream/autogen \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "message": "帮我查一下北京天气，并说明工具调用过程。"
+  }'
 ```
 
-然后直接请求你要联调的框架 endpoint：
+### CrewAI
 
-```json
-{
-  "message": "帮我查一下上海天气"
-}
+```bash
+curl -N \
+  -X POST http://127.0.0.1:8000/api/stream/crewai \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "message": "帮我查一下北京天气，并说明工具调用过程。"
+  }'
 ```
 
-建议天气这类带工具调用的 agent 保持 `DEEPSEEK_MODEL=deepseek-chat`，因为 `deepseek-reasoner` 并不适合这里的工具调用主链。
+## 推荐前端联调路径
 
-如果真实框架运行失败，当前 endpoint 会直接返回错误事件。
+最推荐的接法是：
 
-## 推荐前端接法
+1. 启动这个 FastAPI backend
+2. 在前端用 `defineAgnoPreset()` 或其他框架 preset 创建 session
+3. 用 `createSseTransport()` 直接请求对应 endpoint
+4. 用 `RunSurface` 渲染 runtime
 
-如果你要做官方 adapter：
+如果你想自定义工具卡片：
 
-- `/api/stream/agno` 对应 `createAgnoAdapter()`
-- `/api/stream/langchain` 对应 `createLangChainAdapter()`
-- `/api/stream/autogen` 对应 `createAutoGenAdapter()`
-- `/api/stream/crewai` 对应 `createCrewAIAdapter()`
+- 用 `defineAgnoToolComponents()` / `defineLangChainToolComponents()` 等 helper
 
-这样前端 adapter 可以直接对着真实框架 SSE 联调。
+如果你想在某个原始 SSE 事件到来时额外插入自定义组件：
+
+- 用 `defineAgnoEventComponents()` / `defineLangChainEventComponents()` 等 helper
+- 再用 `composeProtocols()` 叠加到主协议上
+
+## 出错时会发生什么
+
+如果真实框架运行失败，当前 endpoint 会直接返回错误事件。  
+前端 adapter 会把它映射成 runtime error / run finish，方便你在 UI 里直接展示。

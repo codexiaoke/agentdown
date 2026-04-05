@@ -1,19 +1,46 @@
 ---
 title: 快速开始
-description: 在 Vue 3 项目中接入 Agentdown，完成 markdown 渲染、协议映射、stream 组装与 runtime 更新。
+description: 用最短路径在 Vue 3 项目里接入 Agentdown，完成 markdown 渲染、流式协议映射和聊天式运行界面。
 ---
 
 # 快速开始
 
-这一页的目标很简单：让你在一个 Vue 3 + TypeScript 项目里，最快跑起 Agentdown。
+这一页的目标不是把所有 API 一次讲完，而是让你最快跑起来。
+
+## 你可以按三条路径使用 Agentdown
+
+### 1. 只渲染 markdown
+
+适合：
+
+- 静态文档
+- 一次性生成结果
+- 暂时不需要接 runtime
+
+### 2. 接自己的 SSE / JSON 后端
+
+适合：
+
+- 后端事件完全自定义
+- 不想为了前端改后端协议
+- 想自己决定 `content.append`、`tool.finish`、`artifact.upsert` 这类事件语义
+
+### 3. 接官方框架事件
+
+适合：
+
+- Agno
+- LangChain
+- AutoGen
+- CrewAI
+
+这种情况优先用内置 preset，会省掉很多重复样板。
 
 ## 安装
 
 ```bash
 npm install agentdown katex
 ```
-
-如果你会用到数学公式，建议一起安装 `katex`，这样在 `pnpm` 项目里也能稳定导入它的样式：
 
 ```ts
 import 'agentdown/style.css';
@@ -24,10 +51,12 @@ import 'katex/dist/katex.min.css';
 
 ```vue
 <script setup lang="ts">
+// 引入最小 markdown 渲染入口和样式。
 import { MarkdownRenderer } from 'agentdown';
 import 'agentdown/style.css';
 import 'katex/dist/katex.min.css';
 
+// 先用一段固定 markdown 跑通渲染链路。
 const source = `
 # Agentdown
 
@@ -37,9 +66,9 @@ const source = `
 这里可以承载可折叠的思考过程。
 :::
 
-\`\`\`ts
-console.log('hello agentdown');
-\`\`\`
+| 城市 | 天气 |
+| --- | --- |
+| 北京 | 晴 |
 
 \`\`\`mermaid
 flowchart LR
@@ -53,42 +82,56 @@ flowchart LR
 </template>
 ```
 
-## 接入 Runtime 主链路
+如果你只需要 markdown 展示，到这里已经够了。
 
-如果你只需要纯 markdown 渲染，到这里已经够了。  
-如果你还需要把后端流式事件接进一个可持续更新的 UI，就把 `Protocol + Bridge + Assembler + Runtime` 一起接上。
+## 接自己的 SSE / JSON 后端
+
+当后端返回的是你自己的事件结构时，推荐直接用：
+
+- `defineEventProtocol()`
+- `createMarkdownAssembler()`
+- `useSseBridge()`
+- `RunSurface`
 
 ```ts
 import {
+  // `cmd` 用来描述 runtime 里的结构化动作。
   cmd,
-  createAgentRuntime,
-  createBridge,
+  // 负责把流式 markdown 组装成更稳定的 block。
   createMarkdownAssembler,
-  defineEventProtocol
+  // 最常见的 event -> handler 映射入口。
+  defineEventProtocol,
+  // 直接在 Vue 页面里消费 SSE。
+  useSseBridge
 } from 'agentdown';
 
 type Packet =
   | { event: 'RunContent'; text: string }
+  | { event: 'RunCompleted' }
   | { event: 'ToolCall'; id: string; name: string }
   | { event: 'ToolCompleted'; id: string; name: string; content: Record<string, unknown> };
 
-const runtime = createAgentRuntime();
-
+// 把你的后端事件翻译成 runtime 命令。
 const protocol = defineEventProtocol<Packet>({
+  // assistant 文本不断到来时，持续追加到同一条流里。
   RunContent: (event) => [
     cmd.content.open({
       streamId: 'stream:assistant',
       slot: 'main'
     }),
-    cmd.content.append('stream:assistant', event.text),
-    cmd.content.close('stream:assistant')
+    cmd.content.append('stream:assistant', event.text)
   ],
+  // 这一轮结束时，把流正式关闭。
+  RunCompleted: () => cmd.content.close('stream:assistant'),
+  // 工具开始时创建一个工具块。
   ToolCall: (event, context) =>
     cmd.tool.start({
       id: event.id,
       title: event.name,
+      renderer: 'tool',
       at: context.now()
     }),
+  // 工具完成时更新同一个工具块。
   ToolCompleted: (event, context) =>
     cmd.tool.finish({
       id: event.id,
@@ -98,137 +141,161 @@ const protocol = defineEventProtocol<Packet>({
     })
 });
 
-const bridge = createBridge({
-  runtime,
-  protocol,
-  assemblers: {
-    markdown: createMarkdownAssembler()
-  }
-});
-
-bridge.push([
-  { event: 'RunContent', text: '我来为你查询天气' },
-  { event: 'ToolCall', id: 'tool:weather', name: '查询天气' },
-  {
-    event: 'ToolCompleted',
-    id: 'tool:weather',
-    name: '查询天气',
-    content: { city: '北京', condition: '晴', tempC: 26 }
-  }
-]);
-```
-
-这里 `cmd.tool.start()` 即使不传 `renderer`，也会先落到内置默认 `tool` renderer。
-你可以先把链路跑通，后面再按业务换成 `tool.weather` 这类自定义组件。
-
-## 在 Vue 组件里直接接 SSE
-
-如果你的页面本身就是一个 Vue 组件，很多时候不需要手动管理 `bridge.consume()`。  
-直接用内置 hook 会更顺手：
-
-```ts
-import {
-  RunSurface,
-  createMarkdownAssembler,
-  useSseBridge
-} from 'agentdown'
-
-const {
-  runtime,
-  connect,
-  consuming,
-  error
-} = useSseBridge<Packet>({
+// 这里会返回 runtime 和连接控制方法，页面里直接用就行。
+const { runtime, connect, error, consuming } = useSseBridge<Packet>({
   source: '/api/agent/sse',
   protocol,
   assemblers: {
     markdown: createMarkdownAssembler()
   },
-  request: {
-    body: {
-      message: '帮我查一下北京天气'
-    }
-  },
   transport: {
     mode: 'json'
   }
-})
+});
 
-await connect(undefined, {
-  request: {
-    body: {
-      message: '帮我再查一次'
-    }
-  }
-})
+// 调用 connect() 后就会开始消费后端事件流。
+await connect();
 ```
 
-你会直接拿到：
+```vue
+<template>
+  <p v-if="error">{{ error.message }}</p>
+  <p v-if="consuming">请求中...</p>
+  <RunSurface :runtime="runtime" />
+</template>
+```
 
-- `runtime`：可以直接传给 `RunSurface`
-- `start()` / `stop()` / `restart()`：适合接按钮或页面生命周期
-- `consuming` / `error` / `status`：适合接 loading、错误提示和调试面板
+### 如果后端返回的是完整内容快照
 
-如果你只是想先收一层 SSE 数据，不急着接 runtime，也可以先用：
+这种情况不一定要走 `append`，可以直接：
 
-- `useSse()`
+```ts
+// 这种写法适合“后端每次都返回整段完整 markdown”的场景。
+cmd.content.replace({
+  id: 'block:assistant',
+  groupId: 'turn:1',
+  content: '我已经整理好了。\\n\\n- 北京晴\\n- 26°C',
+  kind: 'markdown'
+});
+```
 
-如果不是网络请求，而是本地 async generator / mock 数据流，也可以直接换成：
+### 如果自定义组件需要运行中的值
 
-- `useAsyncIterableBridge()`
+推荐把值放到 `block.data` 或 `tool.result` 里，而不是依赖全局注入。
 
-如果你页面上同时要用：
+也就是说：
 
-- `runtime`
-- `surface`
-- transcript 导出 / 导入
-- replay 控制
+1. 协议层映射 SSE 事件
+2. runtime 保存结构化数据
+3. `RunSurface` 按 `renderer` 选择组件
+4. 组件直接从当前 block 的 `data` 读取值
 
-那可以直接再往上一层，用：
+## 接官方框架最省事的方式
 
-- `useAgentSession()`
+官方适配器已经帮你处理了：
 
-## 一个推荐的项目接入顺序
+- assistant 文本流
+- 工具开始 / 完成
+- 文本分段
+- run 开始 / 结束 / 错误
 
-1. 先用 `MarkdownRenderer` 跑通内容渲染。
-2. 再定义你的 `raw packet -> RuntimeCommand[]` 映射规则。
-3. 用 `createBridge()` 和 assembler 接好流式链路。
-4. 最后按你的 Design System 覆写 `code / thought / html / agui` 等内置组件。
+以 Agno 为例：
 
-## 关于 UI 渲染
+```ts
+import {
+  type AgnoEvent,
+  // 直接请求官方 Agno SSE 接口。
+  createSseTransport,
+  // preset 会把 Agno 默认 protocol 和 markdown assembler 一起带上。
+  defineAgnoPreset,
+  // 让工具名映射和组件注册共用同一份配置。
+  defineAgnoToolComponents
+} from 'agentdown';
+import WeatherToolCard from './WeatherToolCard.vue';
 
-`createAgentRuntime()` 只负责保存同步状态。  
-你可以通过 `runtime.snapshot()` / `runtime.subscribe()` 把 block 渲染成聊天界面、工具卡片区、侧边栏或你自己的 RunSurface。
+// 命中天气类工具名时，切到自定义天气卡片。
+const agnoTools = defineAgnoToolComponents({
+  'tool.weather': {
+    match: ['weather', '天气'],
+    mode: 'includes',
+    component: WeatherToolCard
+  }
+});
 
-一个很常见的起步写法是：
+// 组一个当前页面可复用的 Agno preset。
+const preset = defineAgnoPreset<string>({
+  protocolOptions: {
+    defaultRunTitle: 'Agno 助手',
+    toolRenderer: agnoTools.toolRenderer
+  },
+  surface: {
+    renderers: agnoTools.renderers
+  }
+});
+
+// 一次性拿到 runtime、bridge 和 surface 默认配置。
+const { runtime, bridge, surface } = preset.createSession({
+  bridge: {
+    transport: createSseTransport<AgnoEvent, string>({
+      mode: 'json',
+      init() {
+        return {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          // 真实页面里，这里通常来自输入框。
+          body: JSON.stringify({
+            message: '帮我查一下北京天气'
+          })
+        };
+      }
+    })
+  }
+});
+```
+
+```ts
+import { useBridgeTransport } from 'agentdown';
+
+// 这一层主要负责页面上的开始、停止和状态管理。
+const { start } = useBridgeTransport({
+  bridge,
+  source: 'http://127.0.0.1:8000/api/stream/agno'
+});
+
+// 建立连接后，Agno 原始事件会自动进入 preset 的 protocol。
+await start();
+```
 
 ```vue
 <RunSurface
   :runtime="runtime"
-  :performance="{
-    groupWindow: 80,
-    lazyMount: true,
-    textSlabChars: 1600
-  }"
+  v-bind="surface"
 />
 ```
 
-这套默认性能配置适合大多数流式聊天页。
+LangChain、AutoGen、CrewAI 的写法完全同路数，只是入口函数不同：
 
-## 本地文档站
+- `defineLangChainPreset()`
+- `defineAutoGenPreset()`
+- `defineCrewAIPreset()`
 
-仓库已经内置了 VitePress 文档站脚本：
+CrewAI 直接消费 SSE 文本时，还要配合：
 
-```bash
-npm run docs:dev
-npm run docs:build
-npm run docs:preview
-```
+- `parseCrewAISseMessage()`
 
-## 下一步看什么
+## 推荐的接入顺序
 
-- 想理解内容是怎么被拆成 block 的：看 [Markdown 渲染](/guide/markdown-rendering)
-- 想理解 runtime 里到底保存了什么：看 [Runtime 概览](/runtime/overview)
-- 想理解自定义后端事件怎么映射：看 [协议映射](/runtime/protocol)
-- 想直接接聊天式运行界面：看 [RunSurface](/api/run-surface)
-- 想把默认 UI 换成自己的设计系统：看 [组件覆写](/guide/component-overrides)
+1. 先跑通 `MarkdownRenderer`
+2. 再决定是“自定义 protocol”还是“官方 preset”
+3. 接上 `RunSurface`
+4. 再按产品需要覆写工具卡片、assistant shell、user bubble 和 markdown 内置组件
+
+## 什么时候该继续往下看
+
+- 想接主流框架：看 [官方框架适配](/guide/framework-adapters)
+- 想深入看 Agno：看 [Agno 适配](/guide/agno-adapter)
+- 想理解 markdown block 模型：看 [Markdown 渲染](/guide/markdown-rendering)
+- 想理解 runtime 主链：看 [Runtime 概览](/runtime/overview)
+- 想优化大文本和长会话：看 [性能优化](/guide/performance)

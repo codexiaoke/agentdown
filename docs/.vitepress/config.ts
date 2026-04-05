@@ -27,10 +27,11 @@ export default defineConfig({
     siteTitle: 'Agentdown',
     nav: [
       { text: '快速开始', link: '/guide/getting-started' },
+      { text: '适配器', link: '/guide/framework-adapters' },
       { text: 'Markdown', link: '/guide/markdown-rendering' },
       { text: 'Runtime', link: '/runtime/overview' },
+      { text: '性能', link: '/guide/performance' },
       { text: 'API', link: '/api/run-surface' },
-      { text: '示例', link: '/examples/team-mode' },
       { text: 'GitHub', link: repositoryUrl }
     ],
     sidebar: {
@@ -39,9 +40,11 @@ export default defineConfig({
           text: '开始',
           items: [
             { text: '快速开始', link: '/guide/getting-started' },
+            { text: '官方框架适配', link: '/guide/framework-adapters' },
+            { text: 'Agno 深入接入', link: '/guide/agno-adapter' },
             { text: 'Markdown 渲染', link: '/guide/markdown-rendering' },
-            { text: '组件覆写', link: '/guide/component-overrides' },
-            { text: 'Agno 适配', link: '/guide/agno-adapter' }
+            { text: '性能优化', link: '/guide/performance' },
+            { text: '组件覆写', link: '/guide/component-overrides' }
           ]
         }
       ],

@@ -1,166 +1,234 @@
 ---
 title: Agno 适配
-description: 使用官方 Agno SSE 事件直接接入 Agentdown，并了解有哪些默认能力和可自定义点。
+description: 使用官方 Agno SSE 事件直接接入 Agentdown，并通过工具名和事件 helper 继续定制 UI。
 ---
 
 # Agno 适配
 
-`createAgnoProtocol()` 和 `defineAgnoPreset()` 的目标很简单：
+如果你的后端就是 Agno，最推荐的接法是：
 
-- 后端继续返回官方 Agno 事件
-- 前端负责把这些事件映射成 Agentdown runtime
-- 用户只改“映射规则”和“渲染组件”，不用自己反复写样板代码
+- 继续返回官方 Agno 事件
+- 前端用 `defineAgnoPreset()` 或 `createAgnoProtocol()` 直接适配
+- 不为了前端额外发明一层新协议
 
-## 默认做了什么
+## 默认映射了什么
 
-开箱即用时，Agno 适配层会自动处理这些事情：
+`createAgnoProtocol()` 当前默认会处理：
 
-- `RunStarted` 映射成一次 `run.start`
-- `RunContent` 作为 markdown 流式文本追加
-- `ToolCallStarted` 自动插入工具块
-- `ToolCallCompleted` 自动更新工具结果
-- `RunCompleted` 自动结束本轮消息
-- 工具前后的文本会自动分段，避免全部拼成一个 block
-- 工具结果如果是 Python `repr` 风格字符串，会尽量恢复成对象
+- `RunStarted`
+  映射成 `run.start`
+- `RunContent`
+  作为 markdown 流式文本追加
+- `ToolCallStarted`
+  关闭当前文本分段，再创建工具 block
+- `ToolCallCompleted`
+  更新工具结果
+- `RunCompleted`
+  收尾当前文本分段并结束 run
+- `RunCancelled` / `RunError` / `Error`
+  中止流并标记 run/error
 
-也就是说，后端不用为了 Agentdown 再包一层“统一协议”。
+额外还做了两件很关键的事：
+
+- 工具前后的文本会自动分段，避免全部拼到同一个 block
+- 工具结果如果是常见的 Python `repr` 风格字符串，会尽量恢复成对象
 
 ## 最常见的接法
 
 ```ts
-import { defineAgnoPreset } from 'agentdown';
+import {
+  type AgnoEvent,
+  // 直接消费官方 Agno SSE 事件。
+  createSseTransport,
+  // preset 会内置 Agno 官方主协议和 markdown assembler。
+  defineAgnoPreset,
+  // 工具名 -> renderer / 组件，只维护一份配置即可。
+  defineAgnoToolComponents
+} from 'agentdown';
 import WeatherToolCard from './WeatherToolCard.vue';
 
+// 命中天气相关工具名时，用天气卡片渲染。
+const agnoTools = defineAgnoToolComponents({
+  'tool.weather': {
+    match: ['weather', '天气'],
+    mode: 'includes',
+    component: WeatherToolCard
+  }
+});
+
+// 这里把工具映射和 surface 配置一起收进 preset。
 const preset = defineAgnoPreset<string>({
   protocolOptions: {
-    toolRenderer: ({ tool }) => {
-      if (tool?.tool_name === 'lookup_weather') {
-        return 'tool.weather';
-      }
-
-      return 'tool';
-    }
+    defaultRunTitle: 'Agno 助手',
+    toolRenderer: agnoTools.toolRenderer
   },
-  renderers: {
-    'tool.weather': WeatherToolCard
+  surface: {
+    renderers: agnoTools.renderers
+  }
+});
+
+// 创建当前页面的完整会话对象。
+const { runtime, bridge, surface } = preset.createSession({
+  bridge: {
+    transport: createSseTransport<AgnoEvent, string>({
+      mode: 'json',
+      init() {
+        return {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          // 这里通常来自输入框。
+          body: JSON.stringify({
+            message: '帮我查一下北京天气'
+          })
+        };
+      }
+    })
   }
 });
 ```
+
+```vue
+<RunSurface
+  :runtime="runtime"
+  v-bind="surface"
+/>
+```
+
+## 按工具名挂组件
+
+最常见的需求就是：
+
+- `lookup_weather` 显示天气卡片
+- `search_docs` 显示文档搜索卡片
+
+现在直接用 `defineAgnoToolComponents()`：
+
+```ts
+// 同一份配置会同时产生 toolRenderer 和 renderers。
+const agnoTools = defineAgnoToolComponents({
+  'tool.weather': {
+    match: ['lookup_weather', 'weather', '天气'],
+    mode: 'includes',
+    component: WeatherToolCard
+  },
+  'tool.search-docs': {
+    match: ['search_docs', /doc|search/i],
+    component: SearchDocsCard
+  }
+});
+```
+
+它会同时生成：
+
+- `agnoTools.toolRenderer`
+- `agnoTools.renderers`
+
+所以你不需要一边在协议里写工具名判断，一边在 surface 里再维护一份组件表。
+
+## 按事件名挂组件
+
+如果你还想做：
+
+- 某个 Agno 原始事件到了就额外渲染组件
+- 同一个组件随着 SSE 事件持续 patch
+
+可以用 `defineAgnoEventComponents()`。
+
+```ts
+import {
+  // 组合协议时，主协议和附加协议都能保留。
+  composeProtocols,
+  createAgnoProtocol,
+  // 让某些 Agno 原始事件直接渲染成组件。
+  defineAgnoEventComponents,
+  defineAgnoPreset
+} from 'agentdown';
+import WeatherSummaryCard from './WeatherSummaryCard.vue';
+
+// 当工具完成事件到来时，补一张业务摘要卡片。
+const agnoEvents = defineAgnoEventComponents({
+  'event.weather-summary': {
+    on: 'tool_call_completed',
+    component: WeatherSummaryCard,
+    resolve: ({ event }) => ({
+      id: 'event:block:weather-summary',
+      groupId: 'turn:weather',
+      data: {
+        payload: event
+      }
+    })
+  }
+});
+
+// 主协议继续负责文本和工具，附加协议负责事件组件。
+const preset = defineAgnoPreset({
+  protocol: composeProtocols(
+    createAgnoProtocol(),
+    agnoEvents.protocol
+  ),
+  surface: {
+    renderers: agnoEvents.renderers
+  }
+});
+```
+
+这里默认使用 `patch` 模式而不是 `upsert`，原因是 SSE 场景里同一个组件连续更新更常见，而 `patch` 不会把已有 block 反复挪到列表尾部。
 
 ## 用户可以自定义什么
 
-### 1. 工具渲染器映射
-
-最常用的是 `toolRenderer`。
+### `defaultRunTitle`
 
 ```ts
-toolRenderer: ({ tool }) => {
-  if (tool?.tool_name === 'search_docs') {
-    return 'tool.search-docs';
-  }
-
-  if (tool?.tool_name === 'lookup_weather') {
-    return 'tool.weather';
-  }
-
-  return 'tool';
-}
+// 也可以直接写死一个标题。
+defaultRunTitle: 'Agno 助手'
 ```
 
-它只负责决定这个工具块用哪个 `renderer key`。  
-真正显示成什么 Vue 组件，再交给 `RunSurface` 的 `renderers`。
-
-### 2. 消息分组 id
-
-如果你想控制一轮消息在聊天 UI 里怎么分组，可以改 `groupId`。
+或者：
 
 ```ts
-groupId: (runId) => `conversation:${runId}`
-```
-
-### 3. 文本流 id 和 block id
-
-如果你需要和自己已有的数据结构对齐，可以改：
-
-- `streamId`
-- `blockId`
-
-```ts
-streamId: (runId) => `assistant-stream:${runId}`,
-blockId: (runId) => `assistant-block:${runId}`
-```
-
-### 4. run 标题
-
-可以自定义每次 run 在 runtime 里的标题来源：
-
-```ts
+// 或者根据当前 packet 动态决定标题。
 defaultRunTitle: (packet) => packet.agent_name ?? '通用助手'
 ```
 
-### 5. 文本使用哪个 assembler
+### `toolRenderer`
 
-默认 `RunContent` 走 `markdown` assembler。  
-如果你想接别的流式组装器，也可以改：
+最常用的自定义项，用来决定工具块使用哪个 renderer key。
 
-```ts
-streamAssembler: 'markdown'
-```
+### `groupId` / `blockId` / `streamId`
 
-或者在 preset 里扩展自己的 assembler：
+如果你想和现有消息模型、埋点模型或缓存模型对齐，可以改这些 id 规则。
 
-```ts
-defineAgnoPreset({
-  protocolOptions: {
-    streamAssembler: 'my-markdown'
-  },
-  assemblers: {
-    'my-markdown': myAssembler
-  }
-});
-```
+### `recordEvents`
 
-### 6. 是否记录原始事件
-
-调试时可以打开 `recordEvents`：
+调试或做回放时可打开：
 
 ```ts
+// 打开后，原始 Agno 事件也会写进 runtime history 里。
 recordEvents: true
 ```
 
-这样 runtime 会保留原始 packet，方便你做调试面板或回放。
+### `surface`
 
-### 7. 是否在 `run_started` 时立刻开流
-
-默认会先开一个 assistant 草稿流，适合聊天场景。  
-如果你不想这么做，可以关掉：
-
-```ts
-openStreamOnRunStarted: false
-```
-
-## UI 层还能继续自定义
-
-Agno adapter 只负责“协议到 runtime”。  
-真正渲染时，用户还可以继续替换：
+可以继续覆写：
 
 - `renderers`
-  用来替换工具卡片、artifact 卡片、审批卡片等 surface renderer
+- `draftPlaceholder`
 - `builtinComponents`
-  用来替换 markdown 内置块，例如 `text`、`code`、`html`、`thought`
+- `messageShells`
+- `performance`
 
-所以它的分层是：
+## 什么时候不用默认 Agno protocol
 
-1. 后端输出官方 Agno 事件
-2. Agno adapter 把事件映射成 runtime 命令
-3. `renderers` 决定工具块长什么样
-4. `builtinComponents` 决定 markdown block 长什么样
+只有两种情况建议你自己往下拆：
 
-## 什么时候需要自己重写 protocol
+- 你的后端对官方 Agno 事件做了很重的二次封装
+- 你要把 Agno 事件和其他来源的自定义事件混在同一条流里统一消费
 
-只有两种情况建议自己重写：
+这时通常的做法也不是完全推倒重来，而是：
 
-- 你的后端事件顺序和 Agno 官方差异非常大
-- 你希望把非 Agno 事件也混在同一个流里统一处理
+- `createAgnoProtocol()` 保留主协议
+- `composeProtocols()` 叠加额外协议
 
-其他大多数场景里，直接在 `AgnoProtocolOptions` 里改就够了。
+这样既保留官方事件支持，也能继续扩展业务块。
