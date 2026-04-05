@@ -78,6 +78,10 @@ function mergeSurfaceOptions(base: RunSurfaceOptions = {}, override: RunSurfaceO
   return {
     ...base,
     ...override,
+    performance: {
+      ...(base.performance ?? {}),
+      ...(override.performance ?? {})
+    },
     aguiComponents: {
       ...(base.aguiComponents ?? {}),
       ...(override.aguiComponents ?? {})

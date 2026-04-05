@@ -111,6 +111,9 @@ const protocol = helperProtocolFactory.createProtocol();
 
 这样“事件名怎么映射”可以全局定义一次，后面多个 preset 直接复用；如果个别页面有特殊需求，再用 `createProtocol(overrides)` 局部补充。
 
+另外，`cmd.tool.start()` 如果没有显式传 `renderer`，现在会自动落到内置默认 `tool` renderer。
+这意味着你可以先把协议链路接通，之后再逐步替换成自己的业务组件。
+
 ## 用户可以完全自定义事件名
 
 你完全可以用你自己的事件协议，例如：
@@ -205,5 +208,8 @@ const protocol = defineEventProtocol<'type', Packet>('type', {
 
 `defineEventProtocol()` 适合最常见的基于 `event` 字段分发的后端协议。  
 如果你的协议更复杂，再退回 `defineProtocol() + when()` 即可。
+
+如果你的 protocol 内部维护了流式状态，也可以实现可选的 `reset()`；
+`bridge.reset()` 和 `bridge.close()` 会自动调用它，避免上一轮运行遗留状态污染下一轮映射。
 
 继续看 [Streaming 组装](/runtime/reducer) 可以理解 markdown token 为什么不会立刻乱渲染。

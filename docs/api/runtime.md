@@ -57,7 +57,7 @@ Bridge 负责：
 | `push(packetOrPackets)` | 推入一条或多条 raw packet |
 | `consume(source, options?)` | 从 transport 持续消费异步数据 |
 | `flush(reason?)` | 立即把待处理命令提交到 runtime |
-| `reset()` | 清空 bridge 状态并重置 assembler |
+| `reset()` | 清空 bridge 状态，并重置 protocol 与 assembler |
 | `close()` | 关闭 bridge |
 | `status()` | 获取当前状态 |
 | `snapshot()` | 获取 bridge 调试快照 |

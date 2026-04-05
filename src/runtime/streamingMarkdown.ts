@@ -26,7 +26,11 @@ const AGENT_DIRECTIVE_RE = /^\s*:::\s*(approval|artifact|timeline)(?:\s+.*)?$/;
 const THOUGHT_OPEN_RE = /^\s*:::\s*thought\s*$/;
 const THOUGHT_CLOSE_RE = /^\s*:::\s*$/;
 const HEADING_RE = /^\s{0,3}#{1,6}(?:\s|$)/;
+const SETEXT_HEADING_RE = /^\s{0,3}(?:=+|-+)\s*$/;
 const HR_RE = /^\s{0,3}(?:-{3,}|\*{3,}|_{3,})\s*$/;
+const BLOCKQUOTE_RE = /^\s{0,3}>\s?/;
+const ORDERED_LIST_RE = /^\s{0,3}\d{1,9}[.)]\s+/;
+const UNORDERED_LIST_RE = /^\s{0,3}[-+*]\s+/;
 const TABLE_DIVIDER_RE = /^\s*\|?(?:\s*:?-+:?\s*\|)+(?:\s*:?-+:?\s*)\|?\s*$/;
 
 /**
@@ -146,6 +150,27 @@ function isHeadingOrRule(line: StreamingMarkdownLine): boolean {
 }
 
 /**
+ * 判断一行是否为 setext heading 的下划线。
+ */
+function isSetextHeadingUnderline(line: string): boolean {
+  return SETEXT_HEADING_RE.test(line);
+}
+
+/**
+ * 判断一行是否为 blockquote。
+ */
+function isBlockquoteLine(line: string): boolean {
+  return BLOCKQUOTE_RE.test(line);
+}
+
+/**
+ * 判断一行是否为有序或无序列表项。
+ */
+function isListItemLine(line: string): boolean {
+  return ORDERED_LIST_RE.test(line) || UNORDERED_LIST_RE.test(line);
+}
+
+/**
  * 粗略判断一行能否作为表格表头。
  */
 function isTableHeader(line: string): boolean {
@@ -181,10 +206,31 @@ function isHardBlockStart(line: StreamingMarkdownLine): boolean {
     !!matchFence(line.content)
     || THOUGHT_OPEN_RE.test(line.content)
     || isMathBlockDelimiter(line.content)
+    || isBlockquoteLine(line.content)
+    || isListItemLine(line.content)
     || AGUI_DIRECTIVE_RE.test(line.content)
     || AGENT_DIRECTIVE_RE.test(line.content)
     || HEADING_RE.test(line.content)
     || HR_RE.test(line.content)
+  );
+}
+
+/**
+ * 判断某一行是否可以和下一行的 setext underline 组成标题。
+ */
+function canPairWithSetextUnderline(line: StreamingMarkdownLine): boolean {
+  return (
+    line.content.trim().length > 0
+    && !isBlockquoteLine(line.content)
+    && !isListItemLine(line.content)
+    && !isTableRow(line.content)
+    && !HEADING_RE.test(line.content)
+    && !HR_RE.test(line.content)
+    && !AGUI_DIRECTIVE_RE.test(line.content)
+    && !AGENT_DIRECTIVE_RE.test(line.content)
+    && !THOUGHT_OPEN_RE.test(line.content)
+    && !isMathBlockDelimiter(line.content)
+    && !matchFence(line.content)
   );
 }
 
@@ -342,6 +388,30 @@ function consumeMathBlock(lines: StreamingMarkdownLine[], index: number): Stream
 }
 
 /**
+ * 消费一个完整的 setext heading。
+ */
+function consumeSetextHeading(lines: StreamingMarkdownLine[], index: number): StreamingMarkdownParseResult | null {
+  const titleLine = lines[index];
+  const underlineLine = lines[index + 1];
+
+  if (
+    !titleLine
+    || !underlineLine
+    || !titleLine.hasNewline
+    || !underlineLine.hasNewline
+    || !canPairWithSetextUnderline(titleLine)
+    || !isSetextHeadingUnderline(underlineLine.content)
+  ) {
+    return null;
+  }
+
+  return {
+    end: underlineLine.end,
+    nextIndex: index + 2
+  };
+}
+
+/**
  * 消费一行即可闭合的结构块。
  */
 function consumeSingleLineBlock(lines: StreamingMarkdownLine[], index: number): StreamingMarkdownParseResult | null {
@@ -424,6 +494,10 @@ function consumeGenericBlock(lines: StreamingMarkdownLine[], index: number): Str
       break;
     }
 
+    if (isSetextHeadingUnderline(line.content) && canPairWithSetextUnderline(lines[cursor - 1]!)) {
+      continue;
+    }
+
     if (isBlankLine(line)) {
       if (!line.hasNewline) {
         return null;
@@ -470,6 +544,7 @@ export function findStreamingMarkdownBoundary(source: string): number {
       ?? consumeFenceBlock(lines, index)
       ?? consumeThoughtBlock(lines, index)
       ?? consumeMathBlock(lines, index)
+      ?? consumeSetextHeading(lines, index)
       ?? consumeSingleLineBlock(lines, index)
       ?? consumeTableBlock(lines, index)
       ?? consumeGenericBlock(lines, index);
@@ -553,6 +628,18 @@ export function resolveStreamingMarkdownDraftMode(source: string): StreamingMark
     )
   ) {
     return secondMeaningfulLine ? 'preview' : 'hidden';
+  }
+
+  if (isBlockquoteLine(firstMeaningfulLine.content) || isListItemLine(firstMeaningfulLine.content)) {
+    return 'preview';
+  }
+
+  if (
+    secondMeaningfulLine
+    && isSetextHeadingUnderline(secondMeaningfulLine.content)
+    && canPairWithSetextUnderline(firstMeaningfulLine)
+  ) {
+    return 'preview';
   }
 
   return 'text';

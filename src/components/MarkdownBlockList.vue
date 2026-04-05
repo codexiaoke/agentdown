@@ -24,6 +24,7 @@ defineProps<Props>();
         :is="builtinComponents.text"
         :tag="block.tag"
         :text="block.text"
+        :fragments="block.fragments"
         :width="width"
         :line-height="lineHeight"
         :font="font"

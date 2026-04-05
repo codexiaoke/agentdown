@@ -47,14 +47,16 @@ markdown assembler 会先维护一个尾部草稿：
 
 1. `open` 时插入一个 `draft` markdown block
 2. `delta` 时持续更新草稿内容
-3. `close` 时再把完整内容交给 `parseMarkdown()`
-4. 解析出的稳定 block 会替换掉草稿 block
+3. 只把“已经结构稳定的前缀”解析成 stable block，并插到当前 draft 之前
+4. 尚未稳定的尾巴继续保留为单个 draft
+5. `close` 时再 finalize 剩余尾部
 
 这样做的原因是：
 
 - table 需要表头完整后再渲染
 - fenced code block 需要结束 fence 后再稳定
 - Mermaid、公式、复杂 HTML 也更适合在结构闭合后渲染
+- 普通段落、列表、blockquote、setext heading 这类结构也会尽量在边界明确后再稳定提交
 
 ## 为什么需要 `draft` / `stable`
 
@@ -62,6 +64,14 @@ markdown assembler 会先维护一个尾部草稿：
 
 - `draft` block 适合尾部进行中内容
 - `stable` block 适合已经闭合、可安全展示的内容
+
+当前 draft 还会根据尾部内容自动切换展示模式：
+
+- `text`
+- `preview`
+- `hidden`
+
+这样列表、blockquote、表格表头、未闭合代码块等场景会更自然。
 
 ## Bridge 的批量 flush 做什么
 

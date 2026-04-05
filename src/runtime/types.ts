@@ -253,6 +253,11 @@ export interface RuntimeProtocol<TRawPacket = unknown> {
     packet: TRawPacket;
     context: ProtocolContext;
   }): RuntimeCommand | RuntimeCommand[] | null | void;
+  /**
+   * 可选的协议级重置入口。
+   * 适合清空 protocol 内部为了流式映射维护的临时状态。
+   */
+  reset?(): void;
 }
 
 /**

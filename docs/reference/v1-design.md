@@ -5,8 +5,8 @@ description: Agentdown V1 的产品定位、核心架构、协议边界与非目
 
 # V1 产品设计
 
-> 本文定义 Agentdown 当前主线架构与后续收敛方向。  
-> `Protocol`、`Bridge`、`Assembler`、`Runtime` 已经是正式设计基线；`RunSurface`、更多 transport 与更强的流式稳定化仍在继续完善中。
+> 本文定义 Agentdown V1 的正式设计基线。  
+> 当前主链已经收敛为 `Protocol + Bridge + Assembler + Runtime + RunSurface`，并覆盖流式 Markdown 稳定化、性能收敛和默认 AGUI 渲染体验。
 
 ## 一句话定位
 
@@ -74,9 +74,6 @@ Transport -> Protocol -> Assembler -> Runtime -> RunSurface
 当前已经提供：
 
 - `createAsyncIterableTransport()`
-
-计划补齐：
-
 - `createSseTransport()`
 - `createNdjsonTransport()`
 - `createWebSocketTransport()`
@@ -512,6 +509,7 @@ V1 建议内建 renderer：
 说明：
 
 - `tool` 不作为必须写死的核心 block type
+- `RunSurface` 默认提供一个可覆盖的 `tool` renderer，方便用户在未注册业务组件前先跑通完整链路
 - 自定义工具调用组件本质上是一个自定义 renderer
 - `timeline` 不作为 V1 主路径能力，只作为未来可选调试或插件视图
 

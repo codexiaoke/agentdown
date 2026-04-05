@@ -38,47 +38,23 @@ const protocol = defineProtocol<Packet>([
   ),
   when(
     (packet): packet is Extract<Packet, { event: 'ToolCall' }> => packet.event === 'ToolCall',
-    ({ event, context }) => [
-      cmd.node.upsert({
+    ({ event, context }) =>
+      cmd.tool.start({
         id: event.id,
-        type: 'tool',
-        status: 'running',
         title: event.name,
-        data: {}
-      }),
-      cmd.block.upsert({
-        id: `block:${event.id}`,
-        slot: 'main',
-        type: 'tool',
         renderer: 'tool.weather',
-        state: 'stable',
-        nodeId: event.id,
-        createdAt: context.now(),
-        updatedAt: context.now(),
-        data: {
-          title: event.name,
-          status: 'running'
-        }
+        at: context.now()
       })
-    ]
   ),
   when(
     (packet): packet is Extract<Packet, { event: 'ToolCompleted' }> => packet.event === 'ToolCompleted',
-    ({ event, context }) => [
-      cmd.node.patch(event.id, {
-        status: 'done',
-        updatedAt: context.now(),
-        data: { result: event.content }
-      }),
-      cmd.block.patch(`block:${event.id}`, {
-        updatedAt: context.now(),
-        data: {
-          title: event.name,
-          status: 'done',
-          result: event.content
-        }
+    ({ event, context }) =>
+      cmd.tool.finish({
+        id: event.id,
+        title: event.name,
+        result: event.content,
+        at: context.now()
       })
-    ]
   )
 ]);
 ```
@@ -103,3 +79,6 @@ bridge.push([
 - 文本区出现“我来为你查询天气”
 - 自定义天气工具卡片先显示加载中
 - 工具返回后，卡片更新成最终天气结果
+
+如果你还没写自定义天气组件，也可以先省略 `renderer: 'tool.weather'`，
+让它落到内置默认 `tool` renderer。

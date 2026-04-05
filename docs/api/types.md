@@ -181,8 +181,12 @@ interface RuntimeProtocol<TRawPacket = unknown> {
     packet: TRawPacket
     context: ProtocolContext
   }): RuntimeCommand | RuntimeCommand[] | null | void
+  reset?(): void
 }
 ```
+
+`reset()` 是可选的。
+如果你的 protocol 内部会保存流式映射状态，bridge 在 `reset()` / `close()` 时会自动调用它。
 
 ## Stream 相关
 
@@ -212,5 +216,36 @@ type AguiComponentMap = Record<string, Component | AguiComponentRegistration>
 interface AguiComponentRegistration {
   component: Component
   minHeight?: number
+}
+```
+
+## RunSurface 相关
+
+### `RunSurfaceOptions`
+
+```ts
+interface RunSurfaceOptions {
+  slot?: string
+  lineHeight?: number
+  font?: string
+  emptyText?: string
+  performance?: RunSurfacePerformanceOptions
+  aguiComponents?: AguiComponentMap
+  builtinComponents?: MarkdownBuiltinComponentOverrides
+  renderers?: RunSurfaceRendererMap
+  draftPlaceholder?: RunSurfaceDraftPlaceholder
+  messageShells?: RunSurfaceMessageShellMap
+}
+```
+
+### `RunSurfacePerformanceOptions`
+
+```ts
+interface RunSurfacePerformanceOptions {
+  groupWindow?: number | false
+  groupWindowStep?: number
+  lazyMount?: boolean
+  lazyMountMargin?: string
+  textSlabChars?: number
 }
 ```

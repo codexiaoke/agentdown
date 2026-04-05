@@ -156,6 +156,9 @@ const protocol = factory.createProtocol();
 
 这些 helper 不是 core protocol 的强制语义，而是为了让协议映射层少写重复样板。
 
+其中 `cmd.tool.start()` 如果没有传 `renderer`，默认会使用 `renderer: 'tool'`，
+并由 `RunSurface` 的内置默认工具卡片渲染出来。
+
 ## 一条建议
 
 把“后端长什么样”留在 protocol 里，把“前端怎么展示”留给 block renderer。  

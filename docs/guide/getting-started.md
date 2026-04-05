@@ -87,7 +87,6 @@ const protocol = defineEventProtocol<Packet>({
     cmd.tool.start({
       id: event.id,
       title: event.name,
-      renderer: 'tool.weather',
       at: context.now()
     }),
   ToolCompleted: (event, context) =>
@@ -118,6 +117,9 @@ bridge.push([
   }
 ]);
 ```
+
+这里 `cmd.tool.start()` 即使不传 `renderer`，也会先落到内置默认 `tool` renderer。
+你可以先把链路跑通，后面再按业务换成 `tool.weather` 这类自定义组件。
 
 ## 在 Vue 组件里直接接 SSE
 
@@ -198,6 +200,21 @@ await connect(undefined, {
 `createAgentRuntime()` 只负责保存同步状态。  
 你可以通过 `runtime.snapshot()` / `runtime.subscribe()` 把 block 渲染成聊天界面、工具卡片区、侧边栏或你自己的 RunSurface。
 
+一个很常见的起步写法是：
+
+```vue
+<RunSurface
+  :runtime="runtime"
+  :performance="{
+    groupWindow: 80,
+    lazyMount: true,
+    textSlabChars: 1600
+  }"
+/>
+```
+
+这套默认性能配置适合大多数流式聊天页。
+
 ## 本地文档站
 
 仓库已经内置了 VitePress 文档站脚本：
@@ -213,4 +230,5 @@ npm run docs:preview
 - 想理解内容是怎么被拆成 block 的：看 [Markdown 渲染](/guide/markdown-rendering)
 - 想理解 runtime 里到底保存了什么：看 [Runtime 概览](/runtime/overview)
 - 想理解自定义后端事件怎么映射：看 [协议映射](/runtime/protocol)
+- 想直接接聊天式运行界面：看 [RunSurface](/api/run-surface)
 - 想把默认 UI 换成自己的设计系统：看 [组件覆写](/guide/component-overrides)

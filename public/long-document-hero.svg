@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="420" viewBox="0 0 1200 420" fill="none">
+  <rect width="1200" height="420" fill="#F8FAFC"/>
+  <rect x="32" y="32" width="1136" height="356" rx="28" fill="white" stroke="#DBEAFE" stroke-width="4"/>
+  <text x="72" y="150" fill="#0F172A" font-family="Arial, sans-serif" font-size="52">
+    Agentdown Long Markdown Demo
+  </text>
+  <text x="72" y="216" fill="#475569" font-family="Arial, sans-serif" font-size="26">
+    Long-form reading, mixed markdown, and AGUI blocks in one page.
+  </text>
+  <circle cx="1020" cy="136" r="54" fill="#DBEAFE"/>
+  <circle cx="1088" cy="204" r="36" fill="#BFDBFE"/>
+  <circle cx="958" cy="228" r="26" fill="#93C5FD"/>
+</svg>

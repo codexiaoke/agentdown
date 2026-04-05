@@ -56,6 +56,8 @@
     "docs:preview": "vitepress preview docs",
     "pack:check": "npm pack --dry-run",
     "prepublishOnly": "npm run build",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "typecheck": "vue-tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json",
     "preview": "vite preview"
   },
@@ -79,6 +81,7 @@
     "typescript": "^6.0.2",
     "vite": "^8.0.3",
     "vitepress": "^1.6.4",
+    "vitest": "^4.1.2",
     "vue": "^3.5.31",
     "vue-tsc": "^3.2.6"
   }

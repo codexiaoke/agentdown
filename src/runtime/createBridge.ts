@@ -405,6 +405,8 @@ export function createBridge<TRawPacket = unknown, TSource = AsyncIterable<TRawP
     mappedCommands.splice(0, mappedCommands.length);
     streamAssemblerById.clear();
 
+    protocol.reset?.();
+
     for (const assembler of Object.values(assemblers)) {
       assembler.reset?.();
     }
@@ -421,6 +423,7 @@ export function createBridge<TRawPacket = unknown, TSource = AsyncIterable<TRawP
   function close() {
     flush('close');
     clearScheduling();
+    protocol.reset?.();
     phase = 'closed';
   }
 

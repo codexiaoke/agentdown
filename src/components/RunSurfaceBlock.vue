@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import MarkdownBlockList from './MarkdownBlockList.vue';
 import { parseMarkdown } from '../core/parseMarkdown';
 import type {
@@ -27,7 +27,14 @@ import type {
   RunSurfaceRendererRegistration,
   RunSurfaceRole
 } from '../surface/types';
+import {
+  hasHeavyMarkdownContent,
+  splitMarkdownBlocksForRender
+} from '../surface/renderUtils';
 
+/**
+ * `RunSurfaceBlock` 的组件输入参数。
+ */
 interface Props {
   block: SurfaceBlock;
   role: RunSurfaceRole;
@@ -41,10 +48,16 @@ interface Props {
   renderers: RunSurfaceRendererMap;
   draftPlaceholder: RunSurfaceDraftPlaceholder;
   messageShells: RunSurfaceMessageShellMap;
+  lazyMount: boolean;
+  lazyMountMargin: string;
+  textSlabChars: number;
   hasVisibleContentBefore: boolean;
 }
 
 const props = defineProps<Props>();
+
+const blockRef = ref<HTMLElement | null>(null);
+const shouldMountHeavyContent = ref(!props.lazyMount);
 
 const MARKDOWN_KINDS = new Set<MarkdownBlock['kind']>([
   'text',
@@ -59,6 +72,11 @@ const MARKDOWN_KINDS = new Set<MarkdownBlock['kind']>([
   'timeline'
 ]);
 
+let visibilityObserver: IntersectionObserver | null = null;
+
+/**
+ * 读取当前 block 关联的 runtime node。
+ */
 const node = computed<RuntimeNode | undefined>(() => {
   if (!props.block.nodeId) {
     return undefined;
@@ -67,6 +85,9 @@ const node = computed<RuntimeNode | undefined>(() => {
   return props.snapshot.nodes.find((candidate) => candidate.id === props.block.nodeId);
 });
 
+/**
+ * 解析当前 block 对应的自定义 renderer 注册。
+ */
 const rendererRegistration = computed<RunSurfaceRendererRegistration | null>(() => {
   const candidate = props.renderers[props.block.renderer];
 
@@ -87,6 +108,9 @@ const rendererRegistration = computed<RunSurfaceRendererRegistration | null>(() 
   };
 });
 
+/**
+ * 解析当前 surface 使用的 draft placeholder。
+ */
 const draftPlaceholderRegistration = computed<RunSurfaceDraftPlaceholderRegistration | null>(() => {
   const candidate = props.draftPlaceholder;
 
@@ -107,6 +131,9 @@ const draftPlaceholderRegistration = computed<RunSurfaceDraftPlaceholderRegistra
   };
 });
 
+/**
+ * 解析当前 role 对应的消息 shell。
+ */
 const messageShellRegistration = computed<RunSurfaceMessageShellRegistration | null>(() => {
   const candidate = props.messageShells[props.role];
 
@@ -127,6 +154,9 @@ const messageShellRegistration = computed<RunSurfaceMessageShellRegistration | n
   };
 });
 
+/**
+ * 生成自定义 renderer 需要的上下文对象。
+ */
 const rendererContext = computed<RunSurfaceRendererContext>(() => {
   const context: RunSurfaceRendererContext = {
     block: props.block,
@@ -142,6 +172,9 @@ const rendererContext = computed<RunSurfaceRendererContext>(() => {
   return context;
 });
 
+/**
+ * 生成 renderer 最终收到的 props。
+ */
 const rendererProps = computed(() => {
   const registration = rendererRegistration.value;
 
@@ -173,6 +206,9 @@ const rendererProps = computed(() => {
   return {};
 });
 
+/**
+ * 生成 draft placeholder 需要的上下文。
+ */
 const draftPlaceholderContext = computed<RunSurfaceDraftPlaceholderContext>(() => ({
   block: props.block,
   role: props.role,
@@ -181,6 +217,9 @@ const draftPlaceholderContext = computed<RunSurfaceDraftPlaceholderContext>(() =
   emitIntent
 }));
 
+/**
+ * 生成 draft placeholder 最终收到的 props。
+ */
 const draftPlaceholderProps = computed(() => {
   const registration = draftPlaceholderRegistration.value;
 
@@ -195,6 +234,9 @@ const draftPlaceholderProps = computed(() => {
   return registration.props ?? {};
 });
 
+/**
+ * 根据当前内容生成消息 shell props。
+ */
 function resolveMessageShellProps(kind: 'markdown' | 'draft') {
   const registration = messageShellRegistration.value;
 
@@ -229,6 +271,9 @@ function resolveMessageShellProps(kind: 'markdown' | 'draft') {
 const markdownMessageShellProps = computed(() => resolveMessageShellProps('markdown'));
 const draftMessageShellProps = computed(() => resolveMessageShellProps('draft'));
 
+/**
+ * 把当前 block 还原成 markdown 语义 block。
+ */
 const markdownBlock = computed<MarkdownBlock | null>(() => {
   const data = props.block.data as Partial<MarkdownBlock> & { kind?: unknown };
 
@@ -250,6 +295,9 @@ const markdownBlock = computed<MarkdownBlock | null>(() => {
   return null;
 });
 
+/**
+ * 判断当前 block 是否仍处于 draft-like 状态。
+ */
 const isDraftLike = computed(() => {
   return (
     props.block.state === 'draft'
@@ -259,6 +307,9 @@ const isDraftLike = computed(() => {
   );
 });
 
+/**
+ * 为未知 block 生成兜底文本。
+ */
 const fallbackText = computed(() => {
   if (typeof props.block.content === 'string' && props.block.content.length > 0) {
     return props.block.content;
@@ -280,8 +331,12 @@ const fallbackText = computed(() => {
   return JSON.stringify(props.block.data, null, 2);
 });
 
+/**
+ * 推断当前 draft 尾部应采用的显示模式。
+ */
 const draftMode = computed(() => {
   const mode = (props.block.data as { streamingDraftMode?: unknown }).streamingDraftMode;
+
   if (mode === 'hidden' || mode === 'preview') {
     return mode;
   }
@@ -289,6 +344,9 @@ const draftMode = computed(() => {
   return 'text';
 });
 
+/**
+ * 对 draft markdown 做一次安全预览解析。
+ */
 const draftPreviewBlocks = computed<MarkdownBlock[]>(() => {
   if (!isDraftLike.value || draftMode.value !== 'preview' || fallbackText.value.trim().length === 0) {
     return [];
@@ -299,10 +357,16 @@ const draftPreviewBlocks = computed<MarkdownBlock[]>(() => {
   });
 });
 
+/**
+ * 读取 draft 预览中的首个 markdown block。
+ */
 const draftPreviewBlock = computed<MarkdownBlock | null>(() => {
   return draftPreviewBlocks.value[0] ?? null;
 });
 
+/**
+ * 判断是否应该直接显示 draft 原文。
+ */
 const shouldRenderDraft = computed(() => {
   return (
     isDraftLike.value
@@ -311,15 +375,21 @@ const shouldRenderDraft = computed(() => {
   );
 });
 
+/**
+ * 判断是否应该显示 markdown draft 预览。
+ */
 const shouldRenderDraftPreview = computed(() => {
   return (
     !rendererRegistration.value
     && isDraftLike.value
     && draftMode.value === 'preview'
-    && draftPreviewBlocks.value.length > 0
+    && renderableDraftPreviewBlocks.value.length > 0
   );
 });
 
+/**
+ * 判断是否应该显示空草稿占位。
+ */
 const shouldRenderDraftPlaceholder = computed(() => {
   return (
     !rendererRegistration.value
@@ -331,6 +401,9 @@ const shouldRenderDraftPlaceholder = computed(() => {
   );
 });
 
+/**
+ * 判断当前 block 是否应该完全隐藏。
+ */
 const shouldHideBlock = computed(() => {
   return (
     !rendererRegistration.value
@@ -341,10 +414,174 @@ const shouldHideBlock = computed(() => {
   );
 });
 
+/**
+ * 当前 block 是否使用消息 shell 包裹。
+ */
 const shouldRenderMessageShell = computed(() => {
   return !!messageShellRegistration.value;
 });
 
+/**
+ * 当前稳定 markdown 内容在渲染前的 slab 化结果。
+ */
+const renderableMarkdownBlocks = computed<MarkdownBlock[]>(() => {
+  if (!markdownBlock.value) {
+    return [];
+  }
+
+  return splitMarkdownBlocksForRender([markdownBlock.value], props.textSlabChars);
+});
+
+/**
+ * draft markdown 预览在渲染前的 slab 化结果。
+ */
+const renderableDraftPreviewBlocks = computed<MarkdownBlock[]>(() => {
+  return splitMarkdownBlocksForRender(draftPreviewBlocks.value, props.textSlabChars);
+});
+
+/**
+ * 判断当前 block 是否属于重型内容。
+ */
+const isHeavyBlock = computed(() => {
+  if (rendererRegistration.value) {
+    return !['text', 'text.draft', 'markdown', 'markdown.draft'].includes(props.block.renderer);
+  }
+
+  if (renderableDraftPreviewBlocks.value.length > 0) {
+    return hasHeavyMarkdownContent(renderableDraftPreviewBlocks.value);
+  }
+
+  if (renderableMarkdownBlocks.value.length > 0) {
+    return hasHeavyMarkdownContent(renderableMarkdownBlocks.value);
+  }
+
+  return props.block.type === 'tool';
+});
+
+/**
+ * 推断懒挂载占位的最小高度，尽量减少滚动时的布局跳动。
+ */
+const lazyPlaceholderMinHeight = computed(() => {
+  if (draftPreviewBlock.value?.kind === 'agui') {
+    return draftPreviewBlock.value.minHeight;
+  }
+
+  if (markdownBlock.value?.kind === 'agui') {
+    return markdownBlock.value.minHeight;
+  }
+
+  const activeBlock = draftPreviewBlock.value ?? markdownBlock.value;
+
+  if (activeBlock?.kind === 'mermaid') {
+    return 220;
+  }
+
+  if (activeBlock?.kind === 'code' || activeBlock?.kind === 'html') {
+    return 150;
+  }
+
+  if (
+    activeBlock?.kind === 'artifact'
+    || activeBlock?.kind === 'approval'
+    || activeBlock?.kind === 'timeline'
+    || activeBlock?.kind === 'thought'
+  ) {
+    return 112;
+  }
+
+  if (rendererRegistration.value || props.block.type === 'tool') {
+    return 116;
+  }
+
+  return 72;
+});
+
+/**
+ * 当前 block 是否应该启用接近视口后再挂载。
+ */
+const shouldLazyMount = computed(() => {
+  return props.lazyMount && isHeavyBlock.value;
+});
+
+/**
+ * 当前 block 是否仍处于懒挂载占位状态。
+ */
+const shouldDelayMount = computed(() => {
+  return shouldLazyMount.value && !shouldMountHeavyContent.value;
+});
+
+/**
+ * 断开当前 block 的可见性观察器。
+ */
+function disconnectVisibilityObserver() {
+  visibilityObserver?.disconnect();
+  visibilityObserver = null;
+}
+
+/**
+ * 根据当前配置同步懒挂载观察器。
+ */
+async function syncVisibilityObserver() {
+  disconnectVisibilityObserver();
+
+  if (!shouldLazyMount.value || typeof IntersectionObserver !== 'function') {
+    shouldMountHeavyContent.value = true;
+    return;
+  }
+
+  shouldMountHeavyContent.value = false;
+  await nextTick();
+  const element = blockRef.value;
+
+  if (!element) {
+    return;
+  }
+
+  visibilityObserver = new IntersectionObserver(
+    (entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        shouldMountHeavyContent.value = true;
+        disconnectVisibilityObserver();
+      }
+    },
+    {
+      root: null,
+      rootMargin: props.lazyMountMargin,
+      threshold: 0.01
+    }
+  );
+
+  visibilityObserver.observe(element);
+}
+
+watch(
+  [shouldLazyMount, () => props.lazyMountMargin],
+  () => {
+    syncVisibilityObserver().catch(() => {
+      shouldMountHeavyContent.value = true;
+      disconnectVisibilityObserver();
+    });
+  },
+  {
+    immediate: true,
+    flush: 'post'
+  }
+);
+
+onMounted(() => {
+  syncVisibilityObserver().catch(() => {
+    shouldMountHeavyContent.value = true;
+    disconnectVisibilityObserver();
+  });
+});
+
+onBeforeUnmount(() => {
+  disconnectVisibilityObserver();
+});
+
+/**
+ * 把一个结构化 intent 上抛给 runtime。
+ */
 function emitIntent(intent: Omit<RuntimeIntent, 'id' | 'at'>) {
   return props.runtime.emitIntent(intent);
 }
@@ -352,13 +589,21 @@ function emitIntent(intent: Omit<RuntimeIntent, 'id' | 'at'>) {
 
 <template>
   <div
+    ref="blockRef"
     class="agentdown-run-surface-block"
     :data-renderer="block.renderer"
     :data-state="block.state"
   >
+    <div
+      v-if="shouldDelayMount"
+      class="agentdown-run-surface-lazy-placeholder"
+      :data-role="role"
+      :style="{ minHeight: `${lazyPlaceholderMinHeight}px` }"
+    />
+
     <component
       :is="rendererRegistration.component"
-      v-if="rendererRegistration"
+      v-else-if="rendererRegistration"
       v-bind="rendererProps"
     />
 
@@ -383,7 +628,7 @@ function emitIntent(intent: Omit<RuntimeIntent, 'id' | 'at'>) {
           data-preview="true"
         >
           <MarkdownBlockList
-            :blocks="draftPreviewBlocks"
+            :blocks="renderableDraftPreviewBlocks"
             :width="width"
             :line-height="lineHeight"
             :font="font"
@@ -401,7 +646,7 @@ function emitIntent(intent: Omit<RuntimeIntent, 'id' | 'at'>) {
       data-preview="true"
     >
       <MarkdownBlockList
-        :blocks="draftPreviewBlocks"
+        :blocks="renderableDraftPreviewBlocks"
         :width="width"
         :line-height="lineHeight"
         :font="font"
@@ -441,7 +686,7 @@ function emitIntent(intent: Omit<RuntimeIntent, 'id' | 'at'>) {
     </div>
 
     <div
-      v-else-if="markdownBlock && shouldRenderMessageShell && messageShellRegistration"
+      v-else-if="renderableMarkdownBlocks.length > 0 && shouldRenderMessageShell && messageShellRegistration"
       class="agentdown-run-surface-shell"
       :data-role="role"
     >
@@ -454,7 +699,7 @@ function emitIntent(intent: Omit<RuntimeIntent, 'id' | 'at'>) {
           :data-role="role"
         >
           <MarkdownBlockList
-            :blocks="[markdownBlock]"
+            :blocks="renderableMarkdownBlocks"
             :width="width"
             :line-height="lineHeight"
             :font="font"
@@ -466,12 +711,12 @@ function emitIntent(intent: Omit<RuntimeIntent, 'id' | 'at'>) {
     </div>
 
     <div
-      v-else-if="markdownBlock"
+      v-else-if="renderableMarkdownBlocks.length > 0"
       class="agentdown-run-surface-markdown"
       :data-role="role"
     >
       <MarkdownBlockList
-        :blocks="[markdownBlock]"
+        :blocks="renderableMarkdownBlocks"
         :width="width"
         :line-height="lineHeight"
         :font="font"
@@ -517,6 +762,14 @@ function emitIntent(intent: Omit<RuntimeIntent, 'id' | 'at'>) {
 .agentdown-run-surface-markdown[data-role='system'],
 .agentdown-run-surface-draft[data-role='system'] {
   color: #64748b;
+}
+
+.agentdown-run-surface-lazy-placeholder {
+  width: 100%;
+  border-radius: 16px;
+  background:
+    linear-gradient(90deg, rgba(248, 250, 252, 0.9), rgba(241, 245, 249, 0.95), rgba(248, 250, 252, 0.9));
+  box-shadow: inset 0 0 0 1px rgba(226, 232, 240, 0.9);
 }
 
 .agentdown-run-surface-unknown {

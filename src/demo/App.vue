@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, type Component } from 'vue';
 import BuiltinBlocksDemo from './pages/BuiltinBlocksDemo.vue';
+import LongDocumentDemo from './pages/LongDocumentDemo.vue';
 import ProtocolHelpersDemo from './pages/ProtocolHelpersDemo.vue';
 import ReplayTranscriptDemo from './pages/ReplayTranscriptDemo.vue';
 import SseWeatherDemo from './pages/SseWeatherDemo.vue';
@@ -23,6 +24,12 @@ const routes: DemoRoute[] = [
     title: '内置块总览',
     description: '把 text / thought / code / agui / artifact / approval 走一遍。',
     component: BuiltinBlocksDemo
+  },
+  {
+    path: '/long-document',
+    title: '长文档总览',
+    description: '一页覆盖常用 Markdown 和 Agentdown 扩展语法，并测试长文阅读效果。',
+    component: LongDocumentDemo
   },
   {
     path: '/sse-weather',

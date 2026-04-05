@@ -58,11 +58,13 @@ features:
   <h2>你会在这里用到的核心模块</h2>
   <div class="ad-inline-tokens">
     <span class="ad-inline-token">MarkdownRenderer</span>
+    <span class="ad-inline-token">RunSurface</span>
     <span class="ad-inline-token">createAgentRuntime()</span>
     <span class="ad-inline-token">defineProtocol()</span>
     <span class="ad-inline-token">when()</span>
     <span class="ad-inline-token">createBridge()</span>
     <span class="ad-inline-token">createMarkdownAssembler()</span>
+    <span class="ad-inline-token">useSseBridge()</span>
     <span class="ad-inline-token">:::vue-component</span>
     <span class="ad-inline-token">cmd.block.upsert()</span>
     <span class="ad-inline-token">builtinComponents</span>

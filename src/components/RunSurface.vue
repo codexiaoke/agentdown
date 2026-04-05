@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
 import { defaultMarkdownBuiltinComponents } from './defaultMarkdownComponents';
 import RunSurfaceAssistantShell from './RunSurfaceAssistantShell.vue';
 import RunSurfaceBlock from './RunSurfaceBlock.vue';
+import RunSurfaceToolRenderer from './RunSurfaceToolRenderer.vue';
 import RunSurfaceUserBubble from './RunSurfaceUserBubble.vue';
 import type {
   AguiComponentMap,
@@ -14,16 +15,21 @@ import type {
   RunSurfaceDraftPlaceholder,
   RunSurfaceMessageShellContext,
   RunSurfaceMessageShellMap,
+  RunSurfacePerformanceOptions,
   RunSurfaceRendererMap,
   RunSurfaceRole
 } from '../surface/types';
 
+/**
+ * `RunSurface` 的组件输入参数。
+ */
 interface Props {
   runtime: AgentRuntime;
   slot?: string;
   lineHeight?: number;
   font?: string;
   emptyText?: string;
+  performance?: RunSurfacePerformanceOptions;
   aguiComponents?: AguiComponentMap;
   builtinComponents?: MarkdownBuiltinComponentOverrides;
   renderers?: RunSurfaceRendererMap;
@@ -31,6 +37,9 @@ interface Props {
   messageShells?: RunSurfaceMessageShellMap;
 }
 
+/**
+ * surface 中按 role 和 groupId 聚合后的消息单元。
+ */
 interface SurfaceGroup {
   id: string;
   groupId: string | null;
@@ -38,11 +47,23 @@ interface SurfaceGroup {
   blocks: SurfaceBlock[];
 }
 
+/**
+ * `RunSurface` 内部使用的性能配置完整形态。
+ */
+interface ResolvedRunSurfacePerformance {
+  groupWindow: number | false;
+  groupWindowStep: number;
+  lazyMount: boolean;
+  lazyMountMargin: string;
+  textSlabChars: number;
+}
+
 const props = withDefaults(defineProps<Props>(), {
   slot: 'main',
   lineHeight: 26,
   font: '400 16px "Helvetica Neue"',
   emptyText: '等待新的运行输出...',
+  performance: () => ({}),
   aguiComponents: () => ({}),
   builtinComponents: () => ({}),
   renderers: () => ({}),
@@ -53,19 +74,49 @@ const props = withDefaults(defineProps<Props>(), {
 });
 
 const containerRef = ref<HTMLElement | null>(null);
+const loadMoreRef = ref<HTMLElement | null>(null);
 const width = ref(0);
 const snapshot = shallowRef<RuntimeSnapshot>(props.runtime.snapshot());
+const visibleGroupCount = ref(0);
+
 const resolvedBuiltinComponents = computed(() => ({
   ...defaultMarkdownBuiltinComponents,
   ...props.builtinComponents
 }));
+
+const resolvedPerformance = computed<ResolvedRunSurfacePerformance>(() => {
+  const configuredGroupWindow = props.performance?.groupWindow;
+
+  return {
+    groupWindow: configuredGroupWindow === false ? false : Math.max(24, configuredGroupWindow ?? 80),
+    groupWindowStep: Math.max(12, props.performance?.groupWindowStep ?? 40),
+    lazyMount: props.performance?.lazyMount ?? true,
+    lazyMountMargin: props.performance?.lazyMountMargin ?? '720px 0px',
+    textSlabChars: Math.max(640, props.performance?.textSlabChars ?? 1600)
+  };
+});
+
 const resolvedDraftPlaceholder = computed<RunSurfaceDraftPlaceholder>(() => props.draftPlaceholder ?? false);
+
+/**
+ * 合并 surface 默认 renderer 与外部覆写。
+ * `tool` 默认提供一个基础卡片，调用方仍然可以直接覆盖它。
+ */
+const resolvedRenderers = computed<RunSurfaceRendererMap>(() => ({
+  tool: RunSurfaceToolRenderer,
+  ...(props.renderers ?? {})
+}));
+
+/**
+ * 为默认消息 shell 生成最小上下文 props。
+ */
 function createDefaultShellProps(context: RunSurfaceMessageShellContext) {
   return {
     kind: context.kind,
     blockKind: context.markdownBlock?.kind ?? null
   };
 }
+
 const resolvedMessageShells = computed<RunSurfaceMessageShellMap>(() => ({
   assistant: {
     component: RunSurfaceAssistantShell,
@@ -80,11 +131,18 @@ const resolvedMessageShells = computed<RunSurfaceMessageShellMap>(() => ({
 
 let unsubscribe: (() => void) | null = null;
 let observer: ResizeObserver | null = null;
+let loadMoreObserver: IntersectionObserver | null = null;
 
+/**
+ * 同步 RunSurface 容器宽度，供 markdown/text 布局使用。
+ */
 function updateWidth() {
   width.value = containerRef.value?.clientWidth ?? 0;
 }
 
+/**
+ * 绑定 runtime，并在每次状态变化时刷新 snapshot。
+ */
 function bindRuntime(runtime: AgentRuntime) {
   unsubscribe?.();
   snapshot.value = runtime.snapshot();
@@ -115,19 +173,23 @@ onMounted(() => {
   }
 });
 
-onBeforeUnmount(() => {
-  unsubscribe?.();
-  observer?.disconnect();
-});
-
+/**
+ * 按 slot 过滤当前 surface 需要渲染的 block。
+ */
 const slotBlocks = computed(() => {
   return snapshot.value.blocks.filter((block) => block.slot === props.slot);
 });
 
+/**
+ * 为 block -> node 查询建立临时索引。
+ */
 const nodesById = computed(() => {
   return new Map(snapshot.value.nodes.map((node) => [node.id, node]));
 });
 
+/**
+ * 推断一个 block 应该归属到哪种聊天角色。
+ */
 function resolveBlockRole(block: SurfaceBlock): RunSurfaceRole {
   const blockRole = (block.data as { role?: unknown }).role;
 
@@ -148,6 +210,9 @@ function resolveBlockRole(block: SurfaceBlock): RunSurfaceRole {
   return 'assistant';
 }
 
+/**
+ * 按连续的 role + groupId 把 block 聚合成消息 group。
+ */
 const groups = computed<SurfaceGroup[]>(() => {
   const next: SurfaceGroup[] = [];
 
@@ -172,6 +237,129 @@ const groups = computed<SurfaceGroup[]>(() => {
   return next;
 });
 
+watch(
+  [() => groups.value.length, resolvedPerformance],
+  ([nextLength, performance]) => {
+    if (performance.groupWindow === false) {
+      visibleGroupCount.value = nextLength;
+      return;
+    }
+
+    const groupWindow = performance.groupWindow;
+    const minimumVisibleGroupCount = Math.min(nextLength, groupWindow);
+
+    if (visibleGroupCount.value === 0) {
+      visibleGroupCount.value = minimumVisibleGroupCount;
+      return;
+    }
+
+    if (visibleGroupCount.value < minimumVisibleGroupCount) {
+      visibleGroupCount.value = minimumVisibleGroupCount;
+      return;
+    }
+
+    if (visibleGroupCount.value > nextLength) {
+      visibleGroupCount.value = nextLength;
+    }
+  },
+  {
+    immediate: true
+  }
+);
+
+/**
+ * 当前还有多少更早的 group 没有真正挂载到页面上。
+ */
+const hiddenGroupCount = computed(() => {
+  if (resolvedPerformance.value.groupWindow === false) {
+    return 0;
+  }
+
+  return Math.max(0, groups.value.length - visibleGroupCount.value);
+});
+
+/**
+ * 当前实际参与渲染的 group 列表。
+ */
+const visibleGroups = computed<SurfaceGroup[]>(() => {
+  if (hiddenGroupCount.value <= 0) {
+    return groups.value;
+  }
+
+  return groups.value.slice(groups.value.length - visibleGroupCount.value);
+});
+
+/**
+ * 向前展开更多历史 group，减少一次性全量挂载的开销。
+ */
+function revealPreviousGroups() {
+  if (hiddenGroupCount.value <= 0) {
+    return;
+  }
+
+  visibleGroupCount.value = Math.min(
+    groups.value.length,
+    visibleGroupCount.value + resolvedPerformance.value.groupWindowStep
+  );
+}
+
+/**
+ * 断开“加载更早消息”观察器。
+ */
+function disconnectLoadMoreObserver() {
+  loadMoreObserver?.disconnect();
+  loadMoreObserver = null;
+}
+
+/**
+ * 当顶部哨兵进入视口时，自动继续展开更早的消息。
+ */
+async function syncLoadMoreObserver() {
+  disconnectLoadMoreObserver();
+
+  if (hiddenGroupCount.value <= 0 || typeof IntersectionObserver !== 'function') {
+    return;
+  }
+
+  await nextTick();
+  const element = loadMoreRef.value;
+
+  if (!element) {
+    return;
+  }
+
+  loadMoreObserver = new IntersectionObserver(
+    (entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        revealPreviousGroups();
+      }
+    },
+    {
+      root: null,
+      rootMargin: '320px 0px 0px 0px',
+      threshold: 0
+    }
+  );
+
+  loadMoreObserver.observe(element);
+}
+
+watch(
+  hiddenGroupCount,
+  () => {
+    syncLoadMoreObserver().catch(() => {
+      disconnectLoadMoreObserver();
+    });
+  },
+  {
+    immediate: true,
+    flush: 'post'
+  }
+);
+
+/**
+ * 判断 markdown block 是否已经有足够的可见内容。
+ */
 function hasMarkdownBlockVisibleContent(block: MarkdownBlock): boolean {
   switch (block.kind) {
     case 'text':
@@ -195,6 +383,9 @@ function hasMarkdownBlockVisibleContent(block: MarkdownBlock): boolean {
   }
 }
 
+/**
+ * 判断一个 surface block 是否已经包含肉眼可见的内容。
+ */
 function hasBlockVisibleContent(block: SurfaceBlock): boolean {
   if (typeof block.content === 'string' && block.content.trim().length > 0) {
     return true;
@@ -216,6 +407,12 @@ function hasBlockVisibleContent(block: SurfaceBlock): boolean {
 
   return Object.keys(block.data).length > 0;
 }
+
+onBeforeUnmount(() => {
+  unsubscribe?.();
+  observer?.disconnect();
+  disconnectLoadMoreObserver();
+});
 </script>
 
 <template>
@@ -234,8 +431,22 @@ function hasBlockVisibleContent(block: SurfaceBlock): boolean {
       v-else
       class="agentdown-run-surface-list"
     >
+      <div
+        v-if="hiddenGroupCount > 0"
+        ref="loadMoreRef"
+        class="agentdown-run-surface-load-more"
+      >
+        <button
+          type="button"
+          class="agentdown-run-surface-load-more-button"
+          @click="revealPreviousGroups"
+        >
+          显示更早消息 {{ hiddenGroupCount }}
+        </button>
+      </div>
+
       <article
-        v-for="group in groups"
+        v-for="group in visibleGroups"
         :key="group.id"
         class="agentdown-run-surface-group"
         :data-role="group.role"
@@ -253,9 +464,12 @@ function hasBlockVisibleContent(block: SurfaceBlock): boolean {
             :font="font"
             :agui-components="aguiComponents"
             :builtin-components="resolvedBuiltinComponents"
-            :renderers="renderers"
+            :renderers="resolvedRenderers"
             :draft-placeholder="resolvedDraftPlaceholder"
             :message-shells="resolvedMessageShells"
+            :lazy-mount="resolvedPerformance.lazyMount"
+            :lazy-mount-margin="resolvedPerformance.lazyMountMargin"
+            :text-slab-chars="resolvedPerformance.textSlabChars"
             :has-visible-content-before="group.blocks.slice(0, index).some(hasBlockVisibleContent)"
           />
         </div>
@@ -273,6 +487,33 @@ function hasBlockVisibleContent(block: SurfaceBlock): boolean {
   display: flex;
   flex-direction: column;
   gap: 18px;
+}
+
+.agentdown-run-surface-load-more {
+  display: flex;
+  justify-content: center;
+}
+
+.agentdown-run-surface-load-more-button {
+  border: 1px solid #dbe3ee;
+  border-radius: 999px;
+  padding: 0.5rem 0.9rem;
+  background: #fff;
+  color: #475569;
+  font: inherit;
+  font-size: 0.82rem;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    color 160ms ease;
+}
+
+.agentdown-run-surface-load-more-button:hover {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+  color: #0f172a;
 }
 
 .agentdown-run-surface-group {

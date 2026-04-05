@@ -42,45 +42,63 @@
   white-space: pre;
 }
 
-.agentdown-text-block:is(h1, h2, h3, h4, h5, h6) {
+.agentdown-text-line--rich {
+  display: flex;
+  align-items: baseline;
+  white-space: nowrap;
+}
+
+.agentdown-text-line--empty::after {
+  content: '';
+  display: inline-block;
+  width: 1px;
+  height: 1px;
+}
+
+.agentdown-text-fragment {
+  display: inline-block;
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+  white-space: pre;
+}
+
+.agentdown-text-fragment--strong {
   font-weight: 700;
 }
 
-.agentdown-text-block:is(h1) {
-  font-size: clamp(2.35rem, 4vw, 3.4rem);
-  line-height: 1.04;
-  letter-spacing: -0.06em;
+.agentdown-text-fragment--em {
+  font-style: italic;
 }
 
-.agentdown-text-block:is(h2) {
-  font-size: clamp(1.72rem, 3vw, 2.15rem);
-  line-height: 1.12;
-  letter-spacing: -0.045em;
+.agentdown-text-fragment--del {
+  text-decoration: line-through;
 }
 
-.agentdown-text-block:is(h3) {
-  font-size: 1.35rem;
-  line-height: 1.24;
-  letter-spacing: -0.03em;
+.agentdown-text-fragment--link {
+  color: #2563eb;
+  text-decoration: underline;
+  text-decoration-thickness: 0.06em;
+  text-underline-offset: 0.18em;
 }
 
-.agentdown-text-block:is(h4) {
-  font-size: 1.12rem;
-  line-height: 1.34;
-  letter-spacing: -0.02em;
+.agentdown-text-fragment--code {
+  border: 1px solid var(--agentdown-border-soft);
+  border-radius: 8px;
+  padding: 0.08rem 0.36rem;
+  background: rgba(248, 250, 252, 0.95);
+  color: #0f172a;
+  font-family:
+    "SFMono-Regular",
+    "JetBrains Mono",
+    "Fira Code",
+    "Menlo",
+    monospace;
+  font-size: 0.88em;
 }
 
-.agentdown-text-block:is(h5) {
-  font-size: 0.98rem;
-  line-height: 1.42;
-  letter-spacing: -0.01em;
-}
-
-.agentdown-text-block:is(h6) {
-  font-size: 0.88rem;
-  line-height: 1.5;
-  letter-spacing: 0.01em;
-  text-transform: uppercase;
+.agentdown-text-block[data-tag='h6'],
+.agentdown-text-block[data-tone='subtle'] {
   color: var(--agentdown-muted-color);
 }
 

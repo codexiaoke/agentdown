@@ -14,6 +14,7 @@ interface Props {
   lineHeight?: number;
   font?: string;
   thoughtTitle?: string;
+  allowUnsafeHtml?: boolean;
   aguiComponents?: AguiComponentMap;
   builtinComponents?: MarkdownBuiltinComponentOverrides;
   plugins?: MarkdownEnginePlugin[];
@@ -23,6 +24,7 @@ const props = withDefaults(defineProps<Props>(), {
   lineHeight: 26,
   font: '400 16px "Helvetica Neue"',
   thoughtTitle: 'Thought Process',
+  allowUnsafeHtml: false,
   aguiComponents: () => ({}),
   builtinComponents: () => ({}),
   plugins: () => []
@@ -36,7 +38,8 @@ const blocks = computed(() =>
   parseMarkdown(props.source, {
     plugins: props.plugins,
     thoughtTitle: props.thoughtTitle,
-    aguiComponents: props.aguiComponents
+    aguiComponents: props.aguiComponents,
+    allowUnsafeHtml: props.allowUnsafeHtml
   })
 );
 const resolvedBuiltinComponents = computed(() => ({

@@ -6,10 +6,24 @@ import { agentDirectivesPlugin } from './plugins/agentDirectives';
 import { thoughtPlugin } from './plugins/thought';
 import type { MarkdownEnginePlugin } from './types';
 
+/**
+ * 创建 markdown engine 时的底层选项。
+ */
+export interface MarkdownEngineOptions {
+  /**
+   * 是否允许原始 HTML 直接被 markdown-it 当作 HTML 解析。
+   * 默认关闭；开启后仅适用于可信内容。
+   */
+  allowUnsafeHtml?: boolean;
+}
+
 /** 创建一份带内置扩展的 markdown-it 实例。 */
-export function createMarkdownEngine(plugins: MarkdownEnginePlugin[] = []): MarkdownIt {
+export function createMarkdownEngine(
+  plugins: MarkdownEnginePlugin[] = [],
+  options: MarkdownEngineOptions = {}
+): MarkdownIt {
   const md = new MarkdownIt({
-    html: false,
+    html: options.allowUnsafeHtml ?? false,
     linkify: true,
     breaks: true,
     typographer: true

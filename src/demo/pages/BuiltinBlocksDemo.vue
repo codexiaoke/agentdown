@@ -1,11 +1,17 @@
 <script setup lang="ts">
-import { MarkdownRenderer } from '../../index';
+import {
+  cmd,
+  createAgentRuntime,
+  MarkdownRenderer,
+  RunSurface
+} from '../../index';
 import BuiltinAguiCard from '../components/BuiltinAguiCard.vue';
 
 const markdownFont = '400 16px "Avenir Next", "PingFang SC", "Microsoft YaHei", sans-serif';
 const aguiComponents = {
   DemoBuiltinCard: BuiltinAguiCard
 };
+const runtime = createAgentRuntime();
 
 const narrativeSource = `
 轻内容部分会优先保持 markdown 自然排版，适合解释、思考和流式文本展示。
@@ -75,6 +81,43 @@ const agentUiSource = `
 
 > \`timeline\` 更适合跟 runtime history 连起来展示，所以在聊天运行页里演示会更自然。
 `;
+
+/**
+ * 预置一段运行态内容，演示默认 tool renderer 也可以直接使用。
+ */
+function seedRuntimePreview() {
+  const now = Date.now();
+
+  runtime.reset();
+  runtime.apply([
+    cmd.message.text({
+      id: 'block:user:builtin',
+      role: 'user',
+      text: '帮我查一下北京天气',
+      groupId: 'turn:user:builtin',
+      at: now
+    }),
+    ...cmd.tool.start({
+      id: 'tool:builtin:weather',
+      title: '查询天气',
+      groupId: 'turn:assistant:builtin',
+      at: now + 1
+    }),
+    ...cmd.tool.finish({
+      id: 'tool:builtin:weather',
+      title: '查询天气',
+      at: now + 2,
+      result: {
+        city: '北京',
+        condition: '晴',
+        tempC: 26,
+        humidity: '42%'
+      }
+    })
+  ]);
+}
+
+seedRuntimePreview();
 </script>
 
 <template>
@@ -94,6 +137,7 @@ const agentUiSource = `
       <span>agui</span>
       <span>artifact</span>
       <span>approval</span>
+      <span>tool(default)</span>
     </div>
 
     <section class="demo-section">
@@ -123,6 +167,16 @@ const agentUiSource = `
         :line-height="26"
         :agui-components="aguiComponents"
       />
+    </section>
+
+    <section class="demo-section">
+      <div class="demo-section__head">
+        <span>Section 03</span>
+        <h2>默认 Tool Renderer</h2>
+        <p>即使你还没注册业务组件，tool block 现在也会先有一个开箱即用的默认卡片。</p>
+      </div>
+
+      <RunSurface :runtime="runtime" />
     </section>
   </section>
 </template>

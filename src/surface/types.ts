@@ -14,6 +14,33 @@ import type {
 
 export type RunSurfaceRole = 'assistant' | 'user' | 'system';
 
+/**
+ * RunSurface 的性能相关配置。
+ */
+export interface RunSurfacePerformanceOptions {
+  /**
+   * 组级窗口化一次最多默认渲染多少个 group。
+   * 传 `false` 可关闭窗口化。
+   */
+  groupWindow?: number | false;
+  /**
+   * 每次向前展开更多消息时增加多少个 group。
+   */
+  groupWindowStep?: number;
+  /**
+   * 是否对重型 block 启用接近视口后再挂载。
+   */
+  lazyMount?: boolean;
+  /**
+   * 懒挂载观察的 rootMargin。
+   */
+  lazyMountMargin?: string;
+  /**
+   * 单个 text block 超过该长度后按 slab 分段渲染。
+   */
+  textSlabChars?: number;
+}
+
 export interface RunSurfaceRendererContext<
   TBlockData extends Record<string, unknown> = Record<string, unknown>,
   TNodeData extends Record<string, unknown> = Record<string, unknown>
@@ -82,6 +109,7 @@ export interface RunSurfaceOptions {
   lineHeight?: number;
   font?: string;
   emptyText?: string;
+  performance?: RunSurfacePerformanceOptions;
   aguiComponents?: AguiComponentMap;
   builtinComponents?: MarkdownBuiltinComponentOverrides;
   renderers?: RunSurfaceRendererMap;

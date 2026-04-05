@@ -18,7 +18,7 @@ Agentdown 的渲染思路不是“把所有 token 都塞进一个大 HTML 字符
 
 | 类型 | 来源 | 默认组件 | 说明 |
 | --- | --- | --- | --- |
-| `text` | 纯文本标题/段落 | `PretextTextBlock` | 优先使用 pretext 布局 |
+| `text` | 标题/段落与常见 inline 富文本 | `PretextTextBlock` | 优先使用 pretext 布局 |
 | `html` | 复杂行内标记、表格、列表、引用、图片等 | `HtmlBlock` | 回退到增强型 HTML 渲染 |
 | `code` | 普通 fenced code block | `CodeBlock` | 支持语言标签与复制 |
 | `mermaid` | ` ```mermaid ` | `MermaidBlock` | 支持预览、全屏、拖拽与滚轮缩放 |
@@ -31,13 +31,13 @@ Agentdown 的渲染思路不是“把所有 token 都塞进一个大 HTML 字符
 
 ## 哪些内容会优先走 pretext
 
-当前只有“纯文本标题和段落”会走 pretext。  
-一旦段落里出现复杂 inline 结构，例如链接、图片、强调、内联 HTML，Agentdown 会把这个 block 回退成 `html`。
+当前标题、普通段落，以及包含粗体、斜体、删除线、链接、行内代码的常见 inline 富文本，都会继续走 pretext。  
+一旦段落里出现图片、原生 inline HTML 等当前还不适合进入 pretext 主链的结构，Agentdown 才会把这个 block 回退成 `html`。
 
 这意味着：
 
-- 纯文本流式输出更适合 pretext
-- 富文本 block 更适合 HTML fallback
+- 常见文本型富内容也可以保持在 pretext 主链
+- 复杂结构化 block 更适合 HTML fallback
 - 两条路径可以同时存在，而不是非此即彼
 
 ## AGUI 指令

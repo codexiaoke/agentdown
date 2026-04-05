@@ -29,7 +29,7 @@ export default defineConfig({
       { text: '快速开始', link: '/guide/getting-started' },
       { text: 'Markdown', link: '/guide/markdown-rendering' },
       { text: 'Runtime', link: '/runtime/overview' },
-      { text: 'API', link: '/api/renderer' },
+      { text: 'API', link: '/api/run-surface' },
       { text: '示例', link: '/examples/team-mode' },
       { text: 'GitHub', link: repositoryUrl }
     ],
@@ -58,6 +58,7 @@ export default defineConfig({
         {
           text: 'API 参考',
           items: [
+            { text: 'RunSurface', link: '/api/run-surface' },
             { text: 'MarkdownRenderer', link: '/api/renderer' },
             { text: 'Runtime 与 Bridge', link: '/api/runtime' },
             { text: '协议辅助函数', link: '/api/events' },

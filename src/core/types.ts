@@ -10,6 +10,23 @@ export type MarkdownHeadingTag =
   | 'h5'
   | 'h6';
 
+export interface MarkdownInlineFragment {
+  /** 当前 inline 片段的稳定标识。 */
+  id: string;
+  /** 该片段对应的原始文本。 */
+  text: string;
+  /** 是否带粗体语义。 */
+  strong?: boolean;
+  /** 是否带斜体语义。 */
+  em?: boolean;
+  /** 是否带删除线语义。 */
+  del?: boolean;
+  /** 是否为 inline code 片段。 */
+  code?: boolean;
+  /** 如果当前片段是链接，则记录 href。 */
+  href?: string;
+}
+
 export interface MarkdownTextBlock {
   /** 当前 block 的稳定标识。 */
   id: string;
@@ -19,6 +36,8 @@ export interface MarkdownTextBlock {
   tag: MarkdownHeadingTag;
   /** 交给 pretext 布局的纯文本内容。 */
   text: string;
+  /** 富 inline 文本的结构化片段；为空时表示纯文本。 */
+  fragments?: MarkdownInlineFragment[];
 }
 
 export interface MarkdownHtmlBlock {
@@ -202,4 +221,9 @@ export interface ParseMarkdownOptions {
   thoughtTitle?: string;
   /** 可供 AGUI 指令解析的组件映射表。 */
   aguiComponents?: AguiComponentMap;
+  /**
+   * 是否允许原始 HTML 直接进入 markdown 渲染链。
+   * 默认关闭；开启后只应用于可信内容，否则会有注入风险。
+   */
+  allowUnsafeHtml?: boolean;
 }

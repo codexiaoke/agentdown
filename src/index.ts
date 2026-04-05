@@ -5,6 +5,7 @@ export { default as DefaultMarkdownArtifactBlock } from './components/ArtifactBl
 export { default as MarkdownRenderer } from './components/MarkdownRenderer.vue';
 export { default as RunSurface } from './components/RunSurface.vue';
 export { default as DefaultRunSurfaceAssistantShell } from './components/RunSurfaceAssistantShell.vue';
+export { default as DefaultRunSurfaceToolRenderer } from './components/RunSurfaceToolRenderer.vue';
 export { default as DefaultRunSurfaceUserBubble } from './components/RunSurfaceUserBubble.vue';
 export { default as DefaultMarkdownAguiBlock } from './components/AguiComponentWrapper.vue';
 export { default as DefaultMarkdownCodeBlock } from './components/CodeBlock.vue';
@@ -226,6 +227,7 @@ export type {
   RunSurfaceRendererMap,
   RunSurfaceRendererProps,
   RunSurfaceRendererRegistration,
+  RunSurfacePerformanceOptions,
   RunSurfaceRole,
   RunSurfaceOptions
 } from './surface/types';
