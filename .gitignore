@@ -4,3 +4,9 @@ docs/.vitepress/cache
 docs/.vitepress/dist
 .DS_Store
 *.local
+.venv
+**/__pycache__
+backend/.venv
+backend/.pytest_cache
+backend/.env
+backend/.idea

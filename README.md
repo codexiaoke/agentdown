@@ -7,6 +7,24 @@ Agentdown 是一个面向流式输出的 Agent Markdown UI Runtime。
 
 [在线文档](https://codexiaoke.github.io/agentdown/)
 
+## FastAPI Backend
+
+仓库里现在也带了一个 `backend/`，用于真实框架的 SSE 联调：
+
+- `npm run backend:dev`
+- 然后访问 `http://127.0.0.1:8000/api/health`
+
+目前内置了这些真实流式 endpoint：
+
+- `/api/stream/agno`
+- `/api/stream/langchain`
+- `/api/stream/autogen`
+- `/api/stream/crewai`
+
+这些 endpoint 现在都是 `DeepSeek + 真 Agent + 真工具调用`，不再带 demo/mock 流。
+
+详细说明见 [backend/README.md](./backend/README.md)。
+
 ## 特性
 
 - 面向 `Vue 3 + TypeScript` 的 Agent-native markdown 渲染与运行时

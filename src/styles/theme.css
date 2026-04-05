@@ -46,7 +46,6 @@
   margin: 0;
   white-space: pre-wrap;
   color: var(--agentdown-text-color);
-  letter-spacing: -0.01em;
 }
 
 .agentdown-text-line {
@@ -72,7 +71,7 @@
 
 .agentdown-text-fragment {
   display: inline-block;
-  min-width: 0;
+  flex: 0 0 auto;
   color: inherit;
   text-decoration: none;
   white-space: pre;

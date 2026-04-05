@@ -40,8 +40,8 @@ const routes: DemoRoute[] = [
   },
   {
     path: '/sse-weather',
-    title: 'SSE 天气示例',
-    description: '演示 useSseBridge 怎么把 SSE JSON 直接映射成聊天内容和工具组件。',
+    title: 'Agno 真实 SSE',
+    description: '直接请求真实 /api/stream/agno，并用官方事件适配层映射成聊天内容和工具组件。',
     component: SseWeatherDemo
   },
   {

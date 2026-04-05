@@ -20,6 +20,7 @@ export { createMarkdownEngine } from './core/createMarkdownEngine';
 export { parseMarkdown } from './core/parseMarkdown';
 export { useAgentSession } from './composables/useAgentSession';
 export { createSseRequestInitResolver, useSse } from './composables/useSse';
+export { createAgnoProtocol, defineAgnoPreset } from './adapters/agno';
 export {
   useAsyncIterableBridge,
   useBridgeTransport,
@@ -113,6 +114,18 @@ export type {
   UseRuntimeTranscriptResult,
   UseRuntimeTranscriptResult as UseAgentRuntimeTranscriptResult
 } from './composables/useRuntimeTranscript';
+export type {
+  AgnoBlockIdResolver,
+  AgnoEvent,
+  AgnoGroupIdResolver,
+  AgnoPresetOptions,
+  AgnoProtocolOptions,
+  AgnoRunTitleResolver,
+  AgnoStreamIdResolver,
+  AgnoToolPayload,
+  AgnoToolRendererContext,
+  AgnoToolRendererResolver
+} from './adapters/agno';
 export type {
   UseRuntimeReplayPlayerResult,
   UseRuntimeReplayPlayerResult as UseAgentRuntimeReplayPlayerResult

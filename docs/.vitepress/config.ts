@@ -40,7 +40,8 @@ export default defineConfig({
           items: [
             { text: '快速开始', link: '/guide/getting-started' },
             { text: 'Markdown 渲染', link: '/guide/markdown-rendering' },
-            { text: '组件覆写', link: '/guide/component-overrides' }
+            { text: '组件覆写', link: '/guide/component-overrides' },
+            { text: 'Agno 适配', link: '/guide/agno-adapter' }
           ]
         }
       ],

@@ -54,6 +54,8 @@
     "docs:dev": "vitepress dev docs --host 0.0.0.0",
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs",
+    "backend:dev": "uv run --project backend uvicorn app.main:app --app-dir backend --reload --port 8000",
+    "backend:check": "uv run --project backend python -m compileall backend/app",
     "pack:check": "npm pack --dry-run",
     "prepublishOnly": "npm run build",
     "test": "vitest run",

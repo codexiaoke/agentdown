@@ -1,0 +1,30 @@
+[project]
+name = "agentdown-fastapi-backend"
+version = "0.1.0"
+description = "FastAPI SSE backend for Agentdown real provider adapters."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "agno>=2.5.14",
+  "fastapi>=0.115.0",
+  "httpx>=0.28.0",
+  "openai>=2.30.0",
+  "uvicorn>=0.35.0",
+]
+
+[project.optional-dependencies]
+frameworks = [
+  "agno",
+  "langchain",
+  "langchain-deepseek",
+  "autogen-agentchat",
+  "autogen-ext[openai]",
+  "crewai",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+package = false

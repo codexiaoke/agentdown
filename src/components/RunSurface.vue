@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
 import { defaultMarkdownBuiltinComponents } from './defaultMarkdownComponents';
+import { AGENTDOWN_DEFAULT_TEXT_FONT } from './pretextRichText';
 import RunSurfaceAssistantShell from './RunSurfaceAssistantShell.vue';
 import RunSurfaceBlock from './RunSurfaceBlock.vue';
 import RunSurfaceToolRenderer from './RunSurfaceToolRenderer.vue';
@@ -61,7 +62,7 @@ interface ResolvedRunSurfacePerformance {
 const props = withDefaults(defineProps<Props>(), {
   slot: 'main',
   lineHeight: 26,
-  font: '400 16px "Helvetica Neue"',
+  font: AGENTDOWN_DEFAULT_TEXT_FONT,
   emptyText: '等待新的运行输出...',
   performance: () => ({}),
   aguiComponents: () => ({}),

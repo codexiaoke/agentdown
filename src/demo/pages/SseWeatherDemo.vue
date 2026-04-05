@@ -1,259 +1,157 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import {
+  type AgentRuntime,
+  type AgnoEvent,
   cmd,
+  createSseTransport,
+  defineAgnoPreset,
   RunSurface,
-  useSse
+  useBridgeTransport
 } from '../../index';
-import { weatherRunPreset, type WeatherSsePayload } from '../presets/weatherPreset';
+import MessageLoadingBubble from '../components/MessageLoadingBubble.vue';
+import WeatherToolCard from '../components/WeatherToolCard.vue';
 
-const RUN_ID = 'run:weather';
-const TOOL_ID = 'tool-1';
-const STREAM_ID = 'stream:weather:answer';
-const USER_GROUP_ID = 'turn:user:weather';
-const ASSISTANT_GROUP_ID = 'turn:weather';
-const DEMO_SOURCE = '/demo/weather.sse';
-const DEMO_HEADERS = {
-  Authorization: 'Bearer demo-agent-token',
-  'X-Agentdown-Demo': 'weather'
-};
-const DEMO_REQUEST = {
-  city: '北京',
-  dateLabel: '今天',
-  message: '帮我查一下北京今天天气'
-};
-const { runtime, bridge, surface } = weatherRunPreset.createSession();
+const DEFAULT_PROMPT = '帮我查一下北京今天天气';
+const USER_GROUP_ID = 'turn:user:agno-weather';
 
 /**
- * mock SSE 请求里会用到的业务入参。
+ * 去掉 URL 末尾多余的 `/`，方便后面安全拼接路径。
  */
-interface WeatherDemoRequest {
-  city: string;
-  dateLabel: string;
-  message: string;
+function trimTrailingSlash(value: string): string {
+  return value.replace(/\/+$/, '');
 }
 
 /**
- * 把一个 packet 编码成标准 SSE 文本片段。
+ * 解析 demo 当前应连接的后端根地址。
  */
-function encodeSsePacket(payload: WeatherSsePayload) {
-  return `data: ${JSON.stringify(payload)}\n\n`;
+function resolveBackendBaseUrl(): string {
+  const configured = import.meta.env.VITE_AGENTDOWN_API_BASE;
+  return trimTrailingSlash(configured && configured.length > 0
+    ? configured
+    : 'http://127.0.0.1:8000');
 }
 
 /**
- * 根据页面输入构造整组天气查询 demo packet。
+ * 按统一规则拼出真实 Agno SSE endpoint。
  */
-function buildDemoPackets(input: WeatherDemoRequest): WeatherSsePayload[] {
-  return [
-    {
-      event: 'RunStarted',
-      runId: RUN_ID,
-      title: '天气助手'
-    },
-    {
-      event: 'ContentOpen',
-      streamId: STREAM_ID,
-      slot: 'main',
-      groupId: ASSISTANT_GROUP_ID
-    },
-    {
-      event: 'ContentDelta',
-      streamId: STREAM_ID,
-      text: `我来为你查询${input.city}${input.dateLabel}天气`
-    },
-    {
-      event: 'ToolCall',
-      name: '查询天气',
-      id: TOOL_ID
-    },
-    {
-      event: 'ToolCompleted',
-      name: '查询天气',
-      id: TOOL_ID,
-      content: {
-        city: input.city,
-        condition: '晴',
-        tempC: 26,
-        humidity: '42%'
-      }
-    },
-    {
-      event: 'ContentClose',
-      streamId: STREAM_ID
-    },
-    {
-      event: 'RunCompleted',
-      runId: RUN_ID
-    }
-  ];
+function buildAgnoEndpoint(): string {
+  return `${resolveBackendBaseUrl()}/api/stream/agno`;
 }
 
 /**
- * 从 fetch init.body 中解析出当前 demo 请求参数。
+ * 预先插入一条用户消息，方便观察 assistant 回复和工具卡片。
  */
-function parseRequestBody(init?: RequestInit): WeatherDemoRequest {
-  if (!init?.body || typeof init.body !== 'string') {
-    return DEMO_REQUEST;
-  }
-
-  try {
-    const parsed = JSON.parse(init.body) as Partial<WeatherDemoRequest>;
-
-    return {
-      city: parsed.city ?? DEMO_REQUEST.city,
-      dateLabel: parsed.dateLabel ?? DEMO_REQUEST.dateLabel,
-      message: parsed.message ?? DEMO_REQUEST.message
-    };
-  } catch {
-    return DEMO_REQUEST;
-  }
-}
-
-// 用一个本地 mock fetch 把 POST SSE 请求包成真正的响应流。
-// 这样页面里可以直接演示 useSse({ request: { body, headers } }) 怎么接到 Agentdown。
-/**
- * 创建一个本地 mock SSE fetch，用来模拟后端按时间推送事件。
- */
-function createMockSseFetch(intervalMs: number): typeof fetch {
-  return async (_source: RequestInfo | URL, init?: RequestInit) => {
-    const headers = new Headers(init?.headers);
-
-    if (headers.get('Authorization') !== DEMO_HEADERS.Authorization) {
-      return new Response('Unauthorized', {
-        status: 401,
-        statusText: 'Unauthorized'
-      });
-    }
-
-    const encoder = new TextEncoder();
-    const signal = init?.signal;
-    const payloads = buildDemoPackets(parseRequestBody(init));
-    const timers: number[] = [];
-    let abortListener: (() => void) | undefined;
-    let closed = false;
-
-    const stream = new ReadableStream<Uint8Array>({
-      start(controller) {
-        /**
-         * 清理当前响应流里已注册的所有定时器。
-         */
-        const cleanup = () => {
-          while (timers.length > 0) {
-            const timerId = timers.pop();
-
-            if (timerId !== undefined) {
-              globalThis.clearTimeout(timerId);
-            }
-          }
-        };
-
-        /**
-         * 安全关闭当前 mock SSE stream。
-         */
-        const closeStream = () => {
-          if (closed) {
-            return;
-          }
-
-          closed = true;
-          controller.close();
-        };
-
-        abortListener = () => {
-          cleanup();
-          closeStream();
-        };
-
-        if (signal?.aborted) {
-          abortListener();
-          return;
-        }
-
-        signal?.addEventListener('abort', abortListener, { once: true });
-
-        payloads.forEach((payload, index) => {
-          const timerId = globalThis.setTimeout(() => {
-            if (signal?.aborted) {
-              return;
-            }
-
-            controller.enqueue(encoder.encode(encodeSsePacket(payload)));
-
-            if (index === payloads.length - 1) {
-              closeStream();
-            }
-          }, intervalMs * (index + 1));
-
-          timers.push(timerId);
-        });
-      },
-      cancel() {
-        abortListener?.();
-      }
-    });
-
-    return new Response(stream, {
-      headers: {
-        'Content-Type': 'text/event-stream'
-      }
-    });
-  };
-}
-
-const {
-  connect,
-  abort,
-  status
-} = useSse<WeatherSsePayload>({
-  source: DEMO_SOURCE,
-  keepMessages: 12,
-  mode: 'json',
-  fetch: createMockSseFetch(650),
-  onMessage(packet) {
-    bridge.push(packet);
-  },
-  onComplete() {
-    bridge.flush('demo-complete');
-  },
-  autoStart: false
-});
-
-const playing = computed(() => status.value === 'connecting' || status.value === 'streaming');
-
-/**
- * 预先插入一条用户提问，模拟真实聊天开场。
- */
-function seedConversation(input: WeatherDemoRequest) {
-  const now = Date.now();
-
+function seedConversation(input: string, runtime: AgentRuntime) {
   runtime.apply(cmd.message.text({
-    id: 'block:user:weather',
+    id: 'block:user:agno-weather',
     role: 'user',
-    text: input.message,
+    text: input,
     groupId: USER_GROUP_ID,
-    at: now
+    at: Date.now()
   }));
 }
 
+const prompt = ref(DEFAULT_PROMPT);
+const endpoint = buildAgnoEndpoint();
+
+const agnoPreset = defineAgnoPreset<string>({
+  protocolOptions: {
+    defaultRunTitle: 'Agno 助手',
+    toolRenderer: ({ tool }) => {
+      const name = typeof tool?.tool_name === 'string'
+        ? tool.tool_name
+        : typeof tool?.name === 'string'
+          ? tool.name
+          : '';
+
+      return name.includes('weather')
+        ? 'tool.weather'
+        : 'tool';
+    }
+  },
+  surface: {
+    draftPlaceholder: {
+      component: MessageLoadingBubble,
+      props: {
+        label: 'Agno 正在思考'
+      }
+    },
+    renderers: {
+      'tool.weather': WeatherToolCard
+    }
+  }
+});
+
+const { runtime, bridge, surface } = agnoPreset.createSession({
+  bridge: {
+    transport: createSseTransport<AgnoEvent, string>({
+      mode: 'json',
+      init() {
+        return {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            message: prompt.value
+          })
+        };
+      }
+    })
+  }
+});
+
+const {
+  start,
+  stop,
+  reset,
+  status,
+  error
+} = useBridgeTransport({
+  bridge,
+  source: endpoint
+});
+
 /**
- * 重置 demo 并重新发起一轮天气 SSE 请求。
+ * 生成当前 bridge 状态对应的简短文案。
+ */
+const statusLabel = computed(() => {
+  switch (status.value.phase) {
+    case 'consuming':
+      return '连接中';
+    case 'errored':
+      return '连接失败';
+    case 'closed':
+      return '已关闭';
+    default:
+      return '待命';
+  }
+});
+
+/**
+ * 判断当前是否仍在消费 SSE 数据流。
+ */
+const busy = computed(() => status.value.phase === 'consuming');
+
+/**
+ * 提取页面需要展示的 transport 错误文案。
+ */
+const transportError = computed(() => error.value?.message ?? '');
+
+/**
+ * 重置当前会话，并重新连接真实 Agno backend。
  */
 async function replayDemo() {
-  abort();
-  bridge.reset();
-  seedConversation(DEMO_REQUEST);
-  await connect(undefined, {
-    request: {
-      method: 'POST',
-      headers: DEMO_HEADERS,
-      body: DEMO_REQUEST
-    }
-  });
+  stop();
+  reset();
+  seedConversation(prompt.value, runtime);
+  await start();
 }
 
 onMounted(() => {
   replayDemo().catch(() => {
-    // demo 页面里失败只需要安静结束，不需要额外抛错打断界面。
+    // demo 页面里失败只需要保持当前状态，不需要再额外抛错。
   });
 });
 </script>
@@ -261,42 +159,67 @@ onMounted(() => {
 <template>
   <section class="demo-page">
     <header class="demo-page__header">
-      <h1>天气对话</h1>
-      <p>这个示例直接用通用 useSse 发起一个带 body 和 headers 的 POST SSE 请求，收到 packet 后再推给 Agentdown runtime。</p>
-      <div class="demo-request-meta">
-        <span>POST</span>
-        <span>{{ DEMO_REQUEST.city }}</span>
-        <span>{{ DEMO_REQUEST.dateLabel }}</span>
-        <span>{{ DEMO_HEADERS.Authorization }}</span>
-      </div>
+      <h1>Agno 真实 SSE</h1>
+      <p>启动 FastAPI backend 后，这个页面会直接请求真实 `/api/stream/agno`，然后用 `defineAgnoPreset()` 把官方事件映射成聊天 UI。</p>
     </header>
+
+    <form
+      class="demo-form"
+      @submit.prevent="replayDemo().catch(() => {})"
+    >
+      <label
+        class="demo-form__label"
+        for="agno-prompt"
+      >
+        问题
+      </label>
+
+      <textarea
+        id="agno-prompt"
+        v-model="prompt"
+        class="demo-form__input"
+        rows="2"
+        placeholder="帮我查一下北京今天天气"
+      />
+
+      <div class="demo-form__meta">
+        <span class="demo-form__status">{{ statusLabel }}</span>
+        <code class="demo-form__endpoint">{{ endpoint }}</code>
+      </div>
+
+      <button
+        type="submit"
+        class="demo-page__replay"
+        :disabled="busy"
+      >
+        {{ busy ? '请求中...' : '重新请求' }}
+      </button>
+    </form>
+
+    <p
+      v-if="transportError"
+      class="demo-page__error"
+    >
+      {{ transportError }}
+    </p>
 
     <RunSurface
       :runtime="runtime"
       v-bind="surface"
     />
-
-    <button
-      v-if="!playing"
-      type="button"
-      class="demo-page__replay"
-      @click="replayDemo().catch(() => {})"
-    >
-      重播
-    </button>
   </section>
 </template>
 
 <style scoped>
 .demo-page {
-  max-width: 720px;
+  max-width: 760px;
   margin: 0 auto;
   padding: 44px 24px 80px;
   min-height: 100%;
 }
 
 .demo-page__header {
-  margin-bottom: 28px;
+  margin-bottom: 24px;
 }
 
 .demo-page__header h1,
@@ -315,23 +238,59 @@ onMounted(() => {
   line-height: 1.8;
 }
 
-.demo-request-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 14px;
+.demo-form {
+  margin-bottom: 28px;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  padding: 16px;
+  background: #ffffff;
 }
 
-.demo-request-meta span {
+.demo-form__label {
+  display: block;
+  margin-bottom: 8px;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.demo-form__input {
+  width: 100%;
+  min-height: 72px;
+  border: 1px solid #dbe3ee;
+  border-radius: 14px;
+  padding: 12px 14px;
+  resize: vertical;
+  background: #f8fafc;
+  color: #0f172a;
+  font: inherit;
+  line-height: 1.7;
+}
+
+.demo-form__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.demo-form__status {
   border-radius: 999px;
-  padding: 6px 10px;
-  background: #eef2f7;
-  color: #475569;
+  padding: 4px 10px;
+  background: #e2e8f0;
+  color: #334155;
+  font-size: 12px;
+}
+
+.demo-form__endpoint {
+  overflow-wrap: anywhere;
+  color: #64748b;
   font-size: 12px;
 }
 
 .demo-page__replay {
-  margin-top: 24px;
+  margin-top: 14px;
   border: 0;
   border-radius: 999px;
   padding: 10px 14px;
@@ -340,6 +299,21 @@ onMounted(() => {
   font: inherit;
   font-size: 13px;
   cursor: pointer;
+}
+
+.demo-page__replay:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.demo-page__error {
+  margin: 0 0 20px;
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: #fff1f2;
+  color: #be123c;
+  font-size: 13px;
+  line-height: 1.7;
 }
 
 @media (max-width: 720px) {

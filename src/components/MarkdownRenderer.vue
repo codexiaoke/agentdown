@@ -5,6 +5,7 @@ import MarkdownBlockRenderer from './MarkdownBlockRenderer.vue';
 import MarkdownMeasuredBlock from './MarkdownMeasuredBlock.vue';
 import { defaultMarkdownBuiltinComponents } from './defaultMarkdownComponents';
 import { estimateMarkdownBlockHeight, shouldMeasureMarkdownBlockHeight } from './markdownBlockPerformance';
+import { AGENTDOWN_DEFAULT_TEXT_FONT } from './pretextRichText';
 import { getMarkdownBlockGapAfter } from './markdownBlockSpacing';
 import {
   buildMarkdownHeightPrefixSums,
@@ -45,7 +46,7 @@ interface ResolvedMarkdownRendererPerformance {
 
 const props = withDefaults(defineProps<Props>(), {
   lineHeight: 26,
-  font: '400 16px "Helvetica Neue"',
+  font: AGENTDOWN_DEFAULT_TEXT_FONT,
   thoughtTitle: 'Thought Process',
   allowUnsafeHtml: false,
   aguiComponents: () => ({}),

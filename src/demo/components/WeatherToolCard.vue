@@ -1,19 +1,105 @@
 <script setup lang="ts">
 import { computed } from 'vue';
+
+defineOptions({
+  inheritAttrs: false
+});
+
+/**
+ * 天气卡片允许直接接收对象结果，也兼容 JSON 字符串结果。
+ */
+interface WeatherResult {
+  city?: unknown;
+  resolvedName?: unknown;
+  condition?: unknown;
+  tempC?: unknown;
+  humidity?: unknown;
+  content?: unknown;
+}
+
 const props = defineProps<{
   title: string;
   status?: string;
-  result?: Record<string, unknown>;
+  result?: Record<string, unknown> | string;
 }>();
 
+/**
+ * 尝试把字符串工具结果解析为 JSON 对象。
+ */
+function parseJsonRecord(value: string): Record<string, unknown> | undefined {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * 把任意结果值收敛成天气卡片可读取的对象结构。
+ */
+function normalizeWeatherResult(value: WeatherResult | string | undefined): WeatherResult {
+  if (typeof value === 'string') {
+    return parseJsonRecord(value) ?? {};
+  }
+
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {};
+  }
+
+  if (typeof value.content === 'object' && value.content !== null && !Array.isArray(value.content)) {
+    return value.content as WeatherResult;
+  }
+
+  return value;
+}
+
+/**
+ * 把未知值转成可显示的摄氏温度。
+ */
+function normalizeTemperature(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+}
+
+/**
+ * 把未知值转成更适合展示的湿度文案。
+ */
+function normalizeHumidity(value: unknown): string {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return `${value}%`;
+  }
+
+  if (typeof value === 'string' && value.trim() !== '') {
+    return value.includes('%') ? value : `${value}%`;
+  }
+
+  return '--';
+}
+
 const weather = computed(() => {
-  const result = props.result;
+  const result = normalizeWeatherResult(props.result);
+  const city = typeof result.city === 'string'
+    ? result.city
+    : typeof result.resolvedName === 'string'
+      ? result.resolvedName
+      : '北京';
 
   return {
-    city: typeof result?.city === 'string' ? result.city : '北京',
-    condition: typeof result?.condition === 'string' ? result.condition : '--',
-    tempC: typeof result?.tempC === 'number' ? result.tempC : null,
-    humidity: typeof result?.humidity === 'string' ? result.humidity : '--'
+    city,
+    condition: typeof result.condition === 'string' ? result.condition : '--',
+    tempC: normalizeTemperature(result.tempC),
+    humidity: normalizeHumidity(result.humidity)
   };
 });
 

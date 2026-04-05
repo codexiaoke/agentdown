@@ -8,6 +8,12 @@ import { getCachedPreparedTextWithSegments } from './pretextCache';
 import type { MarkdownHeadingTag, MarkdownInlineFragment } from '../core/types';
 
 /**
+ * Agentdown 默认正文字体，兼顾西文与中文显示。
+ */
+export const AGENTDOWN_DEFAULT_TEXT_FONT =
+  '400 16px "Avenir Next", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif';
+
+/**
  * pretext rich text 布局所需的块级排版参数。
  */
 export interface PretextTypography {
@@ -110,9 +116,9 @@ function parseFontShorthand(font: string): PretextTypography {
 
   if (!matched) {
     return {
-      blockFont: font,
+      blockFont: AGENTDOWN_DEFAULT_TEXT_FONT,
       lineHeight: 26,
-      fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+      fontFamily: '"Avenir Next", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
       fontSizePx: 16,
       fontWeight: 400,
       fontStyle: 'normal'
@@ -121,7 +127,8 @@ function parseFontShorthand(font: string): PretextTypography {
 
   const prefix = matched[1]?.trim() ?? '';
   const sizePx = Number(matched[2] ?? '16');
-  const fontFamily = matched[3] ?? '"Helvetica Neue", Helvetica, Arial, sans-serif';
+  const fontFamily = matched[3]
+    ?? '"Avenir Next", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif';
   const weightMatch = prefix.match(/\b([1-9]00)\b/);
   const fontWeight = weightMatch
     ? Number(weightMatch[1])
@@ -266,6 +273,35 @@ function isSameCursor(left: LayoutCursor, right: LayoutCursor): boolean {
 }
 
 /**
+ * 当当前行剩余空间已经容不下下一个 fragment 时，改为下一行继续布局，而不是直接丢弃它。
+ */
+function shouldWrapItemToNextLine(
+  line: ReturnType<typeof layoutNextLine>,
+  startCursor: LayoutCursor,
+  lineFragments: PretextRichTextLineFragment[]
+): boolean {
+  return (
+    lineFragments.length > 0
+    && (line === null || isSameCursor(startCursor, line.end))
+  );
+}
+
+/**
+ * 当 pretext 在极窄宽度下没法返回有效切片时，兜底保留整段文本，避免内容被吞掉。
+ */
+function createFallbackLineFragment(
+  item: PreparedPretextRichTextTextItem,
+  leadingGap: number
+): PretextRichTextLineFragment {
+  return {
+    id: `${item.id}:fallback`,
+    text: item.fullText,
+    leadingGap,
+    ...item.marks
+  };
+}
+
+/**
  * 把结构化 inline fragments 预处理成可供后续逐行布局的 item 列表。
  */
 export function preparePretextRichTextItems(
@@ -400,7 +436,14 @@ export function layoutPretextRichTextLines(
         Math.max(1, remainingWidth - reservedWidth)
       );
 
+      if (shouldWrapItemToNextLine(line, startCursor, lineFragments)) {
+        break lineLoop;
+      }
+
       if (line === null || isSameCursor(startCursor, line.end)) {
+        lineFragments.push(createFallbackLineFragment(item, leadingGap));
+        lineWidth += leadingGap + item.fullWidth + item.chromeWidth;
+        remainingWidth = Math.max(0, safeWidth - lineWidth);
         itemIndex += 1;
         textCursor = null;
         continue;
