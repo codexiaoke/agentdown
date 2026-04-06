@@ -93,3 +93,4 @@ V2 的核心目标不是“把 markdown 渲染得更炫”，而是：
 
 - [V1 产品设计](/reference/v1-design)
 - [V2 产品设计](/reference/v2-design)
+- [V2 任务清单](/reference/v2-task-list)

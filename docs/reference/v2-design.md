@@ -346,3 +346,7 @@ src/
 - helper DSL
 
 这四件事单独落成更细的 RFC，再开始编码。
+
+如果你想直接看执行拆解，请继续阅读：
+
+- [V2 任务清单](/reference/v2-task-list)

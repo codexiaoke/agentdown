@@ -89,7 +89,7 @@ interface SurfaceBlock<TData = Record<string, unknown>> {
   slot: string
   type: string
   renderer: string
-  state: 'draft' | 'stable'
+  state: 'draft' | 'stable' | 'settled'
   nodeId?: string | null
   groupId?: string | null
   content?: string
@@ -98,6 +98,20 @@ interface SurfaceBlock<TData = Record<string, unknown>> {
   updatedAt?: number
 }
 ```
+
+### `SurfaceBlockStreamingDraftData`
+
+```ts
+interface SurfaceBlockStreamingDraftData {
+  streamingDraftMode?: 'text' | 'preview' | 'hidden'
+  streamingDraftKind?: 'blank' | 'line' | 'paragraph' | 'blockquote' | 'list' | 'table' | 'fence' | 'math' | 'thought' | 'directive' | 'setext-heading' | 'html'
+  streamingDraftStability?: 'line-stable' | 'separator-stable' | 'candidate-stable' | 'close-stable'
+  streamingDraftMultiline?: boolean
+}
+```
+
+这个类型描述 markdown assembler 在 draft block 上补充的结构化尾部信息。
+如果你要根据正在流式输出的语法类型去切换 UI，这是最直接的入口。
 
 ### `RuntimeIntent`
 

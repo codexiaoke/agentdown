@@ -10,6 +10,14 @@ export type MarkdownHeadingTag =
   | 'h5'
   | 'h6';
 
+/**
+ * `MarkdownRenderer` 面向不同页面形态的推荐渲染模式。
+ *
+ * - `typing`：偏聊天 / 生成过程展示，默认更保守地关闭窗口化
+ * - `window`：偏长文阅读 / 性能优先，默认启用窗口化与更积极的 slab
+ */
+export type MarkdownRenderMode = 'typing' | 'window';
+
 export interface MarkdownInlineFragment {
   /** 当前 inline 片段的稳定标识。 */
   id: string;
@@ -208,6 +216,15 @@ export type MarkdownBuiltinComponentOverrides = Partial<MarkdownBuiltinComponent
  */
 export interface MarkdownRendererPerformanceOptions {
   /**
+   * 显式指定 renderer 采用哪一种推荐模式。
+   *
+   * - `typing` 更适合聊天、生成过程和较短内容
+   * - `window` 更适合长文档和性能优先场景
+   *
+   * 如果不传，Agentdown 会尽量根据现有性能参数做向后兼容推断。
+   */
+  mode?: MarkdownRenderMode;
+  /**
    * 单个 text block 超过该长度后按 slab 分段渲染。
    * 传 `false` 可关闭 slab 拆分。
    */
@@ -226,6 +243,8 @@ export interface MarkdownRendererPerformanceOptions {
  * `MarkdownRenderer` 对外暴露的轻量性能遥测快照。
  */
 export interface MarkdownRendererTelemetry {
+  /** 当前 renderer 正在使用的推荐模式。 */
+  renderMode: MarkdownRenderMode;
   /** 当前 markdown 源文本长度。 */
   sourceLength: number;
   /** 解析后的原始 block 总数。 */

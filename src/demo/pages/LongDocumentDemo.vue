@@ -316,6 +316,7 @@ const source = createLongDocumentSource();
         :allow-unsafe-html="true"
         :agui-components="aguiComponents"
         :performance="{
+          mode: 'window',
           textSlabChars: 1200,
           virtualize: true,
           virtualizeMargin: '1400px 0px'

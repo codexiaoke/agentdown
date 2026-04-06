@@ -49,7 +49,7 @@ markdown assembler 会先维护一个尾部草稿：
 2. `delta` 时持续更新草稿内容
 3. 只把“已经结构稳定的前缀”解析成 stable block，并插到当前 draft 之前
 4. 尚未稳定的尾巴继续保留为单个 draft
-5. `close` 时再 finalize 剩余尾部
+5. `close` 时把已提交块标记为 `settled`，并 finalize 剩余尾部
 
 这样做的原因是：
 
@@ -58,12 +58,13 @@ markdown assembler 会先维护一个尾部草稿：
 - Mermaid、公式、复杂 HTML 也更适合在结构闭合后渲染
 - 普通段落、列表、blockquote、setext heading 这类结构也会尽量在边界明确后再稳定提交
 
-## 为什么需要 `draft` / `stable`
+## 为什么需要 `draft` / `stable` / `settled`
 
 这是为了让 UI 在“尽快响应”和“不要提前乱码”之间有一个更自然的平衡。
 
 - `draft` block 适合尾部进行中内容
 - `stable` block 适合已经闭合、可安全展示的内容
+- `settled` block 适合已经最终完成、后续不应再变化的内容
 
 当前 draft 还会根据尾部内容自动切换展示模式：
 
@@ -72,6 +73,19 @@ markdown assembler 会先维护一个尾部草稿：
 - `hidden`
 
 这样列表、blockquote、表格表头、未闭合代码块等场景会更自然。
+
+同时，markdown assembler 也会把尾部分析结果写进 draft block 的 `data`：
+
+- `streamingDraftMode`
+  当前草稿推荐采用的展示模式
+- `streamingDraftKind`
+  当前尾部更像哪一类 markdown 结构，例如 `table`、`fence`、`html`
+- `streamingDraftStability`
+  当前尾部采用的稳定化策略，例如 `candidate-stable` 或 `close-stable`
+- `streamingDraftMultiline`
+  当前尾部是否已经跨越多行
+
+这让 `RunSurface`、devtools、业务样式层都能读到“这段草稿为什么还在 draft”这层信息，而不是只能看到一段原始文本。
 
 ## Bridge 的批量 flush 做什么
 

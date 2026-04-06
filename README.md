@@ -62,16 +62,19 @@ raw packet / SSE -> protocol -> bridge -> assembler -> runtime -> Agent UI
 
 | 框架 | 入口 | 说明 |
 | --- | --- | --- |
-| Agno | `createAgnoProtocol()` / `defineAgnoPreset()` | 直接消费官方 Agno SSE 事件 |
-| LangChain | `createLangChainProtocol()` / `defineLangChainPreset()` | 直接消费 `astream_events()` 风格事件 |
-| AutoGen | `createAutoGenProtocol()` / `defineAutoGenPreset()` | 直接消费官方 `run_stream()` 事件 |
-| CrewAI | `createCrewAIProtocol()` / `defineCrewAIPreset()` | 直接消费官方 SSE chunk，附带 `parseCrewAISseMessage()` |
+| Agno | `useAgnoChatSession()` / `createAgnoAdapter()` | 聊天页面优先用 `useAgnoChatSession()` |
+| LangChain | `useLangChainChatSession()` / `createLangChainAdapter()` | 直接消费 `astream_events()` 风格事件 |
+| AutoGen | `useAutoGenChatSession()` / `createAutoGenAdapter()` | 直接消费官方 `run_stream()` 事件 |
+| CrewAI | `useCrewAIChatSession()` / `createCrewAIAdapter()` | 直接消费官方 SSE chunk，附带 `parseCrewAISseMessage()` |
 
 所有适配器都保持一个原则：
 
 - 前端直接适配官方事件
 - 不要求后端再包一层 Agentdown 专属协议
 - 用户只需要定义“怎么渲染工具”和“哪些事件额外映射成组件”
+
+如果你是在接内置四个框架，优先用各自专用的 `use*ChatSession()`。
+`useAgentChat()` 更适合你继续封装“自定义 framework driver”或项目内部统一抽象层。
 
 ## 安装
 

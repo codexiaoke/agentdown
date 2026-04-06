@@ -255,12 +255,14 @@ await session.connect();
 - 不需要再手动包一层 `useBridgeTransport()`
 - 不需要再手写 `mode / headers / body / JSON.stringify`
 
-目前 starter adapter 先在 Agno 上落地了。
-LangChain、AutoGen、CrewAI 当前仍然继续使用各自的 preset 入口：
+现在四个内置框架都已经有更适合产品页面的接入层：
 
-- `defineLangChainPreset()`
-- `defineAutoGenPreset()`
-- `defineCrewAIPreset()`
+- `useAgnoChatSession()`
+- `useLangChainChatSession()`
+- `useAutoGenChatSession()`
+- `useCrewAIChatSession()`
+
+如果你要的是 starter 级控制，再往下用各自的 `create*Adapter()`。
 
 CrewAI 直接消费 SSE 文本时，还要配合：
 
@@ -269,13 +271,14 @@ CrewAI 直接消费 SSE 文本时，还要配合：
 ## 推荐的接入顺序
 
 1. 先跑通 `MarkdownRenderer`
-2. 再决定是“自定义 protocol”还是“官方 preset”
+2. 再决定是“自定义 protocol”还是“官方框架接入”
 3. 接上 `RunSurface`
 4. 再按产品需要覆写工具卡片、assistant shell、user bubble 和 markdown 内置组件
 
 ## 什么时候该继续往下看
 
 - 想接主流框架：看 [官方框架适配](/guide/framework-adapters)
+- 想把自己的后端继续封装成统一 framework：看 [自定义 Framework 接入](/guide/custom-framework)
 - 想深入看 Agno：看 [Agno 适配](/guide/agno-adapter)
 - 想理解 markdown block 模型：看 [Markdown 渲染](/guide/markdown-rendering)
 - 想理解 runtime 主链：看 [Runtime 概览](/runtime/overview)

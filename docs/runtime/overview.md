@@ -86,7 +86,7 @@ raw packet -> protocol -> bridge -> assembler -> runtime -> surface
 - transcript 导出导入
 - replay
 
-## 为什么有 `draft` 和 `stable`
+## 为什么有 `draft`、`stable` 和 `settled`
 
 这是流式体验的关键。
 
@@ -94,6 +94,8 @@ raw packet -> protocol -> bridge -> assembler -> runtime -> surface
   当前内容还在增长，适合做流式草稿
 - `stable`
   当前结构已经稳定，适合渲染复杂 markdown 和正式组件
+- `settled`
+  当前 block 已经最终完成，后续不会再变化
 
 这能避免半截 table、半截 code fence、半截公式直接闪到页面上。
 
@@ -124,7 +126,7 @@ raw packet -> protocol -> bridge -> assembler -> runtime -> surface
 - 自定义 SSE / JSON 协议
 - 你希望自己控制每种事件如何映射
 
-### 3. 使用官方框架 preset
+### 3. 使用官方框架接入层
 
 适合：
 
@@ -135,10 +137,9 @@ raw packet -> protocol -> bridge -> assembler -> runtime -> surface
 
 这时通常直接用：
 
-- `defineAgnoPreset()`
-- `defineLangChainPreset()`
-- `defineAutoGenPreset()`
-- `defineCrewAIPreset()`
+- 聊天页面：`useAgnoChatSession()` / `useLangChainChatSession()` / `useAutoGenChatSession()` / `useCrewAIChatSession()`
+- starter 控制层：`createAgnoAdapter()` / `createLangChainAdapter()` / `createAutoGenAdapter()` / `createCrewAIAdapter()`
+- 更底层时，再继续往 `create*Protocol()` / `define*Preset()` 走
 
 ## Surface 为什么不直接塞进 Runtime
 

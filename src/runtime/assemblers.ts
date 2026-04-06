@@ -2,11 +2,12 @@ import { parseMarkdown } from '../core/parseMarkdown';
 import type { MarkdownBlock } from '../core/types';
 import {
   findStreamingMarkdownBoundary,
-  resolveStreamingMarkdownDraftMode
+  resolveStreamingMarkdownTailInfo
 } from './streamingMarkdown';
 import type {
   AssemblerContext,
   RuntimeCommand,
+  SurfaceBlockState,
   StreamAssembler,
   StreamOpenCommand,
   SurfaceBlock,
@@ -147,6 +148,24 @@ function createDraftPatchCommand(session: TextStreamSession, updatedAt: number):
 }
 
 /**
+ * 生成一次文本流完成后的最终 settled 补丁命令。
+ */
+function createSettledPatchCommand(session: TextStreamSession, updatedAt: number): RuntimeCommand[] {
+  return [
+    {
+      type: 'block.patch',
+      id: session.blockId,
+      patch: {
+        renderer: session.stableRenderer,
+        state: 'settled',
+        content: session.content,
+        updatedAt
+      }
+    }
+  ];
+}
+
+/**
  * 生成一次流中止后的 draft 补丁命令。
  */
 function createAbortPatchCommand(session: TextStreamSession, updatedAt: number, reason?: string): RuntimeCommand[] {
@@ -199,18 +218,7 @@ function createTextAssembler(options: Required<TextAssemblerOptions>): StreamAss
       }
 
       sessions.delete(command.streamId);
-      return [
-        {
-          type: 'block.patch',
-          id: session.blockId,
-          patch: {
-            renderer: session.stableRenderer,
-            state: 'stable',
-            content: session.content,
-            updatedAt: context.now()
-          }
-        }
-      ];
+      return createSettledPatchCommand(session, context.now());
     },
     abort(command, context) {
       const session = sessions.get(command.streamId);
@@ -235,14 +243,15 @@ function markdownBlockToSurfaceBlock(
   block: MarkdownBlock,
   session: MarkdownStreamSession,
   index: number,
-  at: number
+  at: number,
+  state: SurfaceBlockState = 'stable'
 ): SurfaceBlock {
   const next: SurfaceBlock = {
     id: `${session.blockId}:${index}`,
     slot: session.slot,
     type: block.kind,
     renderer: block.kind,
-    state: 'stable',
+    state,
     data: {
       ...session.data,
       ...block
@@ -303,6 +312,7 @@ function markdownBlockToSurfaceBlock(
  */
 function patchDraftRemainder(session: MarkdownStreamSession, updatedAt: number): RuntimeCommand[] {
   const remainder = session.content.slice(session.committedLength);
+  const tailInfo = resolveStreamingMarkdownTailInfo(remainder);
 
   return [
     {
@@ -312,7 +322,10 @@ function patchDraftRemainder(session: MarkdownStreamSession, updatedAt: number):
         content: remainder,
         updatedAt,
         data: {
-          streamingDraftMode: resolveStreamingMarkdownDraftMode(remainder)
+          streamingDraftMode: tailInfo.mode,
+          streamingDraftKind: tailInfo.kind,
+          streamingDraftStability: tailInfo.stability,
+          streamingDraftMultiline: tailInfo.multiline
         }
       }
     }
@@ -325,7 +338,8 @@ function patchDraftRemainder(session: MarkdownStreamSession, updatedAt: number):
 function appendStableMarkdownBlocks(
   session: MarkdownStreamSession,
   chunk: string,
-  at: number
+  at: number,
+  state: SurfaceBlockState = 'stable'
 ): RuntimeCommand[] {
   const blocks = parseMarkdown(chunk);
 
@@ -338,7 +352,7 @@ function appendStableMarkdownBlocks(
   for (const [offset, block] of blocks.entries()) {
     commands.push({
       type: 'block.insert',
-      block: markdownBlockToSurfaceBlock(block, session, session.stableBlockCount + offset, at),
+      block: markdownBlockToSurfaceBlock(block, session, session.stableBlockCount + offset, at, state),
       beforeId: session.blockId
     });
   }
@@ -361,6 +375,26 @@ function syncStreamingMarkdownSession(session: MarkdownStreamSession, at: number
   }
 
   commands.push(...patchDraftRemainder(session, at));
+  return commands;
+}
+
+/**
+ * 把当前 markdown 流中已经提交的稳定 block 全部标记为 settled。
+ */
+function settleCommittedMarkdownBlocks(session: MarkdownStreamSession, at: number): RuntimeCommand[] {
+  const commands: RuntimeCommand[] = [];
+
+  for (let index = 0; index < session.stableBlockCount; index += 1) {
+    commands.push({
+      type: 'block.patch',
+      id: `${session.blockId}:${index}`,
+      patch: {
+        state: 'settled',
+        updatedAt: at
+      }
+    });
+  }
+
   return commands;
 }
 
@@ -421,9 +455,12 @@ export function createMarkdownAssembler(options: TextAssemblerOptions = {}): Str
       sessions.delete(command.streamId);
       const commands: RuntimeCommand[] = [];
       const remainder = session.content.slice(session.committedLength);
+      const settledAt = context.now();
+
+      commands.push(...settleCommittedMarkdownBlocks(session, settledAt));
 
       if (remainder.length > 0) {
-        commands.push(...appendStableMarkdownBlocks(session, remainder, context.now()));
+        commands.push(...appendStableMarkdownBlocks(session, remainder, settledAt, 'settled'));
       }
 
       commands.push({
@@ -454,6 +491,7 @@ export function createMarkdownAssembler(options: TextAssemblerOptions = {}): Str
 
       session.content = remainder;
       session.committedLength = 0;
+      const tailInfo = resolveStreamingMarkdownTailInfo(remainder);
       return [
         ...createAbortPatchCommand(session, context.now(), command.reason),
         {
@@ -461,7 +499,10 @@ export function createMarkdownAssembler(options: TextAssemblerOptions = {}): Str
           id: session.blockId,
           patch: {
             data: {
-              streamingDraftMode: resolveStreamingMarkdownDraftMode(remainder)
+              streamingDraftMode: tailInfo.mode,
+              streamingDraftKind: tailInfo.kind,
+              streamingDraftStability: tailInfo.stability,
+              streamingDraftMultiline: tailInfo.multiline
             }
           }
         }

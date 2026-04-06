@@ -14,7 +14,8 @@ import type {
   RuntimeIntent,
   RuntimeNode,
   RuntimeSnapshot,
-  SurfaceBlock
+  SurfaceBlock,
+  SurfaceBlockStreamingDraftData
 } from '../runtime/types';
 import type {
   RunSurfaceDraftPlaceholder,
@@ -32,6 +33,9 @@ import {
   hasHeavyMarkdownContent,
   splitMarkdownBlocksForRender
 } from '../surface/renderUtils';
+import {
+  resolveSurfaceBlockStreamingDraftData
+} from '../surface/draftMetadata';
 
 /**
  * `RunSurfaceBlock` 的组件输入参数。
@@ -333,10 +337,17 @@ const fallbackText = computed(() => {
 });
 
 /**
+ * 读取当前 block 上由 assembler 写入的流式草稿元数据。
+ */
+const streamingDraftData = computed<SurfaceBlockStreamingDraftData>(() => {
+  return resolveSurfaceBlockStreamingDraftData(props.block.data);
+});
+
+/**
  * 推断当前 draft 尾部应采用的显示模式。
  */
 const draftMode = computed(() => {
-  const mode = (props.block.data as { streamingDraftMode?: unknown }).streamingDraftMode;
+  const mode = streamingDraftData.value.streamingDraftMode;
 
   if (mode === 'hidden' || mode === 'preview') {
     return mode;
@@ -527,6 +538,50 @@ const shouldDelayMount = computed(() => {
 });
 
 /**
+ * 读取当前 draft 对应的结构类型，方便 devtools 和样式层判断。
+ */
+const draftKind = computed(() => {
+  if (!isDraftLike.value) {
+    return undefined;
+  }
+
+  return streamingDraftData.value.streamingDraftKind;
+});
+
+/**
+ * 读取当前 draft 对应的稳定化策略。
+ */
+const draftStability = computed(() => {
+  if (!isDraftLike.value) {
+    return undefined;
+  }
+
+  return streamingDraftData.value.streamingDraftStability;
+});
+
+/**
+ * 把当前 draft 是否跨多行收敛成 DOM 友好的字符串属性。
+ */
+const draftMultiline = computed(() => {
+  if (!isDraftLike.value || typeof streamingDraftData.value.streamingDraftMultiline !== 'boolean') {
+    return undefined;
+  }
+
+  return String(streamingDraftData.value.streamingDraftMultiline);
+});
+
+/**
+ * 只在 draft-like block 上暴露调试与样式可读的数据属性。
+ */
+const draftModeAttribute = computed(() => {
+  if (!isDraftLike.value) {
+    return undefined;
+  }
+
+  return draftMode.value;
+});
+
+/**
  * 断开当前 block 的可见性观察器。
  */
 function disconnectVisibilityObserver() {
@@ -609,6 +664,10 @@ function emitIntent(intent: Omit<RuntimeIntent, 'id' | 'at'>) {
     class="agentdown-run-surface-block"
     :data-renderer="block.renderer"
     :data-state="block.state"
+    :data-draft-mode="draftModeAttribute"
+    :data-draft-kind="draftKind"
+    :data-draft-stability="draftStability"
+    :data-draft-multiline="draftMultiline"
   >
     <div
       v-if="shouldDelayMount"
@@ -642,6 +701,10 @@ function emitIntent(intent: Omit<RuntimeIntent, 'id' | 'at'>) {
           class="agentdown-run-surface-markdown"
           :data-role="role"
           data-preview="true"
+          :data-draft-mode="draftModeAttribute"
+          :data-draft-kind="draftKind"
+          :data-draft-stability="draftStability"
+          :data-draft-multiline="draftMultiline"
         >
           <MarkdownBlockList
             :blocks="renderableDraftPreviewBlocks"
@@ -660,6 +723,10 @@ function emitIntent(intent: Omit<RuntimeIntent, 'id' | 'at'>) {
       class="agentdown-run-surface-markdown"
       :data-role="role"
       data-preview="true"
+      :data-draft-mode="draftModeAttribute"
+      :data-draft-kind="draftKind"
+      :data-draft-stability="draftStability"
+      :data-draft-multiline="draftMultiline"
     >
       <MarkdownBlockList
         :blocks="renderableDraftPreviewBlocks"
@@ -683,6 +750,10 @@ function emitIntent(intent: Omit<RuntimeIntent, 'id' | 'at'>) {
         <div
           class="agentdown-run-surface-draft"
           :data-role="role"
+          :data-draft-mode="draftModeAttribute"
+          :data-draft-kind="draftKind"
+          :data-draft-stability="draftStability"
+          :data-draft-multiline="draftMultiline"
         >
           <p class="agentdown-run-surface-draft-text">
             {{ fallbackText }}
@@ -695,6 +766,10 @@ function emitIntent(intent: Omit<RuntimeIntent, 'id' | 'at'>) {
       v-else-if="shouldRenderDraft"
       class="agentdown-run-surface-draft"
       :data-role="role"
+      :data-draft-mode="draftModeAttribute"
+      :data-draft-kind="draftKind"
+      :data-draft-stability="draftStability"
+      :data-draft-multiline="draftMultiline"
     >
       <p class="agentdown-run-surface-draft-text">
         {{ fallbackText }}

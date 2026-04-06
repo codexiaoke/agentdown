@@ -1,7 +1,39 @@
+import type {
+  StreamingMarkdownDraftMode,
+  StreamingMarkdownTailKind,
+  StreamingMarkdownTailStability
+} from './streamingMarkdown';
+
 /**
  * runtime 中通用的结构化数据载荷。
  */
 export type RuntimeData = Record<string, unknown>;
+
+/**
+ * markdown assembler 在草稿尾部写入的结构化元数据。
+ *
+ * 它不会强制所有 block 都携带这些字段，
+ * 只会在流式 markdown draft block 上按需出现。
+ */
+export interface SurfaceBlockStreamingDraftData extends RuntimeData {
+  /** 当前草稿尾部推荐采用的显示模式。 */
+  streamingDraftMode?: StreamingMarkdownDraftMode;
+  /** 当前草稿尾部推断出的 markdown 结构类型。 */
+  streamingDraftKind?: StreamingMarkdownTailKind;
+  /** 当前草稿尾部采用的稳定化策略。 */
+  streamingDraftStability?: StreamingMarkdownTailStability;
+  /** 当前草稿尾部是否已经跨越多行。 */
+  streamingDraftMultiline?: boolean;
+}
+
+/**
+ * surface block 在运行态中的生命周期状态。
+ *
+ * - `draft`：还在持续增长或结构尚未稳定
+ * - `stable`：结构已经可安全渲染，但所属流可能还会继续输出
+ * - `settled`：这段 block 已经最终完成，后续不应再变化
+ */
+export type SurfaceBlockState = 'draft' | 'stable' | 'settled';
 
 /**
  * surface block 可携带的聊天语义标识。
@@ -42,7 +74,7 @@ export interface SurfaceBlock<TData extends RuntimeData = RuntimeData> extends R
   slot: string;
   type: string;
   renderer: string;
-  state: 'draft' | 'stable';
+  state: SurfaceBlockState;
   nodeId?: string | null;
   groupId?: string | null;
   content?: string;

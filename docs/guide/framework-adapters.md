@@ -7,14 +7,21 @@ description: 使用内置 Agno、LangChain、AutoGen、CrewAI 适配层，直接
 
 如果你的后端已经是主流 Agent 框架，最推荐的方式不是自己从零写 protocol，而是直接使用内置适配层。
 
+推荐顺序很简单：
+
+1. 做聊天页面，优先用 `useAgnoChatSession()` / `useLangChainChatSession()` / `useAutoGenChatSession()` / `useCrewAIChatSession()`
+2. 需要 starter 级控制，再用 `create*Adapter()` / `useAdapterSession()`
+3. 只有在更底层定制协议时，才往 `create*Protocol()` / `define*Preset()` 继续下钻
+4. `useAgentChat()` 主要留给“自定义 framework driver”或你自己封装统一框架层时使用，详见 [自定义 Framework 接入](/guide/custom-framework)
+
 ## 当前已支持
 
 | 框架 | 入口 | 额外 helper |
 | --- | --- | --- |
-| Agno | `createAgnoAdapter()` / `createAgnoProtocol()` | `defineAgnoToolComponents()` / `defineAgnoEventComponents()` / `toolByName()` / `eventToBlock()` |
-| LangChain | `createLangChainProtocol()` / `defineLangChainPreset()` | `defineLangChainToolComponents()` / `defineLangChainEventComponents()` |
-| AutoGen | `createAutoGenProtocol()` / `defineAutoGenPreset()` | `defineAutoGenToolComponents()` / `defineAutoGenEventComponents()` |
-| CrewAI | `createCrewAIProtocol()` / `defineCrewAIPreset()` | `defineCrewAIToolComponents()` / `defineCrewAIEventComponents()` / `parseCrewAISseMessage()` |
+| Agno | `useAgnoChatSession()` / `createAgnoAdapter()` / `createAgnoProtocol()` | `defineAgnoToolComponents()` / `defineAgnoEventComponents()` / `toolByName()` / `eventToBlock()` |
+| LangChain | `useLangChainChatSession()` / `createLangChainAdapter()` / `createLangChainProtocol()` | `defineLangChainToolComponents()` / `defineLangChainEventComponents()` |
+| AutoGen | `useAutoGenChatSession()` / `createAutoGenAdapter()` / `createAutoGenProtocol()` | `defineAutoGenToolComponents()` / `defineAutoGenEventComponents()` |
+| CrewAI | `useCrewAIChatSession()` / `createCrewAIAdapter()` / `createCrewAIProtocol()` | `defineCrewAIToolComponents()` / `defineCrewAIEventComponents()` / `parseCrewAISseMessage()` |
 
 ## 这些适配器默认帮你做了什么
 
@@ -30,48 +37,35 @@ description: 使用内置 Agno、LangChain、AutoGen、CrewAI 适配层，直接
 1. 哪个工具名应该渲染成哪个组件
 2. 哪些额外事件还要额外渲染成组件
 
-## 推荐接法
+## 聊天页面最推荐接法
 
-还是以 Agno 为例。其他框架只需要换成各自的入口函数。
+还是以 Agno 为例。其他框架只需要换成各自的 chat helper。
 
 ```ts
 import {
-  // 直接消费官方 Agno SSE 事件。
-  createAgnoAdapter,
-  createAgnoSseTransport,
-  // 页面层直接拿到响应式 session。
-  useAdapterSession,
-  // 工具名映射 helper，避免协议层和 UI 层重复写一份配置。
-  defineAgnoToolComponents
+  defineAgnoToolComponents,
+  useAgnoChatSession
 } from 'agentdown';
 import WeatherToolCard from './WeatherToolCard.vue';
 
-// 只要工具名里带 weather/天气，就渲染成天气卡片。
-const agnoTools = defineAgnoToolComponents({
-  'tool.weather': {
-    match: ['weather', '天气'],
-    mode: 'includes',
-    component: WeatherToolCard
-  }
-});
+const prompt = ref('帮我查一下北京天气');
 
-// starter adapter 把官方协议和 helper 组装在一起。
-const agno = createAgnoAdapter<string>({
+// 页面直接得到 runtime、surface、send、restart、error、status。
+const session = useAgnoChatSession<string>({
+  source: 'http://127.0.0.1:8000/api/stream/agno',
+  input: prompt,
+  conversationId: 'session:weather-demo',
   title: 'Agno 助手',
-  tools: agnoTools
+  tools: defineAgnoToolComponents({
+    'tool.weather': {
+      match: ['weather', '天气'],
+      mode: 'includes',
+      component: WeatherToolCard
+    }
+  })
 });
 
-// 页面直接得到 runtime、surface、connect、restart、error、status。
-const session = useAdapterSession(agno, {
-  overrides: {
-    source: 'http://127.0.0.1:8000/api/stream/agno',
-    transport: createAgnoSseTransport<string>({
-      message: '帮我查一下北京天气'
-    })
-  }
-});
-
-await session.connect();
+await session.send();
 ```
 
 ```vue
@@ -80,6 +74,14 @@ await session.connect();
   v-bind="session.surface"
 />
 ```
+
+这种方式最适合：
+
+- 标准问答式聊天页
+- 一次一问一答的产品界面
+- 希望拿到最直接的类型提示和最少样板代码
+
+如果你需要更底层控制，再继续往 `create*Adapter()` / `useAdapterSession()` 走。
 
 如果你想跨框架复用工具组件或事件组件规则，也可以把 `defineAgnoToolComponents()` / `defineAgnoEventComponents()` 换成通用 DSL：
 
@@ -223,3 +225,15 @@ createSseTransport<CrewAIEvent, string>({
 - 你的框架事件经过了非常重的二次封装，已经和官方事件差很多
 
 其他大多数情况下，直接用内置适配器会更省事，也更不容易漏掉 run/tool/stream 的收尾细节。
+
+## `useAgentChat()` 什么时候用
+
+`useAgentChat()` 不是给内置四个框架做日常接入的首选入口。
+
+更合适的场景是：
+
+- 你在项目里又包了一层自己的 framework registry
+- 你想把多个后端框架收敛成一套业务 API
+- 你要接入一个自定义 framework driver，但又想复用 Agentdown 现成的 helper DSL
+
+如果你只是单独接 Agno、LangChain、AutoGen、CrewAI，本页列出的专用 helper 会更直观，类型提示也更好。

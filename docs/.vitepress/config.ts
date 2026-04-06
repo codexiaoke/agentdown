@@ -41,6 +41,7 @@ export default defineConfig({
           items: [
             { text: '快速开始', link: '/guide/getting-started' },
             { text: '官方框架适配', link: '/guide/framework-adapters' },
+            { text: '自定义 Framework', link: '/guide/custom-framework' },
             { text: 'Agno 深入接入', link: '/guide/agno-adapter' },
             { text: 'Markdown 渲染', link: '/guide/markdown-rendering' },
             { text: '性能优化', link: '/guide/performance' },

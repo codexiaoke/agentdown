@@ -162,6 +162,7 @@ const presetOptions: PerformancePresetOption[] = [
     label: '基线',
     description: '关闭 slab 和窗口化，观察整篇文档一次性挂载时的真实成本。',
     performance: {
+      mode: 'typing',
       textSlabChars: false,
       virtualize: false
     }
@@ -171,6 +172,7 @@ const presetOptions: PerformancePresetOption[] = [
     label: '推荐优化',
     description: '开启 text slab + retained-window virtualization，接近默认推荐用法。',
     performance: {
+      mode: 'window',
       textSlabChars: 1200,
       virtualize: true,
       virtualizeMargin: '1400px 0px'
@@ -181,6 +183,7 @@ const presetOptions: PerformancePresetOption[] = [
     label: '更激进',
     description: '更短的 slab 和更紧的窗口范围，适合极长文档压力测试。',
     performance: {
+      mode: 'window',
       textSlabChars: 800,
       virtualize: true,
       virtualizeMargin: '800px 0px'

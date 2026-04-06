@@ -11,6 +11,7 @@ import type {
   RuntimeChatSemantics,
   RuntimeData,
   RuntimeProtocol,
+  SurfaceBlockState,
   StreamAbortCommand,
   StreamCloseCommand,
   StreamDeltaCommand,
@@ -125,7 +126,7 @@ export interface MessageBlockInput extends MessageSemanticInput {
   slot?: string;
   type?: string;
   renderer?: string;
-  state?: 'draft' | 'stable';
+  state?: SurfaceBlockState;
   nodeId?: string | null;
   content?: string;
   data?: RuntimeData;

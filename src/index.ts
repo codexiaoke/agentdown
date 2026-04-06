@@ -174,6 +174,7 @@ export type {
   MarkdownHtmlBlock,
   MarkdownMathBlock,
   MarkdownMermaidBlock,
+  MarkdownRenderMode,
   MarkdownRendererPerformanceOptions,
   MarkdownRendererTelemetry,
   MarkdownTextBlock,
@@ -426,6 +427,8 @@ export type {
   RuntimeNode,
   RuntimeProtocol,
   RuntimeSnapshot,
+  SurfaceBlockState,
+  SurfaceBlockStreamingDraftData,
   StreamAbortCommand,
   StreamAssembler,
   StreamCloseCommand,
@@ -436,6 +439,12 @@ export type {
   TransportAdapter,
   TransportContext
 } from './runtime/types';
+export type {
+  StreamingMarkdownDraftMode,
+  StreamingMarkdownTailInfo,
+  StreamingMarkdownTailKind,
+  StreamingMarkdownTailStability
+} from './runtime/streamingMarkdown';
 export type {
   RuntimeBlockMessageScope
 } from './runtime/chatSemantics';

@@ -5,6 +5,10 @@ import MarkdownBlockRenderer from './MarkdownBlockRenderer.vue';
 import MarkdownMeasuredBlock from './MarkdownMeasuredBlock.vue';
 import { defaultMarkdownBuiltinComponents } from './defaultMarkdownComponents';
 import { estimateMarkdownBlockHeight, shouldMeasureMarkdownBlockHeight } from './markdownBlockPerformance';
+import {
+  resolveMarkdownRendererPerformance,
+  type ResolvedMarkdownRendererPerformance
+} from './markdownRendererPerformance';
 import { AGENTDOWN_DEFAULT_TEXT_FONT } from './pretextRichText';
 import { getMarkdownBlockGapAfter } from './markdownBlockSpacing';
 import {
@@ -33,15 +37,6 @@ interface Props {
   builtinComponents?: MarkdownBuiltinComponentOverrides;
   plugins?: MarkdownEnginePlugin[];
   performance?: MarkdownRendererPerformanceOptions;
-}
-
-/**
- * `MarkdownRenderer` 内部使用的性能配置完整形态。
- */
-interface ResolvedMarkdownRendererPerformance {
-  textSlabChars: number | false;
-  virtualize: boolean;
-  virtualizeMargin: string;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -75,13 +70,9 @@ const blocks = computed(() =>
     allowUnsafeHtml: props.allowUnsafeHtml
   })
 );
-const resolvedPerformance = computed<ResolvedMarkdownRendererPerformance>(() => ({
-  textSlabChars: props.performance?.textSlabChars === false
-    ? false
-    : Math.max(640, props.performance?.textSlabChars ?? 1600),
-  virtualize: props.performance?.virtualize ?? false,
-  virtualizeMargin: props.performance?.virtualizeMargin ?? '1200px 0px'
-}));
+const resolvedPerformance = computed<ResolvedMarkdownRendererPerformance>(() => {
+  return resolveMarkdownRendererPerformance(props.performance);
+});
 const virtualOverscan = computed(() => parseMarkdownVirtualOverscan(resolvedPerformance.value.virtualizeMargin));
 const retainedOverscan = computed(() => ({
   top: Math.max(virtualOverscan.value.top * 2, 1600),
@@ -148,6 +139,7 @@ const bottomSpacerHeight = computed(() => {
   return Math.max(0, totalVirtualHeight.value - (heightPrefixSums.value[mountedWindow.value.endIndex] ?? 0));
 });
 const telemetrySnapshot = computed<MarkdownRendererTelemetry>(() => ({
+  renderMode: resolvedPerformance.value.mode,
   sourceLength: props.source.length,
   parsedBlockCount: blocks.value.length,
   renderableBlockCount: renderableBlocks.value.length,
@@ -426,6 +418,7 @@ onBeforeUnmount(() => {
   <div
     ref="containerRef"
     class="agentdown-root"
+    :data-agentdown-render-mode="resolvedPerformance.mode"
     :data-agentdown-renderable-blocks="telemetrySnapshot.renderableBlockCount"
     :data-agentdown-mounted-blocks="telemetrySnapshot.mountedBlockCount"
     :data-agentdown-window-start="telemetrySnapshot.mountedStartIndex"

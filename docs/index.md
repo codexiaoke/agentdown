@@ -62,16 +62,19 @@ raw packet / SSE -> protocol -> bridge -> assembler -> runtime -> Agent UI
 
 | 框架 | 入口 | 适合什么场景 |
 | --- | --- | --- |
-| Agno | `createAgnoProtocol()` / `defineAgnoPreset()` | 想直接消费官方 Agno SSE 事件 |
-| LangChain | `createLangChainProtocol()` / `defineLangChainPreset()` | 想直接消费 `astream_events()` |
-| AutoGen | `createAutoGenProtocol()` / `defineAutoGenPreset()` | 想消费官方 `run_stream()` 事件 |
-| CrewAI | `createCrewAIProtocol()` / `defineCrewAIPreset()` | 想消费官方 SSE chunk 和最终 `CrewOutput` |
+| Agno | `useAgnoChatSession()` / `createAgnoAdapter()` | 聊天页面优先用 `useAgnoChatSession()`，更底层场景再往 adapter / protocol 走 |
+| LangChain | `useLangChainChatSession()` / `createLangChainAdapter()` | 想直接消费 `astream_events()`，并快速接到聊天界面 |
+| AutoGen | `useAutoGenChatSession()` / `createAutoGenAdapter()` | 想消费官方 `run_stream()` 事件，并快速接到聊天界面 |
+| CrewAI | `useCrewAIChatSession()` / `createCrewAIAdapter()` | 想消费官方 SSE chunk 和最终 `CrewOutput` |
 
 它们都遵循同一个原则：
 
 - 不要求后端包成 Agentdown 专属 JSON
 - 不要求你把框架事件二次统一
 - 前端直接适配官方事件，再按需覆写 UI
+
+如果你做的是标准聊天页面，优先用每个框架自己的 `use*ChatSession()`。
+`useAgentChat()` 更适合你在项目里继续包一层统一抽象，或者接你自己的 framework driver。
 
 ## 推荐接入顺序
 
@@ -174,3 +177,4 @@ const bridge = createBridge({
 - [Markdown 渲染](/guide/markdown-rendering)
 - [Runtime 概览](/runtime/overview)
 - [协议映射](/runtime/protocol)
+- [V2 任务清单](/reference/v2-task-list)

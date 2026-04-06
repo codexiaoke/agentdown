@@ -51,8 +51,37 @@ defineProps<{
 - user 默认有气泡 shell
 - `renderer === 'tool'` 时，默认会落到内置 `tool` 卡片
 - draft markdown 会根据 `streamingDraftMode` 决定显示原文、预览还是隐藏
+- draft markdown 会把 `streamingDraftKind / streamingDraftStability / streamingDraftMultiline` 一并透给 `block.data`
 
 这意味着你可以先把 runtime 跑通，再逐步替换成自己的设计系统。
+
+## draft 元数据
+
+当一个 block 仍处于流式草稿态时，markdown assembler 可能会把下面这些字段写到 `block.data`：
+
+```ts
+interface SurfaceBlockStreamingDraftData {
+  streamingDraftMode?: 'text' | 'preview' | 'hidden'
+  streamingDraftKind?: 'blank' | 'line' | 'paragraph' | 'blockquote' | 'list' | 'table' | 'fence' | 'math' | 'thought' | 'directive' | 'setext-heading' | 'html'
+  streamingDraftStability?: 'line-stable' | 'separator-stable' | 'candidate-stable' | 'close-stable'
+  streamingDraftMultiline?: boolean
+}
+```
+
+这些字段适合用来做：
+
+- 根据草稿结构切换不同 loading / typing UI
+- 在调试时判断“为什么这段内容还没进入 stable”
+- 给不同语法的 draft 加样式，例如 fence / table / html 的占位态
+
+默认 `RunSurface` 也会把这些值写成 DOM `data-*` 属性：
+
+- `data-draft-mode`
+- `data-draft-kind`
+- `data-draft-stability`
+- `data-draft-multiline`
+
+这样你既可以在 Vue 里读 `block.data`，也可以在 devtools 或样式层直接观察当前草稿状态。
 
 ## `performance`
 

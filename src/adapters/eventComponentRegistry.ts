@@ -5,7 +5,8 @@ import type {
   RuntimeCommand,
   RuntimeChatSemantics,
   RuntimeData,
-  RuntimeProtocol
+  RuntimeProtocol,
+  SurfaceBlockState
 } from '../runtime/types';
 import { toArray } from '../runtime/utils';
 import type {
@@ -46,7 +47,7 @@ export interface EventComponentBlockInput extends RuntimeChatSemantics {
   /** block 类型；默认 `event`。 */
   type?: string;
   /** block 渲染状态；默认 `stable`。 */
-  state?: 'draft' | 'stable';
+  state?: SurfaceBlockState;
   /** 关联的 runtime node id。 */
   nodeId?: string | null;
   /** 所属消息分组 id。 */

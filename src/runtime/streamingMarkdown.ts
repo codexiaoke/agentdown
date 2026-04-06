@@ -21,6 +21,46 @@ interface StreamingMarkdownParseResult {
  */
 export type StreamingMarkdownDraftMode = 'text' | 'preview' | 'hidden';
 
+/**
+ * 当前 draft 尾部所属的 markdown 结构类型。
+ */
+export type StreamingMarkdownTailKind =
+  | 'blank'
+  | 'line'
+  | 'paragraph'
+  | 'blockquote'
+  | 'list'
+  | 'table'
+  | 'fence'
+  | 'math'
+  | 'thought'
+  | 'directive'
+  | 'setext-heading'
+  | 'html';
+
+/**
+ * 当前 draft 尾部更接近哪一种稳定化策略。
+ */
+export type StreamingMarkdownTailStability =
+  | 'line-stable'
+  | 'separator-stable'
+  | 'candidate-stable'
+  | 'close-stable';
+
+/**
+ * draft 尾部的结构化分析结果。
+ */
+export interface StreamingMarkdownTailInfo {
+  /** 当前尾部推荐展示模式。 */
+  mode: StreamingMarkdownDraftMode;
+  /** 当前尾部推断出的结构类型。 */
+  kind: StreamingMarkdownTailKind;
+  /** 当前尾部采用的稳定化策略。 */
+  stability: StreamingMarkdownTailStability;
+  /** 是否已经跨越多行。 */
+  multiline: boolean;
+}
+
 const AGUI_DIRECTIVE_RE = /^\s*:::\s*vue-component\s+[A-Za-z][\w-]*(?:\s+.*)?$/;
 const AGENT_DIRECTIVE_RE = /^\s*:::\s*(approval|artifact|timeline)(?:\s+.*)?$/;
 const THOUGHT_OPEN_RE = /^\s*:::\s*thought\s*$/;
@@ -32,6 +72,52 @@ const BLOCKQUOTE_RE = /^\s{0,3}>\s?/;
 const ORDERED_LIST_RE = /^\s{0,3}\d{1,9}[.)]\s+/;
 const UNORDERED_LIST_RE = /^\s{0,3}[-+*]\s+/;
 const TABLE_DIVIDER_RE = /^\s*\|?(?:\s*:?-+:?\s*\|)+(?:\s*:?-+:?\s*)\|?\s*$/;
+const BLOCK_HTML_TAGS = new Set([
+  'article',
+  'aside',
+  'blockquote',
+  'details',
+  'div',
+  'dl',
+  'fieldset',
+  'figcaption',
+  'figure',
+  'footer',
+  'form',
+  'header',
+  'li',
+  'main',
+  'nav',
+  'ol',
+  'p',
+  'pre',
+  'section',
+  'summary',
+  'table',
+  'tbody',
+  'td',
+  'tfoot',
+  'th',
+  'thead',
+  'tr',
+  'ul'
+]);
+const VOID_HTML_TAGS = new Set([
+  'area',
+  'base',
+  'br',
+  'col',
+  'embed',
+  'hr',
+  'img',
+  'input',
+  'link',
+  'meta',
+  'param',
+  'source',
+  'track',
+  'wbr'
+]);
 
 /**
  * 把原始 markdown 字符串拆成带位置索引的行数组。
@@ -199,6 +285,71 @@ function isTableDividerFragment(line: string): boolean {
 }
 
 /**
+ * 尝试从一行里读取 block HTML 的起始标签信息。
+ */
+function matchHtmlBlockStart(
+  line: string
+): {
+  tagName: string;
+  selfClosing: boolean;
+  closesOnSameLine: boolean;
+} | null {
+  const trimmed = line.trim();
+
+  if (
+    trimmed.length === 0
+    || trimmed.startsWith('</')
+    || trimmed.startsWith('<!--')
+    || !trimmed.startsWith('<')
+  ) {
+    return null;
+  }
+
+  const match = trimmed.match(/^<([A-Za-z][\w:-]*)(?=[\s/>])/);
+
+  if (!match?.[1]) {
+    return null;
+  }
+
+  const tagName = match[1].toLowerCase();
+
+  if (!BLOCK_HTML_TAGS.has(tagName) && !VOID_HTML_TAGS.has(tagName)) {
+    return null;
+  }
+
+  return {
+    tagName,
+    selfClosing: VOID_HTML_TAGS.has(tagName) || /\/>\s*$/.test(trimmed),
+    closesOnSameLine: new RegExp(`</${tagName}\\s*>`, 'i').test(trimmed)
+  };
+}
+
+/**
+ * 统计一行里某个 HTML 开始标签出现的次数。
+ */
+function countHtmlOpenTags(line: string, tagName: string): number {
+  const matches = line.match(new RegExp(`<${tagName}(?=[\\s>/])[^>]*>`, 'gi')) ?? [];
+  let count = 0;
+
+  for (const match of matches) {
+    if (match.startsWith('</') || /\/>\s*$/.test(match) || VOID_HTML_TAGS.has(tagName)) {
+      continue;
+    }
+
+    count += 1;
+  }
+
+  return count;
+}
+
+/**
+ * 统计一行里某个 HTML 结束标签出现的次数。
+ */
+function countHtmlCloseTags(line: string, tagName: string): number {
+  return (line.match(new RegExp(`</${tagName}\\s*>`, 'gi')) ?? []).length;
+}
+
+/**
  * 判断一行是否会强制开启一个新的 markdown 结构块。
  */
 function isHardBlockStart(line: StreamingMarkdownLine): boolean {
@@ -206,12 +357,27 @@ function isHardBlockStart(line: StreamingMarkdownLine): boolean {
     !!matchFence(line.content)
     || THOUGHT_OPEN_RE.test(line.content)
     || isMathBlockDelimiter(line.content)
+    || !!matchHtmlBlockStart(line.content)
     || isBlockquoteLine(line.content)
     || isListItemLine(line.content)
     || AGUI_DIRECTIVE_RE.test(line.content)
     || AGENT_DIRECTIVE_RE.test(line.content)
     || HEADING_RE.test(line.content)
     || HR_RE.test(line.content)
+  );
+}
+
+/**
+ * 判断当前行是否属于“必须等闭合后再稳定”的结构起点。
+ */
+function isCloseStableStart(line: StreamingMarkdownLine): boolean {
+  return (
+    !!matchFence(line.content)
+    || THOUGHT_OPEN_RE.test(line.content)
+    || isMathBlockDelimiter(line.content)
+    || !!matchHtmlBlockStart(line.content)
+    || AGUI_DIRECTIVE_RE.test(line.content)
+    || AGENT_DIRECTIVE_RE.test(line.content)
   );
 }
 
@@ -230,6 +396,7 @@ function canPairWithSetextUnderline(line: StreamingMarkdownLine): boolean {
     && !AGENT_DIRECTIVE_RE.test(line.content)
     && !THOUGHT_OPEN_RE.test(line.content)
     && !isMathBlockDelimiter(line.content)
+    && !matchHtmlBlockStart(line.content)
     && !matchFence(line.content)
   );
 }
@@ -388,6 +555,51 @@ function consumeMathBlock(lines: StreamingMarkdownLine[], index: number): Stream
 }
 
 /**
+ * 消费一个结构完整的 block HTML。
+ */
+function consumeHtmlBlock(lines: StreamingMarkdownLine[], index: number): StreamingMarkdownParseResult | null {
+  const line = lines[index];
+  const opening = line ? matchHtmlBlockStart(line.content) : null;
+
+  if (!line || !opening) {
+    return null;
+  }
+
+  if (opening.selfClosing || opening.closesOnSameLine) {
+    return {
+      end: line.end,
+      nextIndex: index + 1
+    };
+  }
+
+  if (!line.hasNewline) {
+    return null;
+  }
+
+  let depth = countHtmlOpenTags(line.content, opening.tagName) - countHtmlCloseTags(line.content, opening.tagName);
+
+  for (let cursor = index + 1; cursor < lines.length; cursor += 1) {
+    const currentLine = lines[cursor];
+
+    if (!currentLine) {
+      break;
+    }
+
+    depth += countHtmlOpenTags(currentLine.content, opening.tagName);
+    depth -= countHtmlCloseTags(currentLine.content, opening.tagName);
+
+    if (depth <= 0) {
+      return {
+        end: currentLine.end,
+        nextIndex: cursor + 1
+      };
+    }
+  }
+
+  return null;
+}
+
+/**
  * 消费一个完整的 setext heading。
  */
 function consumeSetextHeading(lines: StreamingMarkdownLine[], index: number): StreamingMarkdownParseResult | null {
@@ -483,7 +695,9 @@ function consumeTableBlock(lines: StreamingMarkdownLine[], index: number): Strea
  * 消费普通段落或未被其他结构命中的通用块。
  */
 function consumeGenericBlock(lines: StreamingMarkdownLine[], index: number): StreamingMarkdownParseResult | null {
-  if (!lines[index]) {
+  const firstLine = lines[index];
+
+  if (!firstLine || isCloseStableStart(firstLine)) {
     return null;
   }
 
@@ -544,6 +758,7 @@ export function findStreamingMarkdownBoundary(source: string): number {
       ?? consumeFenceBlock(lines, index)
       ?? consumeThoughtBlock(lines, index)
       ?? consumeMathBlock(lines, index)
+      ?? consumeHtmlBlock(lines, index)
       ?? consumeSetextHeading(lines, index)
       ?? consumeSingleLineBlock(lines, index)
       ?? consumeTableBlock(lines, index)
@@ -576,42 +791,84 @@ export function splitStreamingMarkdown(source: string): {
 }
 
 /**
- * 推断 draft 尾部更适合如何显示。
+ * 生成一份标准化的 draft 尾部分析信息。
  */
-export function resolveStreamingMarkdownDraftMode(source: string): StreamingMarkdownDraftMode {
+function createStreamingMarkdownTailInfo(
+  mode: StreamingMarkdownDraftMode,
+  kind: StreamingMarkdownTailKind,
+  stability: StreamingMarkdownTailStability,
+  multiline: boolean
+): StreamingMarkdownTailInfo {
+  return {
+    mode,
+    kind,
+    stability,
+    multiline
+  };
+}
+
+/**
+ * 读取当前 draft 尾部的结构化信息。
+ */
+export function resolveStreamingMarkdownTailInfo(source: string): StreamingMarkdownTailInfo {
   if (source.trim().length === 0) {
-    return 'hidden';
+    return createStreamingMarkdownTailInfo('hidden', 'blank', 'separator-stable', source.includes('\n'));
   }
 
   const lines = splitStreamingMarkdownLines(source);
   const firstMeaningfulLine = lines.find((line) => line.content.trim().length > 0);
 
   if (!firstMeaningfulLine) {
-    return 'hidden';
+    return createStreamingMarkdownTailInfo('hidden', 'blank', 'separator-stable', source.includes('\n'));
   }
 
   const firstMeaningfulIndex = lines.indexOf(firstMeaningfulLine);
   const secondMeaningfulLine = lines
     .slice(firstMeaningfulIndex + 1)
     .find((line) => line.content.trim().length > 0);
+  const multiline = lines.length > 1;
 
-  if (!!matchFence(firstMeaningfulLine.content)) {
-    return secondMeaningfulLine ? 'preview' : 'hidden';
+  if (matchFence(firstMeaningfulLine.content)) {
+    return createStreamingMarkdownTailInfo(
+      secondMeaningfulLine ? 'preview' : 'hidden',
+      'fence',
+      'close-stable',
+      multiline
+    );
   }
 
   if (THOUGHT_OPEN_RE.test(firstMeaningfulLine.content)) {
-    return secondMeaningfulLine ? 'preview' : 'hidden';
+    return createStreamingMarkdownTailInfo(
+      secondMeaningfulLine ? 'preview' : 'hidden',
+      'thought',
+      'close-stable',
+      multiline
+    );
   }
 
   if (isMathBlockDelimiter(firstMeaningfulLine.content)) {
-    return secondMeaningfulLine ? 'preview' : 'hidden';
+    return createStreamingMarkdownTailInfo(
+      secondMeaningfulLine ? 'preview' : 'hidden',
+      'math',
+      'close-stable',
+      multiline
+    );
   }
 
   if (
     AGUI_DIRECTIVE_RE.test(firstMeaningfulLine.content)
     || AGENT_DIRECTIVE_RE.test(firstMeaningfulLine.content)
   ) {
-    return 'hidden';
+    return createStreamingMarkdownTailInfo('hidden', 'directive', 'close-stable', multiline);
+  }
+
+  if (matchHtmlBlockStart(firstMeaningfulLine.content)) {
+    return createStreamingMarkdownTailInfo(
+      secondMeaningfulLine ? 'preview' : 'hidden',
+      'html',
+      'close-stable',
+      multiline
+    );
   }
 
   if (
@@ -627,11 +884,20 @@ export function resolveStreamingMarkdownDraftMode(source: string): StreamingMark
       )
     )
   ) {
-    return secondMeaningfulLine ? 'preview' : 'hidden';
+    return createStreamingMarkdownTailInfo(
+      secondMeaningfulLine ? 'preview' : 'hidden',
+      'table',
+      'candidate-stable',
+      multiline
+    );
   }
 
-  if (isBlockquoteLine(firstMeaningfulLine.content) || isListItemLine(firstMeaningfulLine.content)) {
-    return 'preview';
+  if (isBlockquoteLine(firstMeaningfulLine.content)) {
+    return createStreamingMarkdownTailInfo('preview', 'blockquote', 'separator-stable', multiline);
+  }
+
+  if (isListItemLine(firstMeaningfulLine.content)) {
+    return createStreamingMarkdownTailInfo('preview', 'list', 'separator-stable', multiline);
   }
 
   if (
@@ -639,8 +905,19 @@ export function resolveStreamingMarkdownDraftMode(source: string): StreamingMark
     && isSetextHeadingUnderline(secondMeaningfulLine.content)
     && canPairWithSetextUnderline(firstMeaningfulLine)
   ) {
-    return 'preview';
+    return createStreamingMarkdownTailInfo('preview', 'setext-heading', 'candidate-stable', multiline);
   }
 
-  return 'text';
+  if (HEADING_RE.test(firstMeaningfulLine.content) || HR_RE.test(firstMeaningfulLine.content)) {
+    return createStreamingMarkdownTailInfo('text', 'line', 'line-stable', multiline);
+  }
+
+  return createStreamingMarkdownTailInfo('text', 'paragraph', 'separator-stable', multiline);
+}
+
+/**
+ * 推断 draft 尾部更适合如何显示。
+ */
+export function resolveStreamingMarkdownDraftMode(source: string): StreamingMarkdownDraftMode {
+  return resolveStreamingMarkdownTailInfo(source).mode;
 }

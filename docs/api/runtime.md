@@ -208,7 +208,9 @@ await session.replay.play()
 如果你已经在使用官方 starter adapter，例如：
 
 - `createAgnoAdapter()`
-- 后续的 `createLangChainAdapter()`
+- `createLangChainAdapter()`
+- `createAutoGenAdapter()`
+- `createCrewAIAdapter()`
 
 那更推荐直接用：
 
