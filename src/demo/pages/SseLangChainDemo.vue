@@ -1,20 +1,15 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { onMounted, ref } from 'vue';
 import {
-  type AgentRuntime,
-  type LangChainEvent,
-  cmd,
-  createJsonSseTransport,
   defineLangChainToolComponents,
-  defineLangChainPreset,
   RunSurface,
-  useBridgeTransport
+  useLangChainChatSession
 } from '../../index';
 import MessageLoadingBubble from '../components/MessageLoadingBubble.vue';
 import WeatherToolCard from '../components/WeatherToolCard.vue';
 
 const DEFAULT_PROMPT = '帮我查一下北京天气，并说明工具调用过程。';
-const USER_GROUP_ID = 'turn:user:langchain-weather';
+const DEMO_CONVERSATION_ID = 'session:demo:langchain-weather';
 
 /**
  * 去掉 URL 末尾多余的 `/`，方便后面安全拼接路径。
@@ -40,19 +35,6 @@ function buildLangChainEndpoint(): string {
   return `${resolveBackendBaseUrl()}/api/stream/langchain`;
 }
 
-/**
- * 预先插入一条用户消息，方便观察 assistant 回复和工具卡片。
- */
-function seedConversation(input: string, runtime: AgentRuntime) {
-  runtime.apply(cmd.message.text({
-    id: 'block:user:langchain-weather',
-    role: 'user',
-    text: input,
-    groupId: USER_GROUP_ID,
-    at: Date.now()
-  }));
-}
-
 const prompt = ref(DEFAULT_PROMPT);
 const endpoint = buildLangChainEndpoint();
 const langChainTools = defineLangChainToolComponents({
@@ -63,85 +45,38 @@ const langChainTools = defineLangChainToolComponents({
   }
 });
 
-const langChainPreset = defineLangChainPreset<string>({
-  protocolOptions: {
-    defaultRunTitle: 'LangChain 助手',
-    toolRenderer: langChainTools.toolRenderer
-  },
+/**
+ * LangChain demo 现在也直接走 `useLangChainChatSession()`：
+ * - 不再手写 preset + transport + bridge start/stop
+ * - 不再手写 user message seed
+ * - 不再手写 regenerate 接线
+ */
+const {
+  runtime,
+  surface,
+  send,
+  busy,
+  statusLabel,
+  transportError,
+  sessionId: backendSessionId
+} = useLangChainChatSession<string>({
+  source: endpoint,
+  input: prompt,
+  conversationId: DEMO_CONVERSATION_ID,
+  title: 'LangChain 助手',
+  tools: langChainTools,
   surface: {
     draftPlaceholder: {
       component: MessageLoadingBubble,
       props: {
         label: 'LangChain 正在思考'
       }
-    },
-    renderers: langChainTools.renderers
+    }
   }
 });
-
-const { runtime, bridge, surface } = langChainPreset.createSession({
-  bridge: {
-    transport: createJsonSseTransport<LangChainEvent, string>({
-      request: {
-        body() {
-          return {
-            message: prompt.value
-          };
-        }
-      }
-    })
-  }
-});
-
-const {
-  start,
-  stop,
-  reset,
-  status,
-  error
-} = useBridgeTransport({
-  bridge,
-  source: endpoint
-});
-
-/**
- * 生成当前 bridge 状态对应的简短文案。
- */
-const statusLabel = computed(() => {
-  switch (status.value.phase) {
-    case 'consuming':
-      return '连接中';
-    case 'errored':
-      return '连接失败';
-    case 'closed':
-      return '已关闭';
-    default:
-      return '待命';
-  }
-});
-
-/**
- * 判断当前是否仍在消费 SSE 数据流。
- */
-const busy = computed(() => status.value.phase === 'consuming');
-
-/**
- * 提取页面需要展示的 transport 错误文案。
- */
-const transportError = computed(() => error.value?.message ?? '');
-
-/**
- * 重置当前会话，并重新连接真实 LangChain backend。
- */
-async function replayDemo() {
-  stop();
-  reset();
-  seedConversation(prompt.value, runtime);
-  await start();
-}
 
 onMounted(() => {
-  replayDemo().catch(() => {
+  send().catch(() => {
     // demo 页面里失败只需要保持当前状态，不需要再额外抛错。
   });
 });
@@ -151,12 +86,12 @@ onMounted(() => {
   <section class="demo-page">
     <header class="demo-page__header">
       <h1>LangChain 真实 SSE</h1>
-      <p>启动 FastAPI backend 后，这个页面会直接请求真实 `/api/stream/langchain`，然后用 `defineLangChainPreset()` 把官方 `astream_events()` 渲染成聊天内容和工具组件。</p>
+      <p>启动 FastAPI backend 后，这个页面会直接请求真实 `/api/stream/langchain`，并使用 `useLangChainChatSession()` 把官方 `astream_events()` 渲染成聊天内容和工具组件。</p>
     </header>
 
     <form
       class="demo-form"
-      @submit.prevent="replayDemo().catch(() => {})"
+      @submit.prevent="send().catch(() => {})"
     >
       <label
         class="demo-form__label"
@@ -177,6 +112,13 @@ onMounted(() => {
         <span class="demo-form__status">{{ statusLabel }}</span>
         <code class="demo-form__endpoint">{{ endpoint }}</code>
       </div>
+
+      <p
+        v-if="backendSessionId"
+        class="demo-form__session"
+      >
+        后端 sessionId：<code>{{ backendSessionId }}</code>
+      </p>
 
       <button
         type="submit"
@@ -252,48 +194,71 @@ onMounted(() => {
   border-radius: 14px;
   padding: 12px 14px;
   resize: vertical;
-  font: inherit;
+  background: #f8fafc;
   color: #0f172a;
+  font: inherit;
+  line-height: 1.7;
 }
 
 .demo-form__meta {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   margin-top: 12px;
 }
 
 .demo-form__status {
-  color: #475569;
-  font-size: 13px;
-}
-
-.demo-form__endpoint {
-  color: #1d4ed8;
+  border-radius: 999px;
+  padding: 4px 10px;
+  background: #e2e8f0;
+  color: #334155;
   font-size: 12px;
 }
 
+.demo-form__endpoint {
+  overflow-wrap: anywhere;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.demo-form__session {
+  margin: 12px 0 0;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
 .demo-page__replay {
-  margin-top: 16px;
+  margin-top: 14px;
   border: 0;
   border-radius: 999px;
-  padding: 10px 18px;
-  background: #0f172a;
-  color: #ffffff;
+  padding: 10px 14px;
+  background: #e8eef7;
+  color: #334155;
   font: inherit;
+  font-size: 13px;
   cursor: pointer;
 }
 
 .demo-page__replay:disabled {
-  cursor: progress;
+  cursor: wait;
   opacity: 0.72;
 }
 
 .demo-page__error {
   margin: 0 0 20px;
-  color: #b91c1c;
-  font-size: 14px;
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: #fff1f2;
+  color: #be123c;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+@media (max-width: 720px) {
+  .demo-page {
+    padding: 24px 16px 56px;
+  }
 }
 </style>

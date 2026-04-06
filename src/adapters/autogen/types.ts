@@ -1,3 +1,6 @@
+import type { EventComponentRegistryResult } from '../eventComponentRegistry';
+import type { ToolNameRegistryResult } from '../toolNameRegistry';
+import type { AgentdownAdapterOptions } from '../../runtime/defineAdapter';
 import type { AgentdownPresetOptions } from '../../runtime/definePreset';
 import type {
   ProtocolContext,
@@ -60,6 +63,10 @@ export interface AutoGenEvent extends RuntimeData {
   type: string;
   /** 当前消息或事件 id。 */
   id?: string;
+  /** 某些后端会额外补充 session_id。 */
+  session_id?: string;
+  /** 兼容 camelCase 写法。 */
+  sessionId?: string;
   /** 事件来源，常见为 `user` / `assistant`。 */
   source?: string;
   /** 原始 metadata。 */
@@ -216,6 +223,26 @@ export interface AutoGenPresetOptions<
   protocolOptions?: AutoGenProtocolOptions;
   /** 增加或覆写 preset 可用的 assembler。 */
   assemblers?: Record<string, StreamAssembler>;
+}
+
+/**
+ * AutoGen 官方 starter adapter 的配置项。
+ */
+export interface AutoGenAdapterOptions<
+  TSource = AsyncIterable<AutoGenEvent> | Iterable<AutoGenEvent>
+> extends Omit<AgentdownAdapterOptions<AutoGenEvent, TSource>, 'name' | 'protocol' | 'assemblers'> {
+  /** 允许直接覆写整个主协议。 */
+  protocol?: RuntimeProtocol<AutoGenEvent>;
+  /** 传给 `createAutoGenProtocol()` 的配置。 */
+  protocolOptions?: AutoGenProtocolOptions;
+  /** 增加或覆写 adapter 可用的 assembler。 */
+  assemblers?: Record<string, StreamAssembler>;
+  /** 顶层 run 标题简写，会回填到 `protocolOptions.defaultRunTitle`。 */
+  title?: string | AutoGenRunTitleResolver;
+  /** 基于工具名自动选择 renderer 的 helper 产物。 */
+  tools?: ToolNameRegistryResult<AutoGenToolRendererContext>;
+  /** 基于事件名直接渲染组件的 helper 产物。 */
+  events?: EventComponentRegistryResult<AutoGenEvent>;
 }
 
 /**

@@ -7,10 +7,20 @@
  */
 
 export { createAgnoAdapter } from './adapter';
+export { createAgnoChatIds, useAgnoChatSession } from './chat';
 export { createAgnoProtocol, defineAgnoPreset } from './protocol';
 export { createAgnoSseTransport } from './transport';
 export { defineAgnoEventComponents } from './eventComponents';
 export { defineAgnoToolComponents } from './toolComponents';
+export type {
+  AgnoChatAssistantActionsOptions,
+  AgnoChatIdFactory,
+  AgnoChatIds,
+  AgnoChatSessionIdOptions,
+  AgnoChatUserMessageOptions,
+  UseAgnoChatSessionOptions,
+  UseAgnoChatSessionResult
+} from './chat';
 export type { AgnoRequestBody, AgnoSseTransportOptions } from './transport';
 export type {
   AgnoAdapterOptions,

@@ -1,3 +1,6 @@
+import type { EventComponentRegistryResult } from '../eventComponentRegistry';
+import type { ToolNameRegistryResult } from '../toolNameRegistry';
+import type { AgentdownAdapterOptions } from '../../runtime/defineAdapter';
 import type { AgentdownPresetOptions } from '../../runtime/definePreset';
 import type {
   ProtocolContext,
@@ -34,6 +37,10 @@ export interface LangChainEvent extends RuntimeData {
   event: string;
   /** 当前 LangChain runnable 自身的 run id。 */
   run_id?: string;
+  /** 某些后端会额外补充 session_id。 */
+  session_id?: string;
+  /** 兼容 camelCase 写法。 */
+  sessionId?: string;
   /** 当前 runnable 名称，例如 `LangGraph`、`lookup_weather`。 */
   name?: string;
   /** LangChain 原始 tags。 */
@@ -180,6 +187,26 @@ export interface LangChainPresetOptions<
   protocolOptions?: LangChainProtocolOptions;
   /** 增加或覆写 preset 可用的 assembler。 */
   assemblers?: Record<string, StreamAssembler>;
+}
+
+/**
+ * LangChain 官方 starter adapter 的配置项。
+ */
+export interface LangChainAdapterOptions<
+  TSource = AsyncIterable<LangChainEvent> | Iterable<LangChainEvent>
+> extends Omit<AgentdownAdapterOptions<LangChainEvent, TSource>, 'name' | 'protocol' | 'assemblers'> {
+  /** 允许直接覆写整个主协议。 */
+  protocol?: RuntimeProtocol<LangChainEvent>;
+  /** 传给 `createLangChainProtocol()` 的配置。 */
+  protocolOptions?: LangChainProtocolOptions;
+  /** 增加或覆写 adapter 可用的 assembler。 */
+  assemblers?: Record<string, StreamAssembler>;
+  /** 顶层 run 标题简写，会回填到 `protocolOptions.defaultRunTitle`。 */
+  title?: string | LangChainRunTitleResolver;
+  /** 基于工具名自动选择 renderer 的 helper 产物。 */
+  tools?: ToolNameRegistryResult<LangChainToolRendererContext>;
+  /** 基于事件名直接渲染组件的 helper 产物。 */
+  events?: EventComponentRegistryResult<LangChainEvent>;
 }
 
 /**

@@ -1,20 +1,15 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { onMounted, ref } from 'vue';
 import {
-  type AgentRuntime,
-  type AutoGenEvent,
-  cmd,
-  createJsonSseTransport,
   defineAutoGenToolComponents,
-  defineAutoGenPreset,
   RunSurface,
-  useBridgeTransport
+  useAutoGenChatSession
 } from '../../index';
 import MessageLoadingBubble from '../components/MessageLoadingBubble.vue';
 import WeatherToolCard from '../components/WeatherToolCard.vue';
 
 const DEFAULT_PROMPT = '帮我查一下北京天气，并说明工具调用过程。';
-const USER_GROUP_ID = 'turn:user:autogen-weather';
+const DEMO_CONVERSATION_ID = 'session:demo:autogen-weather';
 
 /**
  * 去掉 URL 末尾多余的 `/`，方便后面安全拼接路径。
@@ -40,19 +35,6 @@ function buildAutoGenEndpoint(): string {
   return `${resolveBackendBaseUrl()}/api/stream/autogen`;
 }
 
-/**
- * 预先插入一条用户消息，方便观察 assistant 回复和工具卡片。
- */
-function seedConversation(input: string, runtime: AgentRuntime) {
-  runtime.apply(cmd.message.text({
-    id: 'block:user:autogen-weather',
-    role: 'user',
-    text: input,
-    groupId: USER_GROUP_ID,
-    at: Date.now()
-  }));
-}
-
 const prompt = ref(DEFAULT_PROMPT);
 const endpoint = buildAutoGenEndpoint();
 const autoGenTools = defineAutoGenToolComponents({
@@ -63,85 +45,38 @@ const autoGenTools = defineAutoGenToolComponents({
   }
 });
 
-const autoGenPreset = defineAutoGenPreset<string>({
-  protocolOptions: {
-    defaultRunTitle: 'AutoGen 助手',
-    toolRenderer: autoGenTools.toolRenderer
-  },
+/**
+ * AutoGen demo 直接走更短的 `useAutoGenChatSession()`：
+ * - 不再手写 preset + transport + bridge start/stop
+ * - 不再手写 user message seed
+ * - 不再手写 regenerate 接线
+ */
+const {
+  runtime,
+  surface,
+  send,
+  busy,
+  statusLabel,
+  transportError,
+  sessionId: backendSessionId
+} = useAutoGenChatSession<string>({
+  source: endpoint,
+  input: prompt,
+  conversationId: DEMO_CONVERSATION_ID,
+  title: 'AutoGen 助手',
+  tools: autoGenTools,
   surface: {
     draftPlaceholder: {
       component: MessageLoadingBubble,
       props: {
         label: 'AutoGen 正在思考'
       }
-    },
-    renderers: autoGenTools.renderers
+    }
   }
 });
-
-const { runtime, bridge, surface } = autoGenPreset.createSession({
-  bridge: {
-    transport: createJsonSseTransport<AutoGenEvent, string>({
-      request: {
-        body() {
-          return {
-            message: prompt.value
-          };
-        }
-      }
-    })
-  }
-});
-
-const {
-  start,
-  stop,
-  reset,
-  status,
-  error
-} = useBridgeTransport({
-  bridge,
-  source: endpoint
-});
-
-/**
- * 生成当前 bridge 状态对应的简短文案。
- */
-const statusLabel = computed(() => {
-  switch (status.value.phase) {
-    case 'consuming':
-      return '连接中';
-    case 'errored':
-      return '连接失败';
-    case 'closed':
-      return '已关闭';
-    default:
-      return '待命';
-  }
-});
-
-/**
- * 判断当前是否仍在消费 SSE 数据流。
- */
-const busy = computed(() => status.value.phase === 'consuming');
-
-/**
- * 提取页面需要展示的 transport 错误文案。
- */
-const transportError = computed(() => error.value?.message ?? '');
-
-/**
- * 重置当前会话，并重新连接真实 AutoGen backend。
- */
-async function replayDemo() {
-  stop();
-  reset();
-  seedConversation(prompt.value, runtime);
-  await start();
-}
 
 onMounted(() => {
-  replayDemo().catch(() => {
+  send().catch(() => {
     // demo 页面里失败只需要保持当前状态，不需要再额外抛错。
   });
 });
@@ -151,12 +86,12 @@ onMounted(() => {
   <section class="demo-page">
     <header class="demo-page__header">
       <h1>AutoGen 真实 SSE</h1>
-      <p>启动 FastAPI backend 后，这个页面会直接请求真实 `/api/stream/autogen`，然后用 `defineAutoGenPreset()` 把官方 `run_stream()` 事件映射成聊天内容和工具组件。</p>
+      <p>启动 FastAPI backend 后，这个页面会直接请求真实 `/api/stream/autogen`，并使用 `useAutoGenChatSession()` 把官方 `run_stream()` 事件渲染成聊天内容和工具组件。</p>
     </header>
 
     <form
       class="demo-form"
-      @submit.prevent="replayDemo().catch(() => {})"
+      @submit.prevent="send().catch(() => {})"
     >
       <label
         class="demo-form__label"
@@ -177,6 +112,13 @@ onMounted(() => {
         <span class="demo-form__status">{{ statusLabel }}</span>
         <code class="demo-form__endpoint">{{ endpoint }}</code>
       </div>
+
+      <p
+        v-if="backendSessionId"
+        class="demo-form__session"
+      >
+        后端 sessionId：<code>{{ backendSessionId }}</code>
+      </p>
 
       <button
         type="submit"
@@ -252,8 +194,17 @@ onMounted(() => {
   border-radius: 14px;
   padding: 12px 14px;
   resize: vertical;
-  font: inherit;
+  background: #f8fafc;
   color: #0f172a;
+  font: inherit;
+  line-height: 1.7;
+}
+
+.demo-form__session {
+  margin: 12px 0 0;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.7;
 }
 
 .demo-form__meta {

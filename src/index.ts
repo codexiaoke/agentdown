@@ -36,30 +36,44 @@ export {
 export { createSseRequestInitResolver, useSse } from './composables/useSse';
 export {
   createAgnoAdapter,
+  createAgnoChatIds,
   createAgnoProtocol,
   createAgnoSseTransport,
   defineAgnoEventComponents,
   defineAgnoPreset,
-  defineAgnoToolComponents
+  defineAgnoToolComponents,
+  useAgnoChatSession
 } from './adapters/agno';
 export {
+  createCrewAIAdapter,
+  createCrewAIChatIds,
   createCrewAIProtocol,
+  createCrewAISseTransport,
   defineCrewAIEventComponents,
   defineCrewAIPreset,
   defineCrewAIToolComponents,
-  parseCrewAISseMessage
+  parseCrewAISseMessage,
+  useCrewAIChatSession
 } from './adapters/crewai';
 export {
+  createAutoGenAdapter,
+  createAutoGenChatIds,
   createAutoGenProtocol,
+  createAutoGenSseTransport,
   defineAutoGenEventComponents,
   defineAutoGenPreset,
-  defineAutoGenToolComponents
+  defineAutoGenToolComponents,
+  useAutoGenChatSession
 } from './adapters/autogen';
 export {
+  createLangChainAdapter,
+  createLangChainChatIds,
   createLangChainProtocol,
+  createLangChainSseTransport,
   defineLangChainEventComponents,
   defineLangChainPreset,
-  defineLangChainToolComponents
+  defineLangChainToolComponents,
+  useLangChainChatSession
 } from './adapters/langchain';
 export { createEventComponentRegistry, eventToBlock } from './adapters/eventComponentRegistry';
 export { createToolNameRegistry, toolByName } from './adapters/toolNameRegistry';
@@ -199,6 +213,11 @@ export type {
 } from './composables/useRuntimeTranscript';
 export type {
   AgnoAdapterOptions,
+  AgnoChatAssistantActionsOptions,
+  AgnoChatIdFactory,
+  AgnoChatIds,
+  AgnoChatSessionIdOptions,
+  AgnoChatUserMessageOptions,
   AgnoBlockIdResolver,
   AgnoConversationIdResolver,
   AgnoEvent,
@@ -213,7 +232,9 @@ export type {
   AgnoTurnIdResolver,
   AgnoToolPayload,
   AgnoToolRendererContext,
-  AgnoToolRendererResolver
+  AgnoToolRendererResolver,
+  UseAgnoChatSessionOptions,
+  UseAgnoChatSessionResult
 } from './adapters/agno';
 export type {
   EventComponentBlockInput,
@@ -238,7 +259,13 @@ export type {
   ToolNameRegistrySharedOptions
 } from './adapters/toolNameRegistry';
 export type {
+  CrewAIAdapterOptions,
   CrewAIBlockIdResolver,
+  CrewAIChatAssistantActionsOptions,
+  CrewAIChatIdFactory,
+  CrewAIChatIds,
+  CrewAIChatSessionIdOptions,
+  CrewAIChatUserMessageOptions,
   CrewAIChunkType,
   CrewAIConversationIdResolver,
   CrewAIEvent,
@@ -249,46 +276,70 @@ export type {
   CrewAIMessageToolFunction,
   CrewAIPresetOptions,
   CrewAIProtocolOptions,
+  CrewAIRequestBody,
   CrewAIRunTitleResolver,
+  CrewAISseTransportOptions,
   CrewAIStreamIdResolver,
   CrewAITurnIdResolver,
   CrewAIStreamingToolCall,
   CrewAITaskOutput,
   CrewAIToolPayload,
   CrewAIToolRendererContext,
-  CrewAIToolRendererResolver
+  CrewAIToolRendererResolver,
+  UseCrewAIChatSessionOptions,
+  UseCrewAIChatSessionResult
 } from './adapters/crewai';
 export type {
+  AutoGenAdapterOptions,
   AutoGenBlockIdResolver,
+  AutoGenChatAssistantActionsOptions,
+  AutoGenChatIdFactory,
+  AutoGenChatIds,
+  AutoGenChatSessionIdOptions,
+  AutoGenChatUserMessageOptions,
   AutoGenConversationIdResolver,
   AutoGenEvent,
   AutoGenGroupIdResolver,
   AutoGenMessageIdResolver,
   AutoGenPresetOptions,
   AutoGenProtocolOptions,
+  AutoGenRequestBody,
   AutoGenRunTitleResolver,
+  AutoGenSseTransportOptions,
   AutoGenStreamIdResolver,
   AutoGenTurnIdResolver,
   AutoGenToolCall,
   AutoGenToolPayload,
   AutoGenToolRendererContext,
   AutoGenToolRendererResolver,
-  AutoGenToolResult
+  AutoGenToolResult,
+  UseAutoGenChatSessionOptions,
+  UseAutoGenChatSessionResult
 } from './adapters/autogen';
 export type {
+  LangChainAdapterOptions,
   LangChainBlockIdResolver,
+  LangChainChatAssistantActionsOptions,
+  LangChainChatIdFactory,
+  LangChainChatIds,
+  LangChainChatSessionIdOptions,
+  LangChainChatUserMessageOptions,
   LangChainConversationIdResolver,
   LangChainEvent,
   LangChainGroupIdResolver,
   LangChainMessageIdResolver,
   LangChainPresetOptions,
   LangChainProtocolOptions,
+  LangChainRequestBody,
   LangChainRunTitleResolver,
+  LangChainSseTransportOptions,
   LangChainStreamIdResolver,
   LangChainTurnIdResolver,
   LangChainToolPayload,
   LangChainToolRendererContext,
-  LangChainToolRendererResolver
+  LangChainToolRendererResolver,
+  UseLangChainChatSessionOptions,
+  UseLangChainChatSessionResult
 } from './adapters/langchain';
 export type {
   UseRuntimeReplayPlayerResult,

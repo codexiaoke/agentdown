@@ -1,169 +1,118 @@
 import { describe, expect, it } from 'vitest';
-import { createMarkdownAssembler } from '../runtime/assemblers';
-import { createBridge } from '../runtime/createBridge';
-import { createLangChainProtocol, type LangChainEvent } from './langchain';
+import { effectScope, nextTick, ref } from 'vue';
+import {
+  createLangChainChatIds,
+  type LangChainEvent,
+  useLangChainChatSession
+} from './langchain';
 
 /**
- * 创建一个用于测试 LangChain adapter 的同步 bridge。
+ * 把一组 LangChain 事件包装成最小可用的 SSE Response。
  */
-function createLangChainTestBridge() {
-  return createBridge<LangChainEvent>({
-    scheduler: 'sync',
-    protocol: createLangChainProtocol({
-      toolRenderer: ({ tool }) => (
-        tool?.name === 'lookup_weather'
-          ? 'tool.weather'
-          : 'tool'
-      )
-    }),
-    assemblers: {
-      markdown: createMarkdownAssembler()
+function createLangChainSseResponse(events: LangChainEvent[]): Response {
+  const encoder = new TextEncoder();
+
+  return new Response(new ReadableStream({
+    start(controller) {
+      for (const event of events) {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+      }
+
+      controller.close();
+    }
+  }), {
+    headers: {
+      'Content-Type': 'text/event-stream'
     }
   });
 }
 
-describe('createLangChainProtocol', () => {
-  it('maps a real langchain tool flow into assistant segments and a tool card', () => {
-    const bridge = createLangChainTestBridge();
+describe('useLangChainChatSession', () => {
+  it('seeds a user message, captures sessionId and exposes a shorter send API', async () => {
+    const scope = effectScope();
+    const prompt = ref('帮我查一下北京天气，并说明工具调用过程。');
+    let requestCount = 0;
+    const sessionState = scope.run(() => useLangChainChatSession<string>({
+      source: 'http://langchain.test/api/stream',
+      input: prompt,
+      conversationId: 'session:demo:langchain-chat',
+      title: 'LangChain 助手',
+      transport: {
+        fetch: (async () => {
+          requestCount += 1;
 
-    bridge.push([
-      {
-        event: 'on_chain_start',
-        run_id: 'root-run-1',
-        name: 'LangGraph',
-        parent_ids: []
-      },
-      {
-        event: 'on_chat_model_stream',
-        run_id: 'model-run-1',
-        name: 'ChatDeepSeek',
-        parent_ids: ['root-run-1', 'model-step-1'],
-        data: {
-          chunk: {
-            content: '我来帮您查询北京的天气。'
-          }
-        }
-      },
-      {
-        event: 'on_tool_start',
-        run_id: 'tool-run-1',
-        name: 'lookup_weather',
-        parent_ids: ['root-run-1', 'tools-step-1'],
-        data: {
-          input: {
-            city: '北京'
-          }
-        }
-      },
-      {
-        event: 'on_tool_end',
-        run_id: 'tool-run-1',
-        name: 'lookup_weather',
-        parent_ids: ['root-run-1', 'tools-step-1'],
-        data: {
-          input: {
-            city: '北京'
-          },
-          output: {
-            content: '{"city":"北京","condition":"局部多云","tempC":15.1,"humidity":12}',
-            tool_call_id: 'call-weather-1'
-          }
-        }
-      },
-      {
-        event: 'on_chat_model_stream',
-        run_id: 'model-run-2',
-        name: 'ChatDeepSeek',
-        parent_ids: ['root-run-1', 'model-step-2'],
-        data: {
-          chunk: {
-            content: '根据查询结果，北京当前为局部多云。'
-          }
-        }
-      },
-      {
-        event: 'on_chain_end',
-        run_id: 'root-run-1',
-        name: 'LangGraph',
-        parent_ids: []
+          return createLangChainSseResponse([
+            {
+              event: 'on_chain_start',
+              run_id: `run-langchain-${requestCount}`,
+              name: 'LangGraph',
+              metadata: {
+                session_id: `langchain-session-${requestCount}`
+              }
+            },
+            {
+              event: 'on_chat_model_stream',
+              run_id: `stream-${requestCount}`,
+              parent_ids: [`run-langchain-${requestCount}`],
+              data: {
+                chunk: {
+                  content: requestCount === 1
+                    ? '我来为你查询天气'
+                    : '我继续为你查询天气'
+                }
+              }
+            },
+            {
+              event: 'on_chain_end',
+              run_id: `run-langchain-${requestCount}`,
+              name: 'LangGraph'
+            }
+          ]);
+        }) as typeof fetch
       }
-    ]);
-    bridge.flush('langchain-test');
+    }));
 
-    const snapshot = bridge.runtime.snapshot();
-    const runNode = snapshot.nodes.find((node) => node.id === 'root-run-1');
-    const toolNode = snapshot.nodes.find((node) => node.id === 'tool-run-1');
-    const orderedRenderableBlocks = snapshot.blocks.filter((block) => block.type === 'text' || block.type === 'tool');
+    if (!sessionState) {
+      throw new Error('Failed to create LangChain chat session.');
+    }
 
-    expect(runNode?.status).toBe('done');
-    expect(toolNode?.status).toBe('done');
-    expect(toolNode?.data.input).toEqual({
-      city: '北京'
-    });
-    expect(toolNode?.data.result).toEqual({
-      city: '北京',
-      condition: '局部多云',
-      tempC: 15.1,
-      humidity: 12
-    });
-    expect(orderedRenderableBlocks).toHaveLength(3);
-    expect(orderedRenderableBlocks[0]).toMatchObject({
-      type: 'text',
-      nodeId: 'root-run-1',
-      content: '我来帮您查询北京的天气。'
-    });
-    expect(orderedRenderableBlocks[1]).toMatchObject({
-      type: 'tool',
-      nodeId: 'tool-run-1',
-      renderer: 'tool.weather'
-    });
-    expect(orderedRenderableBlocks[2]).toMatchObject({
-      type: 'text',
-      nodeId: 'root-run-1',
-      content: '根据查询结果，北京当前为局部多云。'
-    });
-  });
+    await sessionState.send();
+    await nextTick();
 
-  it('creates a synthetic tool start when only on_tool_end is observed', () => {
-    const bridge = createLangChainTestBridge();
+    const snapshot = sessionState.runtime.snapshot();
+    const userBlock = snapshot.blocks.find((block) => block.messageId === sessionState.chatIds.value?.userMessageId);
+    const assistantBlock = snapshot.blocks.find((block) => block.messageId === sessionState.chatIds.value?.assistantMessageId);
+    const assistantActions = sessionState.surface.value.messageActions?.assistant;
+    const resolvedAssistantActions = assistantActions === false
+      ? undefined
+      : assistantActions;
 
-    bridge.push([
-      {
-        event: 'on_chain_start',
-        run_id: 'root-run-2',
-        name: 'LangGraph',
-        parent_ids: []
-      },
-      {
-        event: 'on_tool_end',
-        run_id: 'tool-run-2',
-        name: 'lookup_weather',
-        parent_ids: ['root-run-2', 'tools-step-1'],
-        data: {
-          output: {
-            content: '{"city":"上海","condition":"多云"}'
-          }
-        }
-      },
-      {
-        event: 'on_chain_end',
-        run_id: 'root-run-2',
-        name: 'LangGraph',
-        parent_ids: []
-      }
-    ]);
-    bridge.flush('langchain-tool-fallback');
+    expect(sessionState.sessionId.value).toBe('langchain-session-1');
+    expect(sessionState.busy.value).toBe(false);
+    expect(userBlock?.content).toBe('帮我查一下北京天气，并说明工具调用过程。');
+    expect(assistantBlock?.content).toBe('我来为你查询天气');
+    expect(resolvedAssistantActions?.actions?.some((action) => {
+      const key = typeof action === 'string'
+        ? action
+        : action.key;
 
-    const snapshot = bridge.runtime.snapshot();
-    const toolNode = snapshot.nodes.find((node) => node.id === 'tool-run-2');
-    const toolBlock = snapshot.blocks.find((block) => block.nodeId === 'tool-run-2');
-
-    expect(toolNode?.type).toBe('tool');
-    expect(toolNode?.status).toBe('done');
-    expect(toolNode?.data.result).toEqual({
-      city: '上海',
-      condition: '多云'
+      return key === 'regenerate';
+    })).toBe(true);
+    expect(createLangChainChatIds({
+      conversationId: 'session:demo:langchain-chat',
+      at: 100
+    })).toEqual({
+      conversationId: 'session:demo:langchain-chat',
+      turnId: 'turn:session:demo:langchain-chat:100',
+      userMessageId: 'message:user:session:demo:langchain-chat:100',
+      assistantMessageId: 'message:assistant:session:demo:langchain-chat:100'
     });
-    expect(toolBlock?.renderer).toBe('tool.weather');
+
+    await sessionState.send('再查一遍');
+    await nextTick();
+
+    expect(sessionState.sessionId.value).toBe('langchain-session-1');
+
+    scope.stop();
   });
 });
