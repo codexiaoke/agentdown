@@ -1,5 +1,6 @@
-import { createJsonSseTransport, type FetchTransportSource, type JsonRequestOptions, type JsonSseTransportOptions, type TransportResolvable } from '../../runtime/transports';
+import type { FetchTransportSource, JsonRequestOptions, JsonSseTransportOptions, TransportResolvable } from '../../runtime/transports';
 import type { RuntimeData } from '../../runtime/types';
+import { createFrameworkJsonSseTransport } from '../shared/jsonSseTransportFactory';
 import { parseCrewAISseMessage } from './packet';
 import type { CrewAIEvent } from './types';
 
@@ -26,24 +27,6 @@ export interface CrewAISseTransportOptions<
 }
 
 /**
- * 解析一个可直接传值或按 source 延迟求值的 CrewAI 配置项。
- */
-async function resolveCrewAIValue<TSource, TValue>(
-  source: TSource,
-  value: TransportResolvable<TSource, TValue> | undefined
-): Promise<TValue | undefined> {
-  if (value === undefined) {
-    return undefined;
-  }
-
-  if (typeof value === 'function') {
-    return (value as (source: TSource) => Promise<TValue> | TValue)(source);
-  }
-
-  return value;
-}
-
-/**
  * 创建一个更贴近 CrewAI backend 请求习惯的 SSE transport。
  *
  * 默认会自动套上 `parseCrewAISseMessage()`，这样显式 `event:` 名称也能被保留下来。
@@ -51,26 +34,8 @@ async function resolveCrewAIValue<TSource, TValue>(
 export function createCrewAISseTransport<
   TSource = FetchTransportSource
 >(options: CrewAISseTransportOptions<TSource> = {}) {
-  return createJsonSseTransport<CrewAIEvent, TSource, CrewAIRequestBody>({
-    ...(options.fetch ? { fetch: options.fetch } : {}),
-    parse: options.parse ?? parseCrewAISseMessage,
-    ...(options.init ? { init: options.init } : {}),
-    request: {
-      method: options.request?.method ?? 'POST',
-      ...(options.request?.headers ? { headers: options.request.headers } : {}),
-      body: async (source: TSource) => {
-        const resolvedBody = await resolveCrewAIValue(source, options.body);
-        const resolvedMessage = await resolveCrewAIValue(source, options.message);
-
-        if (resolvedBody === undefined && resolvedMessage === undefined) {
-          return undefined;
-        }
-
-        return {
-          ...(resolvedBody ?? {}),
-          ...(resolvedMessage !== undefined ? { message: resolvedMessage } : {})
-        };
-      }
-    }
+  return createFrameworkJsonSseTransport<CrewAIEvent, TSource, CrewAIRequestBody, CrewAISseTransportOptions<TSource>>({
+    options,
+    parse: parseCrewAISseMessage
   });
 }

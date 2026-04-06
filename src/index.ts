@@ -20,6 +20,20 @@ export { defaultMarkdownBuiltinComponents } from './components/defaultMarkdownCo
 export { createMarkdownEngine } from './core/createMarkdownEngine';
 export { parseMarkdown } from './core/parseMarkdown';
 export { useAdapterSession } from './composables/useAdapterSession';
+export {
+  agnoChatFramework,
+  autoGenChatFramework,
+  builtinAgentChatFrameworks,
+  createAgentChatFrameworkRegistry,
+  crewAIChatFramework,
+  defineAgentChatFramework,
+  langChainChatFramework,
+  normalizeAgentChatEventActionDefinitions,
+  normalizeAgentChatEventComponentDefinitions,
+  normalizeAgentChatToolDefinitions,
+  resolveAgentChatFrameworkDriver,
+  useAgentChat
+} from './composables/useAgentChat';
 export { useAgentSession } from './composables/useAgentSession';
 export {
   useRuntimeBlock,
@@ -39,6 +53,7 @@ export {
   createAgnoChatIds,
   createAgnoProtocol,
   createAgnoSseTransport,
+  defineAgnoEventActions,
   defineAgnoEventComponents,
   defineAgnoPreset,
   defineAgnoToolComponents,
@@ -49,6 +64,7 @@ export {
   createCrewAIChatIds,
   createCrewAIProtocol,
   createCrewAISseTransport,
+  defineCrewAIEventActions,
   defineCrewAIEventComponents,
   defineCrewAIPreset,
   defineCrewAIToolComponents,
@@ -60,6 +76,7 @@ export {
   createAutoGenChatIds,
   createAutoGenProtocol,
   createAutoGenSseTransport,
+  defineAutoGenEventActions,
   defineAutoGenEventComponents,
   defineAutoGenPreset,
   defineAutoGenToolComponents,
@@ -70,6 +87,7 @@ export {
   createLangChainChatIds,
   createLangChainProtocol,
   createLangChainSseTransport,
+  defineLangChainEventActions,
   defineLangChainEventComponents,
   defineLangChainPreset,
   defineLangChainToolComponents,
@@ -163,6 +181,29 @@ export type {
   MarkdownThoughtBlock,
   ParseMarkdownOptions
 } from './core/types';
+export type {
+  AgentChatEventActionInput,
+  AgentChatEventActionMap,
+  AgentChatBuiltinFrameworkId,
+  AgentChatEventComponentInput,
+  AgentChatEventComponentMap,
+  AgentChatFramework,
+  AgentChatFrameworkDriver,
+  AgentChatFrameworkRegistry,
+  AgentChatFrameworkSessionOptions,
+  AgentChatToolDefinitionInput,
+  AgentChatToolMap,
+  InferAgentChatSource,
+  ResolveUseAgentChatResult,
+  UseAgentChatAgnoOptions,
+  UseAgentChatAutoGenOptions,
+  UseAgentChatCustomOptions,
+  UseAgentChatCrewAIOptions,
+  UseAgentChatFrameworkOptions,
+  UseAgentChatLangChainOptions,
+  UseAgentChatOptions,
+  UseAgentChatResult
+} from './composables/useAgentChat';
 export type {
   AdapterSessionTranscriptSource,
   UseAdapterSessionOptions,

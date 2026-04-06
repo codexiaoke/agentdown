@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { effectScope, nextTick, ref } from 'vue';
+import { effectScope, nextTick, ref, type Component } from 'vue';
 import { createMarkdownAssembler } from '../runtime/assemblers';
 import { createBridge } from '../runtime/createBridge';
 import {
+  createAutoGenAdapter,
   createAutoGenChatIds,
   createAutoGenProtocol,
+  createAutoGenSseTransport,
+  defineAutoGenEventComponents,
+  defineAutoGenToolComponents,
   type AutoGenEvent,
   useAutoGenChatSession
 } from './autogen';
@@ -187,6 +191,145 @@ describe('createAutoGenProtocol', () => {
       condition: '多云'
     });
     expect(toolBlock?.renderer).toBe('tool.weather');
+  });
+
+  it('creates a ready-to-use AutoGen adapter by composing tools, events and surface renderers', async () => {
+    const WeatherToolCard = {} as Component;
+    const WeatherEventCard = {} as Component;
+    const tools = defineAutoGenToolComponents({
+      'tool.weather': {
+        match: 'lookup_weather',
+        component: WeatherToolCard
+      }
+    });
+    const events = defineAutoGenEventComponents({
+      'event.weather-summary': {
+        on: 'weather_card',
+        component: WeatherEventCard,
+        resolve: ({ event }) => ({
+          id: 'event:block:weather-summary',
+          mode: 'upsert',
+          groupId: 'turn:autogen-adapter',
+          data: {
+            payload: (event as AutoGenEvent).content
+          }
+        })
+      }
+    });
+    const adapter = createAutoGenAdapter({
+      title: '天气助手',
+      tools,
+      events
+    });
+    const session = adapter.createSession({
+      source: [
+        {
+          type: 'ModelClientStreamingChunkEvent',
+          id: 'chunk-1',
+          source: 'assistant',
+          full_message_id: 'assistant-msg-5',
+          content: '我来为你查询天气。'
+        },
+        {
+          type: 'ToolCallRequestEvent',
+          id: 'tool-request-5',
+          source: 'assistant',
+          content: [
+            {
+              id: 'call-weather-5',
+              name: 'lookup_weather',
+              arguments: '{"city":"北京"}'
+            }
+          ]
+        },
+        {
+          type: 'ToolCallExecutionEvent',
+          id: 'tool-execution-5',
+          source: 'assistant',
+          content: [
+            {
+              call_id: 'call-weather-5',
+              name: 'lookup_weather',
+              content: '{"city":"北京","condition":"晴"}',
+              is_error: false
+            }
+          ]
+        },
+        {
+          type: 'weather_card',
+          id: 'event-5',
+          source: 'assistant',
+          content: {
+            city: '北京',
+            condition: '晴'
+          }
+        },
+        {
+          type: 'TaskResult',
+          id: 'task-result-5',
+          messages: []
+        }
+      ]
+    });
+
+    await session.connect();
+
+    const snapshot = session.runtime.snapshot();
+    const toolBlock = snapshot.blocks.find((block) => block.nodeId === 'call-weather-5');
+    const eventBlock = snapshot.blocks.find((block) => block.id === 'event:block:weather-summary');
+
+    expect(adapter.name).toBe('autogen');
+    expect(session.surface.renderers?.['tool.weather']).toBe(WeatherToolCard);
+    expect(session.surface.renderers?.['event.weather-summary']).toBe(WeatherEventCard);
+    expect(snapshot.nodes.find((node) => node.type === 'run')?.title).toBe('天气助手');
+    expect(toolBlock?.renderer).toBe('tool.weather');
+    expect(eventBlock).toMatchObject({
+      renderer: 'event.weather-summary'
+    });
+    expect(eventBlock?.data.payload).toEqual({
+      city: '北京',
+      condition: '晴'
+    });
+  });
+
+  it('provides a compact AutoGen SSE transport helper for backend requests', async () => {
+    let capturedInit: RequestInit | undefined;
+    const transport = createAutoGenSseTransport<string>({
+      fetch: async (_source, init) => {
+        capturedInit = init;
+
+        return new Response('data: {"type":"TaskResult","id":"task-helper","messages":[]}\n\n', {
+          status: 200,
+          headers: {
+            'Content-Type': 'text/event-stream'
+          }
+        });
+      },
+      message(source) {
+        return `ask:${source}`;
+      },
+      body: {
+        city: '北京'
+      }
+    });
+    const packets: AutoGenEvent[] = [];
+
+    for await (const packet of transport.connect('/api/stream/autogen', {
+      signal: new AbortController().signal
+    })) {
+      packets.push(packet);
+    }
+
+    expect(capturedInit?.method).toBe('POST');
+    expect(new Headers(capturedInit?.headers).get('Content-Type')).toBe('application/json');
+    expect(capturedInit?.body).toBe('{"city":"北京","message":"ask:/api/stream/autogen"}');
+    expect(packets).toEqual([
+      {
+        type: 'TaskResult',
+        id: 'task-helper',
+        messages: []
+      }
+    ]);
   });
 });
 

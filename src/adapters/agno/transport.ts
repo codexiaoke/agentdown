@@ -1,5 +1,6 @@
-import { createJsonSseTransport, type FetchTransportSource, type JsonRequestOptions, type JsonSseTransportOptions, type TransportResolvable } from '../../runtime/transports';
+import type { FetchTransportSource, JsonRequestOptions, JsonSseTransportOptions, TransportResolvable } from '../../runtime/transports';
 import type { RuntimeData } from '../../runtime/types';
+import { createFrameworkJsonSseTransport } from '../shared/jsonSseTransportFactory';
 import type { AgnoEvent } from './types';
 
 /**
@@ -29,24 +30,6 @@ export interface AgnoSseTransportOptions<
   body?: TransportResolvable<TSource, RuntimeData | undefined>;
   /** 少数场景下覆写 method / headers 等请求细节。 */
   request?: Omit<JsonRequestOptions<TSource, AgnoRequestBody>, 'body'>;
-}
-
-/**
- * 解析一个可直接传值或按 source 延迟求值的 Agno 配置项。
- */
-async function resolveAgnoValue<TSource, TValue>(
-  source: TSource,
-  value: TransportResolvable<TSource, TValue> | undefined
-): Promise<TValue | undefined> {
-  if (value === undefined) {
-    return undefined;
-  }
-
-  if (typeof value === 'function') {
-    return (value as (source: TSource) => Promise<TValue> | TValue)(source);
-  }
-
-  return value;
 }
 
 /**
@@ -82,26 +65,7 @@ async function resolveAgnoValue<TSource, TValue>(
 export function createAgnoSseTransport<
   TSource = FetchTransportSource
 >(options: AgnoSseTransportOptions<TSource> = {}) {
-  return createJsonSseTransport<AgnoEvent, TSource, AgnoRequestBody>({
-    ...(options.fetch ? { fetch: options.fetch } : {}),
-    ...(options.parse ? { parse: options.parse } : {}),
-    ...(options.init ? { init: options.init } : {}),
-    request: {
-      method: options.request?.method ?? 'POST',
-      ...(options.request?.headers ? { headers: options.request.headers } : {}),
-      body: async (source: TSource) => {
-        const resolvedBody = await resolveAgnoValue(source, options.body);
-        const resolvedMessage = await resolveAgnoValue(source, options.message);
-
-        if (resolvedBody === undefined && resolvedMessage === undefined) {
-          return undefined;
-        }
-
-        return {
-          ...(resolvedBody ?? {}),
-          ...(resolvedMessage !== undefined ? { message: resolvedMessage } : {})
-        };
-      }
-    }
+  return createFrameworkJsonSseTransport<AgnoEvent, TSource, AgnoRequestBody, AgnoSseTransportOptions<TSource>>({
+    options
   });
 }

@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
 import {
-  defineLangChainToolComponents,
   RunSurface,
-  useLangChainChatSession
+  useAgentChat
 } from '../../index';
 import MessageLoadingBubble from '../components/MessageLoadingBubble.vue';
 import WeatherToolCard from '../components/WeatherToolCard.vue';
@@ -37,19 +36,11 @@ function buildLangChainEndpoint(): string {
 
 const prompt = ref(DEFAULT_PROMPT);
 const endpoint = buildLangChainEndpoint();
-const langChainTools = defineLangChainToolComponents({
-  'tool.weather': {
-    match: ['weather', '天气'],
-    mode: 'includes',
-    component: WeatherToolCard
-  }
-});
 
 /**
- * LangChain demo 现在也直接走 `useLangChainChatSession()`：
- * - 不再手写 preset + transport + bridge start/stop
- * - 不再手写 user message seed
- * - 不再手写 regenerate 接线
+ * LangChain demo 现在直接走统一入口 `useAgentChat()`：
+ * - 只需要指定 `framework: 'langchain'`
+ * - `tools` 可以直接写成对象简写
  */
 const {
   runtime,
@@ -59,12 +50,15 @@ const {
   statusLabel,
   transportError,
   sessionId: backendSessionId
-} = useLangChainChatSession<string>({
+} = useAgentChat<string>({
+  framework: 'langchain',
   source: endpoint,
   input: prompt,
   conversationId: DEMO_CONVERSATION_ID,
   title: 'LangChain 助手',
-  tools: langChainTools,
+  tools: {
+    lookup_weather: WeatherToolCard
+  },
   surface: {
     draftPlaceholder: {
       component: MessageLoadingBubble,
@@ -86,7 +80,7 @@ onMounted(() => {
   <section class="demo-page">
     <header class="demo-page__header">
       <h1>LangChain 真实 SSE</h1>
-      <p>启动 FastAPI backend 后，这个页面会直接请求真实 `/api/stream/langchain`，并使用 `useLangChainChatSession()` 把官方 `astream_events()` 渲染成聊天内容和工具组件。</p>
+      <p>启动 FastAPI backend 后，这个页面会直接请求真实 `/api/stream/langchain`，并使用统一入口 `useAgentChat()` 把官方 `astream_events()` 渲染成聊天内容和工具组件。</p>
     </header>
 
     <form

@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { effectScope, nextTick, ref } from 'vue';
+import { effectScope, nextTick, ref, type Component } from 'vue';
 import { createMarkdownAssembler } from '../runtime/assemblers';
 import { createBridge } from '../runtime/createBridge';
 import {
+  createCrewAIAdapter,
   createCrewAIChatIds,
   createCrewAIProtocol,
+  createCrewAISseTransport,
+  defineCrewAIEventComponents,
+  defineCrewAIToolComponents,
   type CrewAIEvent,
   useCrewAIChatSession
 } from './crewai';
@@ -211,6 +215,165 @@ describe('createCrewAIProtocol', () => {
       type: 'text',
       content: '上海当前天气：多云，温度21°C。'
     });
+  });
+
+  it('creates a ready-to-use CrewAI adapter by composing tools, events and surface renderers', async () => {
+    const WeatherToolCard = {} as Component;
+    const WeatherEventCard = {} as Component;
+    const tools = defineCrewAIToolComponents({
+      'tool.weather': {
+        match: 'lookup_weather',
+        component: WeatherToolCard
+      }
+    });
+    const events = defineCrewAIEventComponents({
+      'event.weather-summary': {
+        on: 'weather_card',
+        component: WeatherEventCard,
+        resolve: ({ event }) => ({
+          id: 'event:block:weather-summary',
+          mode: 'upsert',
+          groupId: 'turn:agent-2',
+          data: {
+            payload: (event as CrewAIEvent).content
+          }
+        })
+      }
+    });
+    const adapter = createCrewAIAdapter({
+      title: '天气助手',
+      tools,
+      events
+    });
+    const session = adapter.createSession({
+      source: [
+        {
+          agent_id: 'agent-2',
+          agent_role: 'Weather Researcher',
+          chunk_type: {
+            _value_: 'text'
+          },
+          content: '我来为你查询天气。'
+        },
+        {
+          agent_id: 'agent-2',
+          agent_role: 'Weather Researcher',
+          chunk_type: {
+            _value_: 'tool_call'
+          },
+          content: '',
+          tool_call: {
+            tool_id: 'call-weather-3',
+            tool_name: 'lookup_weather',
+            arguments: '{"city":"北京"}'
+          }
+        },
+        {
+          event: 'weather_card',
+          type: 'weather_card',
+          content: {
+            city: '北京',
+            condition: '晴'
+          }
+        },
+        {
+          event: 'CrewOutput',
+          type: 'CrewOutput',
+          raw: '北京天气晴。',
+          tasks_output: [
+            {
+              agent: 'Weather Researcher',
+              messages: [
+                {
+                  role: 'assistant',
+                  content: '',
+                  tool_calls: [
+                    {
+                      id: 'call-weather-3',
+                      type: 'function',
+                      function: {
+                        name: 'lookup_weather',
+                        arguments: '{"city":"北京"}'
+                      }
+                    }
+                  ]
+                },
+                {
+                  role: 'tool',
+                  name: 'lookup_weather',
+                  tool_call_id: 'call-weather-3',
+                  content: '{"city":"北京","condition":"晴"}'
+                },
+                {
+                  role: 'assistant',
+                  content: '北京天气晴。'
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    });
+
+    await session.connect();
+
+    const snapshot = session.runtime.snapshot();
+    const toolBlock = snapshot.blocks.find((block) => block.nodeId === 'call-weather-3');
+    const eventBlock = snapshot.blocks.find((block) => block.id === 'event:block:weather-summary');
+
+    expect(adapter.name).toBe('crewai');
+    expect(session.surface.renderers?.['tool.weather']).toBe(WeatherToolCard);
+    expect(session.surface.renderers?.['event.weather-summary']).toBe(WeatherEventCard);
+    expect(snapshot.nodes.find((node) => node.id === 'agent-2')?.title).toBe('天气助手');
+    expect(toolBlock?.renderer).toBe('tool.weather');
+    expect(eventBlock).toMatchObject({
+      renderer: 'event.weather-summary'
+    });
+    expect(eventBlock?.data.payload).toEqual({
+      city: '北京',
+      condition: '晴'
+    });
+  });
+
+  it('provides a compact CrewAI SSE transport helper for backend requests', async () => {
+    let capturedInit: RequestInit | undefined;
+    const transport = createCrewAISseTransport<string>({
+      fetch: async (_source, init) => {
+        capturedInit = init;
+
+        return new Response('event: CrewOutput\ndata: {"type":"CrewOutput","raw":"done","tasks_output":[]}\n\n', {
+          status: 200,
+          headers: {
+            'Content-Type': 'text/event-stream'
+          }
+        });
+      },
+      message(source) {
+        return `ask:${source}`;
+      },
+      body: {
+        city: '北京'
+      }
+    });
+    const packets: CrewAIEvent[] = [];
+
+    for await (const packet of transport.connect('/api/stream/crewai', {
+      signal: new AbortController().signal
+    })) {
+      packets.push(packet);
+    }
+
+    expect(capturedInit?.method).toBe('POST');
+    expect(new Headers(capturedInit?.headers).get('Content-Type')).toBe('application/json');
+    expect(capturedInit?.body).toBe('{"city":"北京","message":"ask:/api/stream/crewai"}');
+    expect(packets).toEqual([
+      {
+        event: 'CrewOutput',
+        type: 'CrewOutput',
+        raw: 'done',
+        tasks_output: []
+      }
+    ]);
   });
 });
 

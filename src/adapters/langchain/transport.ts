@@ -1,5 +1,6 @@
-import { createJsonSseTransport, type FetchTransportSource, type JsonRequestOptions, type JsonSseTransportOptions, type TransportResolvable } from '../../runtime/transports';
+import type { FetchTransportSource, JsonRequestOptions, JsonSseTransportOptions, TransportResolvable } from '../../runtime/transports';
 import type { RuntimeData } from '../../runtime/types';
+import { createFrameworkJsonSseTransport } from '../shared/jsonSseTransportFactory';
 import type { LangChainEvent } from './types';
 
 /**
@@ -30,49 +31,12 @@ export interface LangChainSseTransportOptions<
 }
 
 /**
- * 解析一个可直接传值或按 source 延迟求值的 LangChain 配置项。
- */
-async function resolveLangChainValue<TSource, TValue>(
-  source: TSource,
-  value: TransportResolvable<TSource, TValue> | undefined
-): Promise<TValue | undefined> {
-  if (value === undefined) {
-    return undefined;
-  }
-
-  if (typeof value === 'function') {
-    return (value as (source: TSource) => Promise<TValue> | TValue)(source);
-  }
-
-  return value;
-}
-
-/**
  * 创建一个更贴近 LangChain backend 请求习惯的 SSE transport。
  */
 export function createLangChainSseTransport<
   TSource = FetchTransportSource
 >(options: LangChainSseTransportOptions<TSource> = {}) {
-  return createJsonSseTransport<LangChainEvent, TSource, LangChainRequestBody>({
-    ...(options.fetch ? { fetch: options.fetch } : {}),
-    ...(options.parse ? { parse: options.parse } : {}),
-    ...(options.init ? { init: options.init } : {}),
-    request: {
-      method: options.request?.method ?? 'POST',
-      ...(options.request?.headers ? { headers: options.request.headers } : {}),
-      body: async (source: TSource) => {
-        const resolvedBody = await resolveLangChainValue(source, options.body);
-        const resolvedMessage = await resolveLangChainValue(source, options.message);
-
-        if (resolvedBody === undefined && resolvedMessage === undefined) {
-          return undefined;
-        }
-
-        return {
-          ...(resolvedBody ?? {}),
-          ...(resolvedMessage !== undefined ? { message: resolvedMessage } : {})
-        };
-      }
-    }
+  return createFrameworkJsonSseTransport<LangChainEvent, TSource, LangChainRequestBody, LangChainSseTransportOptions<TSource>>({
+    options
   });
 }

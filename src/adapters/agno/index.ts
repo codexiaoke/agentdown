@@ -8,6 +8,7 @@
 
 export { createAgnoAdapter } from './adapter';
 export { createAgnoChatIds, useAgnoChatSession } from './chat';
+export { defineAgnoEventActions } from './eventActions';
 export { createAgnoProtocol, defineAgnoPreset } from './protocol';
 export { createAgnoSseTransport } from './transport';
 export { defineAgnoEventComponents } from './eventComponents';

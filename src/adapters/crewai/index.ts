@@ -9,6 +9,7 @@
 
 export { createCrewAIAdapter } from './adapter';
 export { createCrewAIChatIds, useCrewAIChatSession } from './chat';
+export { defineCrewAIEventActions } from './eventActions';
 export { parseCrewAISseMessage } from './packet';
 export { createCrewAIProtocol, defineCrewAIPreset } from './protocol';
 export { createCrewAISseTransport } from './transport';

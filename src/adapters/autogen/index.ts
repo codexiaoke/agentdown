@@ -9,6 +9,7 @@
 
 export { createAutoGenAdapter } from './adapter';
 export { createAutoGenChatIds, useAutoGenChatSession } from './chat';
+export { defineAutoGenEventActions } from './eventActions';
 export { createAutoGenProtocol, defineAutoGenPreset } from './protocol';
 export { createAutoGenSseTransport } from './transport';
 export { defineAutoGenEventComponents } from './eventComponents';

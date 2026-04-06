@@ -1,5 +1,6 @@
-import { createJsonSseTransport, type FetchTransportSource, type JsonRequestOptions, type JsonSseTransportOptions, type TransportResolvable } from '../../runtime/transports';
+import type { FetchTransportSource, JsonRequestOptions, JsonSseTransportOptions, TransportResolvable } from '../../runtime/transports';
 import type { RuntimeData } from '../../runtime/types';
+import { createFrameworkJsonSseTransport } from '../shared/jsonSseTransportFactory';
 import type { AutoGenEvent } from './types';
 
 /**
@@ -25,49 +26,12 @@ export interface AutoGenSseTransportOptions<
 }
 
 /**
- * 解析一个可直接传值或按 source 延迟求值的 AutoGen 配置项。
- */
-async function resolveAutoGenValue<TSource, TValue>(
-  source: TSource,
-  value: TransportResolvable<TSource, TValue> | undefined
-): Promise<TValue | undefined> {
-  if (value === undefined) {
-    return undefined;
-  }
-
-  if (typeof value === 'function') {
-    return (value as (source: TSource) => Promise<TValue> | TValue)(source);
-  }
-
-  return value;
-}
-
-/**
  * 创建一个更贴近 AutoGen backend 请求习惯的 SSE transport。
  */
 export function createAutoGenSseTransport<
   TSource = FetchTransportSource
 >(options: AutoGenSseTransportOptions<TSource> = {}) {
-  return createJsonSseTransport<AutoGenEvent, TSource, AutoGenRequestBody>({
-    ...(options.fetch ? { fetch: options.fetch } : {}),
-    ...(options.parse ? { parse: options.parse } : {}),
-    ...(options.init ? { init: options.init } : {}),
-    request: {
-      method: options.request?.method ?? 'POST',
-      ...(options.request?.headers ? { headers: options.request.headers } : {}),
-      body: async (source: TSource) => {
-        const resolvedBody = await resolveAutoGenValue(source, options.body);
-        const resolvedMessage = await resolveAutoGenValue(source, options.message);
-
-        if (resolvedBody === undefined && resolvedMessage === undefined) {
-          return undefined;
-        }
-
-        return {
-          ...(resolvedBody ?? {}),
-          ...(resolvedMessage !== undefined ? { message: resolvedMessage } : {})
-        };
-      }
-    }
+  return createFrameworkJsonSseTransport<AutoGenEvent, TSource, AutoGenRequestBody, AutoGenSseTransportOptions<TSource>>({
+    options
   });
 }

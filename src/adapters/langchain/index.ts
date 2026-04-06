@@ -9,6 +9,7 @@
 
 export { createLangChainAdapter } from './adapter';
 export { createLangChainChatIds, useLangChainChatSession } from './chat';
+export { defineLangChainEventActions } from './eventActions';
 export { createLangChainProtocol, defineLangChainPreset } from './protocol';
 export { createLangChainSseTransport } from './transport';
 export { defineLangChainEventComponents } from './eventComponents';
