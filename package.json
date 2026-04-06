@@ -1,6 +1,6 @@
 {
   "name": "agentdown",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Reactive agent-native markdown UI runtime for Vue, powered by markdown-it and @chenglou/pretext.",
   "type": "module",
   "license": "MIT",
