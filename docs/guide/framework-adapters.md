@@ -11,7 +11,7 @@ description: 使用内置 Agno、LangChain、AutoGen、CrewAI 适配层，直接
 
 | 框架 | 入口 | 额外 helper |
 | --- | --- | --- |
-| Agno | `createAgnoProtocol()` / `defineAgnoPreset()` | `defineAgnoToolComponents()` / `defineAgnoEventComponents()` |
+| Agno | `createAgnoAdapter()` / `createAgnoProtocol()` | `defineAgnoToolComponents()` / `defineAgnoEventComponents()` / `toolByName()` / `eventToBlock()` |
 | LangChain | `createLangChainProtocol()` / `defineLangChainPreset()` | `defineLangChainToolComponents()` / `defineLangChainEventComponents()` |
 | AutoGen | `createAutoGenProtocol()` / `defineAutoGenPreset()` | `defineAutoGenToolComponents()` / `defineAutoGenEventComponents()` |
 | CrewAI | `createCrewAIProtocol()` / `defineCrewAIPreset()` | `defineCrewAIToolComponents()` / `defineCrewAIEventComponents()` / `parseCrewAISseMessage()` |
@@ -36,11 +36,11 @@ description: 使用内置 Agno、LangChain、AutoGen、CrewAI 适配层，直接
 
 ```ts
 import {
-  type AgnoEvent,
   // 直接消费官方 Agno SSE 事件。
-  createSseTransport,
-  // preset 把官方协议、assembler 和 surface 默认值收起来。
-  defineAgnoPreset,
+  createAgnoAdapter,
+  createAgnoSseTransport,
+  // 页面层直接拿到响应式 session。
+  useAdapterSession,
   // 工具名映射 helper，避免协议层和 UI 层重复写一份配置。
   defineAgnoToolComponents
 } from 'agentdown';
@@ -55,58 +55,36 @@ const agnoTools = defineAgnoToolComponents({
   }
 });
 
-// 创建一个 Agno preset，后面页面里可以直接复用。
-const preset = defineAgnoPreset<string>({
-  protocolOptions: {
-    defaultRunTitle: 'Agno 助手',
-    toolRenderer: agnoTools.toolRenderer
-  },
-  surface: {
-    renderers: agnoTools.renderers
-  }
+// starter adapter 把官方协议和 helper 组装在一起。
+const agno = createAgnoAdapter<string>({
+  title: 'Agno 助手',
+  tools: agnoTools
 });
 
-// 拿到 runtime、bridge 和 surface，后面直接喂给页面即可。
-const { runtime, bridge, surface } = preset.createSession({
-  bridge: {
-    transport: createSseTransport<AgnoEvent, string>({
-      mode: 'json',
-      init() {
-        return {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          // 这里一般就是当前页面的用户输入。
-          body: JSON.stringify({
-            message: '帮我查一下北京天气'
-          })
-        };
-      }
+// 页面直接得到 runtime、surface、connect、restart、error、status。
+const session = useAdapterSession(agno, {
+  overrides: {
+    source: 'http://127.0.0.1:8000/api/stream/agno',
+    transport: createAgnoSseTransport<string>({
+      message: '帮我查一下北京天气'
     })
   }
 });
-```
 
-```ts
-import { useBridgeTransport } from 'agentdown';
-
-// 这一层只负责页面状态和连接控制。
-const { start, status, error } = useBridgeTransport({
-  bridge,
-  source: 'http://127.0.0.1:8000/api/stream/agno'
-});
-
-// 连接后，Agno 事件会自动持续进入 runtime。
-await start();
+await session.connect();
 ```
 
 ```vue
 <RunSurface
-  :runtime="runtime"
-  v-bind="surface"
+  :runtime="session.runtime"
+  v-bind="session.surface"
 />
 ```
+
+如果你想跨框架复用工具组件或事件组件规则，也可以把 `defineAgnoToolComponents()` / `defineAgnoEventComponents()` 换成通用 DSL：
+
+- `toolByName()`
+- `eventToBlock()`
 
 ## 按工具名映射组件
 

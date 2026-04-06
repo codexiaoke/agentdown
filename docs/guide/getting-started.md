@@ -34,7 +34,7 @@ description: 用最短路径在 Vue 3 项目里接入 Agentdown，完成 markdow
 - AutoGen
 - CrewAI
 
-这种情况优先用内置 preset，会省掉很多重复样板。
+这种情况优先用内置 starter adapter，会省掉很多重复样板。
 
 ## 安装
 
@@ -203,11 +203,11 @@ cmd.content.replace({
 
 ```ts
 import {
-  type AgnoEvent,
   // 直接请求官方 Agno SSE 接口。
-  createSseTransport,
-  // preset 会把 Agno 默认 protocol 和 markdown assembler 一起带上。
-  defineAgnoPreset,
+  createAgnoAdapter,
+  createAgnoSseTransport,
+  // 页面层直接拿到响应式 session。
+  useAdapterSession,
   // 让工具名映射和组件注册共用同一份配置。
   defineAgnoToolComponents
 } from 'agentdown';
@@ -222,60 +222,41 @@ const agnoTools = defineAgnoToolComponents({
   }
 });
 
-// 组一个当前页面可复用的 Agno preset。
-const preset = defineAgnoPreset<string>({
-  protocolOptions: {
-    defaultRunTitle: 'Agno 助手',
-    toolRenderer: agnoTools.toolRenderer
-  },
-  surface: {
-    renderers: agnoTools.renderers
-  }
+// adapter 会收好 Agno 默认 protocol、assembler 和 helper。
+const agno = createAgnoAdapter<string>({
+  title: 'Agno 助手',
+  tools: agnoTools
 });
 
-// 一次性拿到 runtime、bridge 和 surface 默认配置。
-const { runtime, bridge, surface } = preset.createSession({
-  bridge: {
-    transport: createSseTransport<AgnoEvent, string>({
-      mode: 'json',
-      init() {
-        return {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          // 真实页面里，这里通常来自输入框。
-          body: JSON.stringify({
-            message: '帮我查一下北京天气'
-          })
-        };
-      }
+// 页面直接得到 runtime、surface、status、error、connect。
+const session = useAdapterSession(agno, {
+  overrides: {
+    source: 'http://127.0.0.1:8000/api/stream/agno',
+    transport: createAgnoSseTransport<string>({
+      message: '帮我查一下北京天气'
     })
   }
 });
-```
 
-```ts
-import { useBridgeTransport } from 'agentdown';
-
-// 这一层主要负责页面上的开始、停止和状态管理。
-const { start } = useBridgeTransport({
-  bridge,
-  source: 'http://127.0.0.1:8000/api/stream/agno'
-});
-
-// 建立连接后，Agno 原始事件会自动进入 preset 的 protocol。
-await start();
+await session.connect();
 ```
 
 ```vue
 <RunSurface
-  :runtime="runtime"
-  v-bind="surface"
+  :runtime="session.runtime"
+  v-bind="session.surface"
 />
 ```
 
-LangChain、AutoGen、CrewAI 的写法完全同路数，只是入口函数不同：
+新写法比以前少了三层常见胶水代码：
+
+- 不需要先 `defineAgnoPreset()`
+- 不需要再自己 `preset.createSession()`
+- 不需要再手动包一层 `useBridgeTransport()`
+- 不需要再手写 `mode / headers / body / JSON.stringify`
+
+目前 starter adapter 先在 Agno 上落地了。
+LangChain、AutoGen、CrewAI 当前仍然继续使用各自的 preset 入口：
 
 - `defineLangChainPreset()`
 - `defineAutoGenPreset()`

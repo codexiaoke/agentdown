@@ -1,19 +1,10 @@
 import { computed, onScopeDispose, shallowRef, toValue, watch, type ComputedRef, type MaybeRefOrGetter, type ShallowRef } from 'vue';
-import { createSseTransport } from '../runtime/transports';
+import { createJsonRequestInitResolver, createSseTransport } from '../runtime/transports';
 import type {
   FetchTransportSource,
+  JsonRequestOptions,
   SseTransportOptions
 } from '../runtime/transports';
-
-/**
- * 支持同步或异步返回值的工具类型。
- */
-type Awaitable<T> = T | Promise<T>;
-
-/**
- * 支持直接传值或按 source 延迟求值的工具类型。
- */
-type Resolvable<TSource, TValue> = TValue | ((source: TSource) => Awaitable<TValue>);
 
 /**
  * `useSse()` 暴露给页面层的连接状态。
@@ -23,11 +14,8 @@ export type SseStatus = 'idle' | 'connecting' | 'streaming' | 'completed' | 'abo
 /**
  * 更贴近业务语义的 SSE 请求描述。
  */
-export interface SseRequestOptions<TSource = FetchTransportSource> {
-  method?: Resolvable<TSource, string | undefined>;
-  headers?: Resolvable<TSource, HeadersInit | undefined>;
-  body?: Resolvable<TSource, BodyInit | Record<string, unknown> | undefined>;
-}
+export interface SseRequestOptions<TSource = FetchTransportSource>
+  extends JsonRequestOptions<TSource, BodyInit | Record<string, unknown>> {}
 
 /**
  * 单次 connect 时可覆盖的行为配置。
@@ -75,111 +63,6 @@ export interface UseSseResult<TPacket = unknown, TSource = FetchTransportSource>
 }
 
 /**
- * 判断一组 headers 是否已经是原生 `Headers` 实例。
- */
-function isHeaders(value: HeadersInit | undefined): value is Headers {
-  return typeof Headers !== 'undefined' && value instanceof Headers;
-}
-
-/**
- * 合并多份 headers，后面的值覆盖前面的值。
- */
-function mergeHeaders(...values: Array<HeadersInit | undefined>): Headers {
-  const headers = new Headers();
-
-  for (const value of values) {
-    if (!value) {
-      continue;
-    }
-
-    if (isHeaders(value)) {
-      value.forEach((headerValue, key) => {
-        headers.set(key, headerValue);
-      });
-      continue;
-    }
-
-    if (Array.isArray(value)) {
-      for (const [key, headerValue] of value) {
-        headers.set(key, headerValue);
-      }
-      continue;
-    }
-
-    Object.entries(value).forEach(([key, headerValue]) => {
-      if (headerValue !== undefined) {
-        headers.set(key, String(headerValue));
-      }
-    });
-  }
-
-  return headers;
-}
-
-/**
- * 判断 body 是否是需要自动 JSON.stringify 的普通对象。
- */
-function isJsonRecordBody(value: unknown): value is Record<string, unknown> {
-  if (typeof value !== 'object' || value === null) {
-    return false;
-  }
-
-  if (Array.isArray(value)) {
-    return false;
-  }
-
-  if (value instanceof FormData || value instanceof URLSearchParams || value instanceof Blob) {
-    return false;
-  }
-
-  if (value instanceof ArrayBuffer || ArrayBuffer.isView(value)) {
-    return false;
-  }
-
-  if (typeof ReadableStream !== 'undefined' && value instanceof ReadableStream) {
-    return false;
-  }
-
-  return true;
-}
-
-/**
- * 解析一个可直接传值或按 source 计算的配置项。
- */
-async function resolveValue<TSource, TValue>(
-  source: TSource,
-  value: Resolvable<TSource, TValue> | undefined
-): Promise<TValue | undefined> {
-  if (value === undefined) {
-    return undefined;
-  }
-
-  if (typeof value === 'function') {
-    return (value as (source: TSource) => Awaitable<TValue>)(source);
-  }
-
-  return value;
-}
-
-/**
- * 统一解析 base init，兼容对象和函数两种写法。
- */
-async function resolveBaseInit<TSource>(
-  source: TSource,
-  init: SseTransportOptions<unknown, TSource>['init']
-): Promise<RequestInit | undefined> {
-  if (!init) {
-    return undefined;
-  }
-
-  if (typeof init === 'function') {
-    return init(source);
-  }
-
-  return init;
-}
-
-/**
  * 把 method / headers / body 这类更贴近业务的配置，转成 transport.init。
  * 这样 standalone useSse 和 useSseBridge 可以共用同一套请求描述方式。
  */
@@ -187,37 +70,7 @@ export function createSseRequestInitResolver<TSource = FetchTransportSource>(
   request?: SseRequestOptions<TSource>,
   baseInit?: SseTransportOptions<unknown, TSource>['init']
 ): SseTransportOptions<unknown, TSource>['init'] | undefined {
-  if (!request && !baseInit) {
-    return undefined;
-  }
-
-  return async (source: TSource) => {
-    const resolvedInit = await resolveBaseInit(source, baseInit);
-    const resolvedMethod = await resolveValue(source, request?.method);
-    const resolvedHeaders = await resolveValue(source, request?.headers);
-    const resolvedBody = await resolveValue(source, request?.body);
-    const headers = mergeHeaders(resolvedInit?.headers, resolvedHeaders);
-    let body = resolvedBody;
-
-    if (body !== undefined && isJsonRecordBody(body)) {
-      if (!headers.has('Content-Type')) {
-        headers.set('Content-Type', 'application/json');
-      }
-
-      body = JSON.stringify(body);
-    }
-
-    const mergedMethod = resolvedMethod
-      ?? resolvedInit?.method
-      ?? (body !== undefined ? 'POST' : undefined);
-
-    return {
-      ...resolvedInit,
-      ...(mergedMethod !== undefined ? { method: mergedMethod } : {}),
-      ...(headers.keys().next().done ? {} : { headers }),
-      ...(body !== undefined ? { body: body as BodyInit } : {})
-    };
-  };
+  return createJsonRequestInitResolver(request, baseInit);
 }
 
 /**

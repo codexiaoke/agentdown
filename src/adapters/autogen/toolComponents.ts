@@ -1,4 +1,4 @@
-import { createToolNameRegistry, type ToolNameComponentMap, type ToolNameRegistryResult, type ToolNameRegistrySharedOptions } from '../toolNameRegistry';
+import { toolByName, type ToolNameComponentMap, type ToolNameRegistryResult, type ToolNameRegistrySharedOptions } from '../toolNameRegistry';
 import type { AutoGenToolRendererContext } from './types';
 
 /**
@@ -17,9 +17,8 @@ export function defineAutoGenToolComponents(
   definitions: ToolNameComponentMap,
   options: ToolNameRegistrySharedOptions = {}
 ): ToolNameRegistryResult<AutoGenToolRendererContext> {
-  return createToolNameRegistry<AutoGenToolRendererContext>({
+  return toolByName<AutoGenToolRendererContext>(definitions, {
     ...options,
-    definitions,
     resolveName: resolveAutoGenToolName
   });
 }

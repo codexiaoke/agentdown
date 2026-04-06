@@ -297,6 +297,9 @@ export function createAgentRuntime(): AgentRuntime {
         data: cloneValue(patch.data ?? {}),
         ...(patch.nodeId !== undefined ? { nodeId: patch.nodeId } : {}),
         ...(patch.groupId !== undefined ? { groupId: patch.groupId } : {}),
+        ...(patch.conversationId !== undefined ? { conversationId: patch.conversationId } : {}),
+        ...(patch.turnId !== undefined ? { turnId: patch.turnId } : {}),
+        ...(patch.messageId !== undefined ? { messageId: patch.messageId } : {}),
         ...(patch.content !== undefined ? { content: patch.content } : {}),
         ...(patch.createdAt !== undefined ? { createdAt: patch.createdAt } : {}),
         ...(patch.updatedAt !== undefined ? { updatedAt: patch.updatedAt } : {})

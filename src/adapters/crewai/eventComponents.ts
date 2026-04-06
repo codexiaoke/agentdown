@@ -1,4 +1,4 @@
-import { createEventComponentRegistry, type EventComponentDefinitionMap, type EventComponentRegistryResult, type EventComponentRegistrySharedOptions } from '../eventComponentRegistry';
+import { eventToBlock, type EventComponentDefinitionMap, type EventComponentRegistryResult, type EventComponentRegistrySharedOptions } from '../eventComponentRegistry';
 import { normalizeCrewAIEventName } from './packet';
 import type { CrewAIEvent } from './types';
 
@@ -9,9 +9,8 @@ export function defineCrewAIEventComponents(
   definitions: EventComponentDefinitionMap<CrewAIEvent>,
   options: EventComponentRegistrySharedOptions = {}
 ): EventComponentRegistryResult<CrewAIEvent> {
-  return createEventComponentRegistry<CrewAIEvent>({
+  return eventToBlock<CrewAIEvent>(definitions, {
     ...options,
-    definitions,
     resolveEventName(event) {
       const normalized = normalizeCrewAIEventName(event);
       return normalized.length > 0

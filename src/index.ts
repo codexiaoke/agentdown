@@ -5,6 +5,7 @@ export { default as DefaultMarkdownArtifactBlock } from './components/ArtifactBl
 export { default as MarkdownRenderer } from './components/MarkdownRenderer.vue';
 export { default as RunSurface } from './components/RunSurface.vue';
 export { default as DefaultRunSurfaceAssistantShell } from './components/RunSurfaceAssistantShell.vue';
+export { default as DefaultRunSurfaceMessageActions } from './components/RunSurfaceMessageActions.vue';
 export { default as DefaultRunSurfaceToolRenderer } from './components/RunSurfaceToolRenderer.vue';
 export { default as DefaultRunSurfaceUserBubble } from './components/RunSurfaceUserBubble.vue';
 export { default as DefaultMarkdownAguiBlock } from './components/AguiComponentWrapper.vue';
@@ -18,10 +19,25 @@ export { default as DefaultMarkdownTimelineBlock } from './components/TimelineBl
 export { defaultMarkdownBuiltinComponents } from './components/defaultMarkdownComponents';
 export { createMarkdownEngine } from './core/createMarkdownEngine';
 export { parseMarkdown } from './core/parseMarkdown';
+export { useAdapterSession } from './composables/useAdapterSession';
 export { useAgentSession } from './composables/useAgentSession';
+export {
+  useRuntimeBlock,
+  useRuntimeBlocksByConversationId,
+  useRuntimeBlocksByGroup,
+  useRuntimeBlocksByMessageId,
+  useRuntimeBlocksByTurnId
+} from './composables/useRuntimeBlock';
+export {
+  useRuntimeMessage,
+  useRuntimeMessagesByConversationId,
+  useRuntimeMessagesByTurnId
+} from './composables/useRuntimeMessage';
 export { createSseRequestInitResolver, useSse } from './composables/useSse';
 export {
+  createAgnoAdapter,
   createAgnoProtocol,
+  createAgnoSseTransport,
   defineAgnoEventComponents,
   defineAgnoPreset,
   defineAgnoToolComponents
@@ -45,8 +61,8 @@ export {
   defineLangChainPreset,
   defineLangChainToolComponents
 } from './adapters/langchain';
-export { createEventComponentRegistry } from './adapters/eventComponentRegistry';
-export { createToolNameRegistry } from './adapters/toolNameRegistry';
+export { createEventComponentRegistry, eventToBlock } from './adapters/eventComponentRegistry';
+export { createToolNameRegistry, toolByName } from './adapters/toolNameRegistry';
 export {
   useAsyncIterableBridge,
   useBridgeTransport,
@@ -61,7 +77,27 @@ export { useRuntimeSnapshot as useAgentRuntimeSnapshot } from './composables/use
 export { useRuntimeTranscript as useAgentRuntimeTranscript } from './composables/useRuntimeTranscript';
 export { useRuntimeReplayPlayer as useAgentRuntimeReplayPlayer } from './composables/useRuntimeReplayPlayer';
 export { createMarkdownAssembler, createPlainTextAssembler } from './runtime/assemblers';
+export {
+  getBlocksByConversationId,
+  getBlocksByGroup,
+  getBlocksByMessageId,
+  getBlocksByTurnId,
+  getRuntimeBlock
+} from './runtime/blockSelectors';
+export {
+  getBlockConversationId,
+  getBlockMessageId,
+  getBlockTurnId,
+  resolveBlockMessageScope
+} from './runtime/chatSemantics';
+export { eventToAction } from './runtime/eventActions';
+export {
+  getRuntimeMessage,
+  getRuntimeMessagesByConversationId,
+  getRuntimeMessagesByTurnId
+} from './runtime/messageSelectors';
 export { createBridge } from './runtime/createBridge';
+export { defineAdapter } from './runtime/defineAdapter';
 export { defineAgentdownPreset } from './runtime/definePreset';
 export { composeProtocols } from './runtime/composeProtocols';
 export {
@@ -74,6 +110,8 @@ export {
 } from './runtime/replay';
 export {
   createAsyncIterableTransport,
+  createJsonRequestInitResolver,
+  createJsonSseTransport,
   createNdjsonTransport,
   createSseTransport,
   createWebSocketTransport
@@ -112,6 +150,24 @@ export type {
   ParseMarkdownOptions
 } from './core/types';
 export type {
+  AdapterSessionTranscriptSource,
+  UseAdapterSessionOptions,
+  UseAdapterSessionResult
+} from './composables/useAdapterSession';
+export type {
+  UseRuntimeBlockResult,
+  UseRuntimeBlocksByConversationIdResult,
+  UseRuntimeBlocksByGroupResult,
+  UseRuntimeBlocksByMessageIdResult,
+  UseRuntimeBlocksByTurnIdResult
+} from './composables/useRuntimeBlock';
+export type {
+  UseRuntimeMessageResult,
+  UseRuntimeMessagesByConversationIdResult,
+  UseRuntimeMessagesByTurnIdResult,
+  UseRuntimeMessagesResult
+} from './composables/useRuntimeMessage';
+export type {
   AgentSessionTranscriptSource,
   UseAgentSessionOptions,
   UseAgentSessionResult
@@ -142,13 +198,19 @@ export type {
   UseRuntimeTranscriptResult as UseAgentRuntimeTranscriptResult
 } from './composables/useRuntimeTranscript';
 export type {
+  AgnoAdapterOptions,
   AgnoBlockIdResolver,
+  AgnoConversationIdResolver,
   AgnoEvent,
   AgnoGroupIdResolver,
+  AgnoMessageIdResolver,
   AgnoPresetOptions,
   AgnoProtocolOptions,
+  AgnoRequestBody,
   AgnoRunTitleResolver,
+  AgnoSseTransportOptions,
   AgnoStreamIdResolver,
+  AgnoTurnIdResolver,
   AgnoToolPayload,
   AgnoToolRendererContext,
   AgnoToolRendererResolver
@@ -160,11 +222,13 @@ export type {
   EventComponentRegistryOptions,
   EventComponentRegistryResult,
   EventComponentRegistrySharedOptions,
+  EventToBlockOptions,
   EventComponentResolveContext,
   EventNameMatchMode,
   EventNameMatcher
 } from './adapters/eventComponentRegistry';
 export type {
+  ToolByNameOptions,
   ToolNameComponentDefinition,
   ToolNameComponentMap,
   ToolNameMatchMode,
@@ -176,8 +240,10 @@ export type {
 export type {
   CrewAIBlockIdResolver,
   CrewAIChunkType,
+  CrewAIConversationIdResolver,
   CrewAIEvent,
   CrewAIGroupIdResolver,
+  CrewAIMessageIdResolver,
   CrewAIMessage,
   CrewAIMessageToolCall,
   CrewAIMessageToolFunction,
@@ -185,6 +251,7 @@ export type {
   CrewAIProtocolOptions,
   CrewAIRunTitleResolver,
   CrewAIStreamIdResolver,
+  CrewAITurnIdResolver,
   CrewAIStreamingToolCall,
   CrewAITaskOutput,
   CrewAIToolPayload,
@@ -193,12 +260,15 @@ export type {
 } from './adapters/crewai';
 export type {
   AutoGenBlockIdResolver,
+  AutoGenConversationIdResolver,
   AutoGenEvent,
   AutoGenGroupIdResolver,
+  AutoGenMessageIdResolver,
   AutoGenPresetOptions,
   AutoGenProtocolOptions,
   AutoGenRunTitleResolver,
   AutoGenStreamIdResolver,
+  AutoGenTurnIdResolver,
   AutoGenToolCall,
   AutoGenToolPayload,
   AutoGenToolRendererContext,
@@ -207,12 +277,15 @@ export type {
 } from './adapters/autogen';
 export type {
   LangChainBlockIdResolver,
+  LangChainConversationIdResolver,
   LangChainEvent,
   LangChainGroupIdResolver,
+  LangChainMessageIdResolver,
   LangChainPresetOptions,
   LangChainProtocolOptions,
   LangChainRunTitleResolver,
   LangChainStreamIdResolver,
+  LangChainTurnIdResolver,
   LangChainToolPayload,
   LangChainToolRendererContext,
   LangChainToolRendererResolver
@@ -221,6 +294,14 @@ export type {
   UseRuntimeReplayPlayerResult,
   UseRuntimeReplayPlayerResult as UseAgentRuntimeReplayPlayerResult
 } from './composables/useRuntimeReplayPlayer';
+export type {
+  AgentdownAdapter,
+  AgentdownAdapterBridgeOptions,
+  AgentdownAdapterOptions,
+  AgentdownAdapterOverrides,
+  AgentdownAdapterSession,
+  AgentdownAdapterSessionOptions
+} from './runtime/defineAdapter';
 export type {
   AgentRuntime,
   AssemblerContext,
@@ -245,6 +326,7 @@ export type {
   ProtocolRule,
   RuntimeCommand,
   RuntimeCommandHistoryEntry,
+  RuntimeChatSemantics,
   RuntimeData,
   RuntimeHistoryEntry,
   RuntimeIntent,
@@ -262,6 +344,29 @@ export type {
   TransportAdapter,
   TransportContext
 } from './runtime/types';
+export type {
+  RuntimeBlockMessageScope
+} from './runtime/chatSemantics';
+export type {
+  EventActionContext,
+  EventActionDefinition,
+  EventActionDefinitionMap,
+  EventActionMatcher,
+  EventActionMatchMode,
+  EventActionRegistryResult,
+  EventToActionOptions
+} from './runtime/eventActions';
+export type {
+  RuntimeMessageQueryOptions,
+  RuntimeMessageSource
+} from './runtime/messageSelectors';
+export type {
+  RuntimeBlockSource,
+  RuntimeBlocksByConversationOptions,
+  RuntimeBlocksByGroupOptions,
+  RuntimeBlocksByMessageOptions,
+  RuntimeBlocksByTurnOptions
+} from './runtime/blockSelectors';
 export type {
   AgentdownPreset,
   AgentdownPresetOptions,
@@ -307,6 +412,8 @@ export type {
 } from './runtime/defineProtocol';
 export type {
   FetchTransportSource,
+  JsonRequestOptions,
+  JsonSseTransportOptions,
   NdjsonTransportContext,
   NdjsonTransportMode,
   NdjsonTransportOptions,
@@ -314,6 +421,8 @@ export type {
   SseTransportMessage,
   SseTransportMode,
   SseTransportOptions,
+  TransportAwaitable,
+  TransportResolvable,
   WebSocketTransportContext,
   WebSocketTransportMessage,
   WebSocketTransportMode,
@@ -321,9 +430,16 @@ export type {
   WebSocketTransportSource
 } from './runtime/transports';
 export type {
+  RunSurfaceBuiltinMessageActionKey,
+  RunSurfaceBuiltinMessageActionHandler,
   RunSurfaceDraftPlaceholder,
   RunSurfaceDraftPlaceholderContext,
   RunSurfaceDraftPlaceholderRegistration,
+  RunSurfaceMessageActionContext,
+  RunSurfaceMessageActionDefinition,
+  RunSurfaceMessageActionItem,
+  RunSurfaceMessageActionsMap,
+  RunSurfaceMessageActionsRoleOptions,
   RunSurfaceMessageShell,
   RunSurfaceMessageShellContext,
   RunSurfaceMessageShellMap,

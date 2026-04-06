@@ -11,12 +11,15 @@ export { defineAutoGenEventComponents } from './eventComponents';
 export { defineAutoGenToolComponents } from './toolComponents';
 export type {
   AutoGenBlockIdResolver,
+  AutoGenConversationIdResolver,
   AutoGenEvent,
   AutoGenGroupIdResolver,
+  AutoGenMessageIdResolver,
   AutoGenPresetOptions,
   AutoGenProtocolOptions,
   AutoGenRunTitleResolver,
   AutoGenStreamIdResolver,
+  AutoGenTurnIdResolver,
   AutoGenToolCall,
   AutoGenToolPayload,
   AutoGenToolRendererContext,

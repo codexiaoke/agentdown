@@ -3,18 +3,21 @@ import { computed, onMounted, ref } from 'vue';
 import {
   type AgentRuntime,
   type AgnoEvent,
+  type RunSurfaceMessageActionItem,
+  type RunSurfaceMessageActionsRoleOptions,
   cmd,
-  createSseTransport,
+  createAgnoAdapter,
+  createAgnoSseTransport,
   defineAgnoToolComponents,
-  defineAgnoPreset,
+  eventToAction,
   RunSurface,
-  useBridgeTransport
+  useAdapterSession
 } from '../../index';
 import MessageLoadingBubble from '../components/MessageLoadingBubble.vue';
 import WeatherToolCard from '../components/WeatherToolCard.vue';
 
 const DEFAULT_PROMPT = '帮我查一下北京今天天气';
-const USER_GROUP_ID = 'turn:user:agno-weather';
+const DEMO_CONVERSATION_ID = 'session:demo:agno-weather';
 
 /**
  * 去掉 URL 末尾多余的 `/`，方便后面安全拼接路径。
@@ -41,20 +44,45 @@ function buildAgnoEndpoint(): string {
 }
 
 /**
+ * 为当前这次演示生成一组新的聊天语义 id。
+ */
+function createChatIds() {
+  const seed = Date.now();
+  const turnId = `turn:demo:agno-weather:${seed}`;
+  const userMessageId = `message:user:demo:agno-weather:${seed}`;
+  const assistantMessageId = `message:assistant:demo:agno-weather:${seed}`;
+
+  return {
+    conversationId: DEMO_CONVERSATION_ID,
+    turnId,
+    userMessageId,
+    assistantMessageId
+  };
+}
+
+/**
  * 预先插入一条用户消息，方便观察 assistant 回复和工具卡片。
  */
-function seedConversation(input: string, runtime: AgentRuntime) {
+function seedConversation(
+  input: string,
+  runtime: AgentRuntime,
+  chatIds: ReturnType<typeof createChatIds>
+) {
   runtime.apply(cmd.message.text({
-    id: 'block:user:agno-weather',
+    id: `block:${chatIds.userMessageId}:text`,
     role: 'user',
     text: input,
-    groupId: USER_GROUP_ID,
+    conversationId: chatIds.conversationId,
+    turnId: chatIds.turnId,
+    messageId: chatIds.userMessageId,
     at: Date.now()
   }));
 }
 
 const prompt = ref(DEFAULT_PROMPT);
 const endpoint = buildAgnoEndpoint();
+const currentChatIds = ref(createChatIds());
+const backendSessionId = ref('');
 const agnoTools = defineAgnoToolComponents({
   'tool.weather': {
     match: ['weather', '天气'],
@@ -63,50 +91,148 @@ const agnoTools = defineAgnoToolComponents({
   }
 });
 
-const agnoPreset = defineAgnoPreset<string>({
-  protocolOptions: {
-    defaultRunTitle: 'Agno 助手',
-    toolRenderer: agnoTools.toolRenderer
+/**
+ * 这里演示“收到某个原始事件后做副作用”，而不是渲染 UI。
+ *
+ * 在真实项目里：
+ * - 如果后端发 `CreateSession`
+ * - 或 `SessionCreated`
+ * - 或任何你们自己定义的事件名
+ *
+ * 都可以在这里监听，然后把 sessionId 存到外部状态里。
+ */
+const sessionActions = eventToAction<AgnoEvent>(
+  {
+    captureSession: {
+      /**
+       * 这个 demo 的 Agno 后端不会专门发 `CreateSession`，
+       * 但事件里会携带 `session_id`，所以这里直接按字段存在与否拦截。
+       *
+       * 如果你的后端会发专门事件，也可以直接写：
+       * on: 'CreateSession'
+       */
+      match: ({ event }) => {
+        return typeof event.session_id === 'string' || typeof event.sessionId === 'string';
+      },
+      run: ({ event }) => {
+        const sessionId = typeof event.session_id === 'string'
+          ? event.session_id
+          : typeof event.sessionId === 'string'
+            ? event.sessionId
+            : '';
+
+        if (sessionId.length > 0) {
+          backendSessionId.value = sessionId;
+        }
+      }
+    }
   },
+  {
+    resolveEventName: (event) => event.event
+  }
+);
+
+/**
+ * 新写法里，Agno 的 protocol / assembler / surface 入口都收敛到 adapter。
+ */
+const agnoAdapter = createAgnoAdapter<string>({
+  title: 'Agno 助手',
+  protocolOptions: {
+    /**
+     * demo 里把 assistant 响应显式绑定到当前这一轮 turn 上，
+     * 这样页面里的 user / assistant / tool 都能落进统一会话语义。
+     */
+    conversationId() {
+      return currentChatIds.value.conversationId;
+    },
+    turnId() {
+      return currentChatIds.value.turnId;
+    },
+    messageId() {
+      return currentChatIds.value.assistantMessageId;
+    }
+  },
+  tools: agnoTools,
   surface: {
     draftPlaceholder: {
       component: MessageLoadingBubble,
       props: {
         label: 'Agno 正在思考'
       }
-    },
-    renderers: agnoTools.renderers
+    }
   }
 });
 
-const { runtime, bridge, surface } = agnoPreset.createSession({
-  bridge: {
-    transport: createSseTransport<AgnoEvent, string>({
-      mode: 'json',
-      init() {
-        return {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            message: prompt.value
-          })
-        };
+const {
+  runtime,
+  surface,
+  connect,
+  disconnect,
+  reset,
+  status,
+  error
+} = useAdapterSession(agnoAdapter, {
+  overrides: {
+    source: endpoint,
+    bridge: {
+      hooks: sessionActions.hooks
+    },
+    /**
+     * Agno helper 会自动补上 JSON SSE 常见配置：
+     * - mode: 'json'
+     * - POST
+     * - application/json
+     * - { message }
+     */
+    transport: createAgnoSseTransport<string>({
+      message() {
+        return prompt.value;
       }
     })
   }
 });
 
-const {
-  start,
-  stop,
-  reset,
-  status,
-  error
-} = useBridgeTransport({
-  bridge,
-  source: endpoint
+/**
+ * 给 demo 注入一层最终 surface 配置：
+ * - 复制保留内置行为
+ * - 重新生成真正触发一次新的后端请求
+ * - 请求进行中禁用重新生成，避免重复提交
+ */
+const surfaceOptions = computed(() => {
+  const assistantActions = surface.messageActions?.assistant;
+  const actions: RunSurfaceMessageActionItem[] = [
+    'copy',
+    {
+      key: 'regenerate',
+      disabled: () => busy.value
+    },
+    'like',
+    'dislike',
+    'share'
+  ];
+  const resolvedAssistantActions: RunSurfaceMessageActionsRoleOptions | false = assistantActions === false
+    ? false
+    : {
+        enabled: true,
+        showOnDraft: false,
+        showWhileRunning: false,
+        ...(assistantActions ?? {}),
+        actions,
+        builtinHandlers: {
+          ...(assistantActions?.builtinHandlers ?? {}),
+          regenerate: async () => {
+            await replayDemo();
+          }
+        }
+      };
+
+  return {
+    ...surface,
+    messageActions: {
+      ...(surface.messageActions ?? {}),
+      assistant: resolvedAssistantActions
+    }
+  };
 });
 
 /**
@@ -139,10 +265,12 @@ const transportError = computed(() => error.value?.message ?? '');
  * 重置当前会话，并重新连接真实 Agno backend。
  */
 async function replayDemo() {
-  stop();
+  disconnect();
   reset();
-  seedConversation(prompt.value, runtime);
-  await start();
+  backendSessionId.value = '';
+  currentChatIds.value = createChatIds();
+  seedConversation(prompt.value, runtime, currentChatIds.value);
+  await connect();
 }
 
 onMounted(() => {
@@ -156,7 +284,7 @@ onMounted(() => {
   <section class="demo-page">
     <header class="demo-page__header">
       <h1>Agno 真实 SSE</h1>
-      <p>启动 FastAPI backend 后，这个页面会直接请求真实 `/api/stream/agno`，然后用 `defineAgnoPreset()` 把官方事件映射成聊天 UI。</p>
+      <p>启动 FastAPI backend 后，这个页面会直接请求真实 `/api/stream/agno`，并使用 `createAgnoAdapter() + useAdapterSession()` 把官方事件映射成聊天 UI。</p>
     </header>
 
     <form
@@ -183,6 +311,13 @@ onMounted(() => {
         <code class="demo-form__endpoint">{{ endpoint }}</code>
       </div>
 
+      <p
+        v-if="backendSessionId"
+        class="demo-form__session"
+      >
+        后端 sessionId：<code>{{ backendSessionId }}</code>
+      </p>
+
       <button
         type="submit"
         class="demo-page__replay"
@@ -201,7 +336,7 @@ onMounted(() => {
 
     <RunSurface
       :runtime="runtime"
-      v-bind="surface"
+      v-bind="surfaceOptions"
     />
   </section>
 </template>
@@ -283,6 +418,13 @@ onMounted(() => {
   overflow-wrap: anywhere;
   color: #64748b;
   font-size: 12px;
+}
+
+.demo-form__session {
+  margin: 12px 0 0;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.7;
 }
 
 .demo-page__replay {

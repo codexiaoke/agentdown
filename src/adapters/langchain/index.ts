@@ -11,12 +11,15 @@ export { defineLangChainEventComponents } from './eventComponents';
 export { defineLangChainToolComponents } from './toolComponents';
 export type {
   LangChainBlockIdResolver,
+  LangChainConversationIdResolver,
   LangChainEvent,
   LangChainGroupIdResolver,
+  LangChainMessageIdResolver,
   LangChainPresetOptions,
   LangChainProtocolOptions,
   LangChainRunTitleResolver,
   LangChainStreamIdResolver,
+  LangChainTurnIdResolver,
   LangChainToolPayload,
   LangChainToolRendererContext,
   LangChainToolRendererResolver

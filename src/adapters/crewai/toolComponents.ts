@@ -1,4 +1,4 @@
-import { createToolNameRegistry, type ToolNameComponentMap, type ToolNameRegistryResult, type ToolNameRegistrySharedOptions } from '../toolNameRegistry';
+import { toolByName, type ToolNameComponentMap, type ToolNameRegistryResult, type ToolNameRegistrySharedOptions } from '../toolNameRegistry';
 import type { CrewAIToolRendererContext } from './types';
 
 /**
@@ -17,9 +17,8 @@ export function defineCrewAIToolComponents(
   definitions: ToolNameComponentMap,
   options: ToolNameRegistrySharedOptions = {}
 ): ToolNameRegistryResult<CrewAIToolRendererContext> {
-  return createToolNameRegistry<CrewAIToolRendererContext>({
+  return toolByName<CrewAIToolRendererContext>(definitions, {
     ...options,
-    definitions,
     resolveName: resolveCrewAIToolName
   });
 }

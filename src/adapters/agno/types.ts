@@ -1,3 +1,6 @@
+import type { EventComponentRegistryResult } from '../eventComponentRegistry';
+import type { ToolNameRegistryResult } from '../toolNameRegistry';
+import type { AgentdownAdapterOptions } from '../../runtime/defineAdapter';
 import type { AgentdownPresetOptions } from '../../runtime/definePreset';
 import type {
   ProtocolContext,
@@ -123,6 +126,33 @@ export type AgnoGroupIdResolver = (
 ) => string | null | undefined;
 
 /**
+ * 生成 conversationId 时的自定义回调签名。
+ */
+export type AgnoConversationIdResolver = (
+  runId: string,
+  packet: AgnoEvent,
+  context: ProtocolContext
+) => string | null | undefined;
+
+/**
+ * 生成 turnId 时的自定义回调签名。
+ */
+export type AgnoTurnIdResolver = (
+  runId: string,
+  packet: AgnoEvent,
+  context: ProtocolContext
+) => string | null | undefined;
+
+/**
+ * 生成 assistant messageId 时的自定义回调签名。
+ */
+export type AgnoMessageIdResolver = (
+  runId: string,
+  packet: AgnoEvent,
+  context: ProtocolContext
+) => string | null | undefined;
+
+/**
  * 生成 run 标题时的自定义回调签名。
  */
 export type AgnoRunTitleResolver = (
@@ -149,6 +179,12 @@ export interface AgnoProtocolOptions {
   blockId?: string | AgnoBlockIdResolver;
   /** 自定义消息分组 id，默认按 `turn:${runId}` 分组。 */
   groupId?: string | AgnoGroupIdResolver;
+  /** 自定义 conversationId，默认优先取后端事件里的 `session_id/sessionId`。 */
+  conversationId?: string | AgnoConversationIdResolver;
+  /** 自定义 turnId，默认回退到当前 `groupId`。 */
+  turnId?: string | AgnoTurnIdResolver;
+  /** 自定义 assistant messageId，默认按 `message:${runId}:assistant` 生成。 */
+  messageId?: string | AgnoMessageIdResolver;
   /** 自定义 run 标题解析规则。 */
   defaultRunTitle?: string | AgnoRunTitleResolver;
   /** 把某个工具映射到哪个 renderer，例如 `tool.weather`。 */
@@ -167,6 +203,26 @@ export interface AgnoPresetOptions<
   protocolOptions?: AgnoProtocolOptions;
   /** 增加或覆写 preset 可用的 assembler。 */
   assemblers?: Record<string, StreamAssembler>;
+}
+
+/**
+ * Agno 官方 starter adapter 的配置项。
+ */
+export interface AgnoAdapterOptions<
+  TSource = AsyncIterable<AgnoEvent> | Iterable<AgnoEvent>
+> extends Omit<AgentdownAdapterOptions<AgnoEvent, TSource>, 'name' | 'protocol' | 'assemblers'> {
+  /** 允许直接覆写整个主协议。 */
+  protocol?: RuntimeProtocol<AgnoEvent>;
+  /** 传给 `createAgnoProtocol()` 的配置。 */
+  protocolOptions?: AgnoProtocolOptions;
+  /** 增加或覆写 adapter 可用的 assembler。 */
+  assemblers?: Record<string, StreamAssembler>;
+  /** 顶层 run 标题简写，会回填到 `protocolOptions.defaultRunTitle`。 */
+  title?: string | AgnoRunTitleResolver;
+  /** 基于工具名自动选择 renderer 的 helper 产物。 */
+  tools?: ToolNameRegistryResult<AgnoToolRendererContext>;
+  /** 基于事件名直接渲染组件的 helper 产物。 */
+  events?: EventComponentRegistryResult<AgnoEvent>;
 }
 
 /**
@@ -201,6 +257,12 @@ export interface AgnoRunSession {
   segmentHasContent: boolean;
   /** 当前 run 在 surface 里的消息分组 id。 */
   groupId: string | null | undefined;
+  /** 当前 run 所属的 conversation / session id。 */
+  conversationId: string | null | undefined;
+  /** 当前 run 所属的 turn id。 */
+  turnId: string | null | undefined;
+  /** 当前 assistant 消息的稳定 message id。 */
+  messageId: string | null | undefined;
   /** 当前 run 的显示标题。 */
   title: string | undefined;
   /** 当前分段的内容流是否已经打开。 */

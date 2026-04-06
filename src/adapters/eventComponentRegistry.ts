@@ -3,6 +3,7 @@ import { cmd } from '../runtime/defineProtocol';
 import type {
   ProtocolContext,
   RuntimeCommand,
+  RuntimeChatSemantics,
   RuntimeData,
   RuntimeProtocol
 } from '../runtime/types';
@@ -37,7 +38,7 @@ export type EventNameMatcher = string | RegExp;
  * 之所以默认用 `patch`，是因为 runtime 在 block 已存在时不会把它重新挪到末尾，
  * 更适合 SSE 场景里“同一个组件持续更新”的常见需求。
  */
-export interface EventComponentBlockInput {
+export interface EventComponentBlockInput extends RuntimeChatSemantics {
   /** block id；不传时会自动生成一个。 */
   id?: string;
   /** block 所在 slot。 */
@@ -120,6 +121,18 @@ export interface EventComponentRegistryOptions<TRawEvent>
   extends EventComponentRegistrySharedOptions {
   /** 一组 renderer 规则。 */
   definitions: EventComponentDefinitionMap<TRawEvent>;
+  /** 如何从原始事件里读取当前事件名。 */
+  resolveEventName: (event: TRawEvent) => string | undefined;
+}
+
+/**
+ * `eventToBlock()` 的轻量配置。
+ *
+ * 对外只暴露“怎么取事件名”和“怎么规范化事件名”，
+ * 让用户能直接把主要精力放在 definitions 上。
+ */
+export interface EventToBlockOptions<TRawEvent>
+  extends EventComponentRegistrySharedOptions {
   /** 如何从原始事件里读取当前事件名。 */
   resolveEventName: (event: TRawEvent) => string | undefined;
 }
@@ -234,6 +247,9 @@ function createEventBlockCommands<TRawEvent>(
             state: input.state ?? 'stable',
             ...(input.nodeId !== undefined ? { nodeId: input.nodeId } : {}),
             ...(input.groupId !== undefined ? { groupId: input.groupId } : {}),
+            ...(input.conversationId !== undefined ? { conversationId: input.conversationId } : {}),
+            ...(input.turnId !== undefined ? { turnId: input.turnId } : {}),
+            ...(input.messageId !== undefined ? { messageId: input.messageId } : {}),
             ...(input.content !== undefined ? { content: input.content } : {}),
             data: resolvedData,
             createdAt: updatedAt,
@@ -255,6 +271,9 @@ function createEventBlockCommands<TRawEvent>(
           state: input.state ?? 'stable',
           ...(input.nodeId !== undefined ? { nodeId: input.nodeId } : {}),
           ...(input.groupId !== undefined ? { groupId: input.groupId } : {}),
+          ...(input.conversationId !== undefined ? { conversationId: input.conversationId } : {}),
+          ...(input.turnId !== undefined ? { turnId: input.turnId } : {}),
+          ...(input.messageId !== undefined ? { messageId: input.messageId } : {}),
           ...(input.content !== undefined ? { content: input.content } : {}),
           data: resolvedData,
           createdAt: updatedAt,
@@ -271,6 +290,9 @@ function createEventBlockCommands<TRawEvent>(
           state: input.state ?? 'stable',
           ...(input.nodeId !== undefined ? { nodeId: input.nodeId } : {}),
           ...(input.groupId !== undefined ? { groupId: input.groupId } : {}),
+          ...(input.conversationId !== undefined ? { conversationId: input.conversationId } : {}),
+          ...(input.turnId !== undefined ? { turnId: input.turnId } : {}),
+          ...(input.messageId !== undefined ? { messageId: input.messageId } : {}),
           ...(input.content !== undefined ? { content: input.content } : {}),
           data: resolvedData,
           updatedAt
@@ -280,22 +302,23 @@ function createEventBlockCommands<TRawEvent>(
 }
 
 /**
- * 创建一个通用“事件 -> 自定义组件”的注册器。
+ * 创建一个更自然的“事件 -> 自定义组件” helper。
  *
  * 常见用途：
  * - SSE 某个事件到来后直接渲染一张业务卡片
  * - 同一个事件反复到来时持续 patch 同一个组件
  * - 把事件匹配逻辑和 surface.renderers 注册收敛到同一份配置里
  */
-export function createEventComponentRegistry<TRawEvent>(
-  options: EventComponentRegistryOptions<TRawEvent>
+export function eventToBlock<TRawEvent>(
+  definitions: EventComponentDefinitionMap<TRawEvent>,
+  options: EventToBlockOptions<TRawEvent>
 ): EventComponentRegistryResult<TRawEvent> {
   const normalizeEventName = options.normalizeEventName ?? defaultNormalizeEventName;
-  const definitions = Object.entries(options.definitions).map(([renderer, definition]) => ({
+  const normalizedDefinitions = Object.entries(definitions).map(([renderer, definition]) => ({
     renderer,
     definition
   }));
-  const renderers = collectEventRenderers(options.definitions);
+  const renderers = collectEventRenderers(definitions);
 
   /**
    * 把单个原始事件映射成一组 block 命令。
@@ -308,7 +331,7 @@ export function createEventComponentRegistry<TRawEvent>(
     const normalizedEventName = rawEventName ? normalizeEventName(rawEventName) : undefined;
     const commands: RuntimeCommand[] = [];
 
-    for (const entry of definitions) {
+    for (const entry of normalizedDefinitions) {
       const resolveContext: EventComponentResolveContext<TRawEvent> = {
         event: input.packet,
         context: input.context,
@@ -367,4 +390,20 @@ export function createEventComponentRegistry<TRawEvent>(
       }
     }
   };
+}
+
+/**
+ * 兼容旧版命名的注册器入口。
+ *
+ * 内部已经统一到 `eventToBlock()`，这样新旧 API 可以共享同一套实现。
+ */
+export function createEventComponentRegistry<TRawEvent>(
+  options: EventComponentRegistryOptions<TRawEvent>
+): EventComponentRegistryResult<TRawEvent> {
+  return eventToBlock(options.definitions, {
+    resolveEventName: options.resolveEventName,
+    ...(options.normalizeEventName !== undefined
+      ? { normalizeEventName: options.normalizeEventName }
+      : {})
+  });
 }

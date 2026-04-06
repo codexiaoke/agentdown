@@ -103,6 +103,33 @@ export type LangChainGroupIdResolver = (
 ) => string | null | undefined;
 
 /**
+ * 生成 conversationId 时的自定义回调签名。
+ */
+export type LangChainConversationIdResolver = (
+  runId: string,
+  packet: LangChainEvent,
+  context: ProtocolContext
+) => string | null | undefined;
+
+/**
+ * 生成 turnId 时的自定义回调签名。
+ */
+export type LangChainTurnIdResolver = (
+  runId: string,
+  packet: LangChainEvent,
+  context: ProtocolContext
+) => string | null | undefined;
+
+/**
+ * 生成 assistant messageId 时的自定义回调签名。
+ */
+export type LangChainMessageIdResolver = (
+  runId: string,
+  packet: LangChainEvent,
+  context: ProtocolContext
+) => string | null | undefined;
+
+/**
  * 生成 run 标题时的自定义回调签名。
  */
 export type LangChainRunTitleResolver = (
@@ -129,6 +156,12 @@ export interface LangChainProtocolOptions {
   blockId?: string | LangChainBlockIdResolver;
   /** 自定义消息分组 id，默认按 `turn:${runId}` 分组。 */
   groupId?: string | LangChainGroupIdResolver;
+  /** 自定义 conversationId；LangChain 默认无法可靠推断，所以默认是 `null`。 */
+  conversationId?: string | LangChainConversationIdResolver;
+  /** 自定义 turnId，默认回退到当前 `groupId`。 */
+  turnId?: string | LangChainTurnIdResolver;
+  /** 自定义 assistant messageId，默认按 `message:${runId}:assistant` 生成。 */
+  messageId?: string | LangChainMessageIdResolver;
   /** 自定义 run 标题解析规则。 */
   defaultRunTitle?: string | LangChainRunTitleResolver;
   /** 把某个工具映射到哪个 renderer，例如 `tool.weather`。 */
@@ -181,6 +214,12 @@ export interface LangChainRunSession {
   segmentHasContent: boolean;
   /** 当前 run 在 surface 里的消息分组 id。 */
   groupId: string | null | undefined;
+  /** 当前 run 所属的 conversation / session id。 */
+  conversationId: string | null | undefined;
+  /** 当前 run 所属的 turn id。 */
+  turnId: string | null | undefined;
+  /** 当前 assistant 消息的稳定 message id。 */
+  messageId: string | null | undefined;
   /** 当前 run 的显示标题。 */
   title: string | undefined;
   /** 当前分段的内容流是否已经打开。 */

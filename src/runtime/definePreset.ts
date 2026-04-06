@@ -97,6 +97,10 @@ function mergeSurfaceOptions(base: RunSurfaceOptions = {}, override: RunSurfaceO
     messageShells: {
       ...(base.messageShells ?? {}),
       ...(override.messageShells ?? {})
+    },
+    messageActions: {
+      ...(base.messageActions ?? {}),
+      ...(override.messageActions ?? {})
     }
   };
 }

@@ -1,4 +1,4 @@
-import { createEventComponentRegistry, type EventComponentDefinitionMap, type EventComponentRegistryResult, type EventComponentRegistrySharedOptions } from '../eventComponentRegistry';
+import { eventToBlock, type EventComponentDefinitionMap, type EventComponentRegistryResult, type EventComponentRegistrySharedOptions } from '../eventComponentRegistry';
 import { normalizeAgnoEventName } from './packet';
 import type { AgnoEvent } from './types';
 
@@ -12,9 +12,8 @@ export function defineAgnoEventComponents(
   definitions: EventComponentDefinitionMap<AgnoEvent>,
   options: EventComponentRegistrySharedOptions = {}
 ): EventComponentRegistryResult<AgnoEvent> {
-  return createEventComponentRegistry<AgnoEvent>({
+  return eventToBlock<AgnoEvent>(definitions, {
     ...options,
-    definitions,
     resolveEventName(event) {
       return typeof event.event === 'string'
         ? normalizeAgnoEventName(event.event)

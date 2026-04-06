@@ -11,9 +11,12 @@ import {
 } from './packet';
 import {
   resolveBlockId,
+  resolveConversationId,
   resolveGroupId,
+  resolveMessageId,
   resolveRunTitle,
   resolveStreamId,
+  resolveTurnId,
   resolveToolRenderer
 } from './resolvers';
 import type {
@@ -61,6 +64,18 @@ function syncStreamSegmentIds(session: AgnoRunSession): void {
 }
 
 /**
+ * 提取当前 run 会话写入 block 时需要附带的聊天语义字段。
+ */
+function resolveSessionMessageScope(session: AgnoRunSession) {
+  return {
+    ...(session.groupId !== undefined ? { groupId: session.groupId } : {}),
+    ...(session.conversationId !== undefined ? { conversationId: session.conversationId } : {}),
+    ...(session.turnId !== undefined ? { turnId: session.turnId } : {}),
+    ...(session.messageId !== undefined ? { messageId: session.messageId } : {})
+  };
+}
+
+/**
  * 在一次内容分段完成后，切换到下一段内容 id。
  */
 function advanceStreamSegment(session: AgnoRunSession): void {
@@ -87,7 +102,7 @@ export function createStreamOpenCommands(
       assembler: options.streamAssembler ?? 'markdown',
       slot: options.slot ?? 'main',
       nodeId: session.runId,
-      ...(session.groupId !== undefined ? { groupId: session.groupId } : {}),
+      ...resolveSessionMessageScope(session),
       data: {
         blockId: session.blockId
       }
@@ -120,6 +135,9 @@ export function ensureRunSession(
     streamSegmentIndex: 0,
     segmentHasContent: false,
     groupId: resolveGroupId(runId, packet, context, options),
+    conversationId: resolveConversationId(runId, packet, context, options),
+    turnId: resolveTurnId(runId, packet, context, options),
+    messageId: resolveMessageId(runId, packet, context, options),
     title: resolveRunTitle(packet, runId, context, options),
     streamOpen: false,
     pendingTools: [],
@@ -349,7 +367,7 @@ export function ensureToolStarted(
       parentId: session.runId,
       title: extractToolName(tool) ?? '工具调用',
       slot: options.slot ?? 'main',
-      ...(session.groupId !== undefined ? { groupId: session.groupId } : {}),
+      ...resolveSessionMessageScope(session),
       renderer: resolveToolRenderer(session.runId, toolId, tool, packet, context, options),
       data: buildToolData(packet, tool),
       at: context.now()

@@ -1,4 +1,4 @@
-import { createEventComponentRegistry, type EventComponentDefinitionMap, type EventComponentRegistryResult, type EventComponentRegistrySharedOptions } from '../eventComponentRegistry';
+import { eventToBlock, type EventComponentDefinitionMap, type EventComponentRegistryResult, type EventComponentRegistrySharedOptions } from '../eventComponentRegistry';
 import { normalizeLangChainEventName } from './packet';
 import type { LangChainEvent } from './types';
 
@@ -9,9 +9,8 @@ export function defineLangChainEventComponents(
   definitions: EventComponentDefinitionMap<LangChainEvent>,
   options: EventComponentRegistrySharedOptions = {}
 ): EventComponentRegistryResult<LangChainEvent> {
-  return createEventComponentRegistry<LangChainEvent>({
+  return eventToBlock<LangChainEvent>(definitions, {
     ...options,
-    definitions,
     resolveEventName(event) {
       return typeof event.event === 'string'
         ? normalizeLangChainEventName(event.event)

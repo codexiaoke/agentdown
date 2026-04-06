@@ -1,4 +1,4 @@
-import { createToolNameRegistry, type ToolNameComponentMap, type ToolNameRegistryResult, type ToolNameRegistrySharedOptions } from '../toolNameRegistry';
+import { toolByName, type ToolNameComponentMap, type ToolNameRegistryResult, type ToolNameRegistrySharedOptions } from '../toolNameRegistry';
 import type { AgnoToolRendererContext } from './types';
 
 /**
@@ -23,9 +23,8 @@ export function defineAgnoToolComponents(
   definitions: ToolNameComponentMap,
   options: ToolNameRegistrySharedOptions = {}
 ): ToolNameRegistryResult<AgnoToolRendererContext> {
-  return createToolNameRegistry<AgnoToolRendererContext>({
+  return toolByName<AgnoToolRendererContext>(definitions, {
     ...options,
-    definitions,
     resolveName: resolveAgnoToolName
   });
 }

@@ -8,6 +8,7 @@ import type {
   ProtocolContext,
   ProtocolRule,
   RuntimeCommand,
+  RuntimeChatSemantics,
   RuntimeData,
   RuntimeProtocol,
   StreamAbortCommand,
@@ -69,16 +70,22 @@ export interface ContentOpenInput extends Omit<StreamOpenCommand, 'type' | 'asse
 }
 
 /**
+ * 写入消息 block 时可复用的聊天语义输入。
+ */
+interface MessageSemanticInput extends RuntimeChatSemantics {
+  groupId?: string | null;
+}
+
+/**
  * 创建一个工具节点和工具 block 时的输入结构。
  */
-export interface ToolStartInput {
+export interface ToolStartInput extends MessageSemanticInput {
   id: string;
   title: string;
   parentId?: string | null;
   message?: string;
   slot?: string;
   renderer?: string;
-  groupId?: string | null;
   blockId?: string;
   data?: RuntimeData;
   nodeData?: RuntimeData;
@@ -90,7 +97,7 @@ export interface ToolStartInput {
 /**
  * 更新一个工具节点和工具 block 时的输入结构。
  */
-export interface ToolUpdateInput {
+export interface ToolUpdateInput extends MessageSemanticInput {
   id: string;
   title?: string;
   message?: string;
@@ -112,7 +119,7 @@ type MessageRole = 'assistant' | 'user' | 'system';
 /**
  * 通用消息 block 的输入结构。
  */
-export interface MessageBlockInput {
+export interface MessageBlockInput extends MessageSemanticInput {
   id: string;
   role?: MessageRole;
   slot?: string;
@@ -120,7 +127,6 @@ export interface MessageBlockInput {
   renderer?: string;
   state?: 'draft' | 'stable';
   nodeId?: string | null;
-  groupId?: string | null;
   content?: string;
   data?: RuntimeData;
   at?: number;
@@ -343,6 +349,18 @@ function toolBlockId(id: string, blockId?: string): string {
 }
 
 /**
+ * 提取一组消息 block 需要写入的聊天语义字段。
+ */
+function resolveMessageSemantics(input: MessageSemanticInput) {
+  return compactObject({
+    ...(input.groupId !== undefined ? { groupId: input.groupId } : {}),
+    ...(input.conversationId !== undefined ? { conversationId: input.conversationId } : {}),
+    ...(input.turnId !== undefined ? { turnId: input.turnId } : {}),
+    ...(input.messageId !== undefined ? { messageId: input.messageId } : {})
+  });
+}
+
+/**
  * 统一推导消息 block 的 type、renderer 和 role。
  */
 function resolveMessageBlockShape(input: MessageBlockInput) {
@@ -379,8 +397,8 @@ function createMessageInsertCommand(
         },
         input.data
       ),
+      ...resolveMessageSemantics(input),
       ...(input.nodeId !== undefined ? { nodeId: input.nodeId } : {}),
-      ...(input.groupId !== undefined ? { groupId: input.groupId } : {}),
       ...(input.content !== undefined ? { content: input.content } : {}),
       ...(input.at !== undefined ? { createdAt: input.at, updatedAt: input.at } : {})
     },
@@ -406,8 +424,8 @@ function createMessageUpsertCommand(input: MessageBlockInput) {
       },
       input.data
     ),
+    ...resolveMessageSemantics(input),
     ...(input.nodeId !== undefined ? { nodeId: input.nodeId } : {}),
-    ...(input.groupId !== undefined ? { groupId: input.groupId } : {}),
     ...(input.content !== undefined ? { content: input.content } : {}),
     ...(input.at !== undefined ? { createdAt: input.at, updatedAt: input.at } : {})
   });
@@ -430,8 +448,8 @@ function createMessagePatchCommand(input: MessageBlockInput): BlockPatchCommand 
       },
       input.data
     ),
+    ...resolveMessageSemantics(input),
     ...(input.nodeId !== undefined ? { nodeId: input.nodeId } : {}),
-    ...(input.groupId !== undefined ? { groupId: input.groupId } : {}),
     ...(input.content !== undefined ? { content: input.content } : {}),
     ...(input.at !== undefined ? { updatedAt: input.at } : {})
   });
@@ -1116,7 +1134,7 @@ export const cmd = {
             input.data,
             input.blockData
           ),
-          ...(input.groupId !== undefined ? { groupId: input.groupId } : {}),
+          ...resolveMessageSemantics(input),
           ...(input.at !== undefined ? { createdAt: input.at, updatedAt: input.at } : {})
         })
       ];
@@ -1141,6 +1159,7 @@ export const cmd = {
         }),
         cmd.block.patch(toolBlockId(input.id, input.blockId), {
           ...(input.renderer ? { renderer: input.renderer } : {}),
+          ...resolveMessageSemantics(input),
           ...(input.at !== undefined ? { updatedAt: input.at } : {}),
           data: mergeData(
             {

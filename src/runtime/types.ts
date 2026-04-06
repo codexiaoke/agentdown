@@ -4,6 +4,21 @@
 export type RuntimeData = Record<string, unknown>;
 
 /**
+ * surface block 可携带的聊天语义标识。
+ *
+ * 这层语义和 block 自身的 `id` 是两回事：
+ * - `conversationId` 表示整段对话 / session
+ * - `turnId` 表示一问一答中的一轮
+ * - `messageId` 表示一条具体消息
+ * - `block.id` 仍然只表示消息内部的某个渲染块
+ */
+export interface RuntimeChatSemantics {
+  conversationId?: string | null;
+  turnId?: string | null;
+  messageId?: string | null;
+}
+
+/**
  * runtime 节点的通用结构。
  */
 export interface RuntimeNode<TData extends RuntimeData = RuntimeData> {
@@ -22,7 +37,7 @@ export interface RuntimeNode<TData extends RuntimeData = RuntimeData> {
 /**
  * surface 上可渲染 block 的通用结构。
  */
-export interface SurfaceBlock<TData extends RuntimeData = RuntimeData> {
+export interface SurfaceBlock<TData extends RuntimeData = RuntimeData> extends RuntimeChatSemantics {
   id: string;
   slot: string;
   type: string;
@@ -111,7 +126,7 @@ export type BlockRemoveCommand = {
 /**
  * 打开一个流式内容会话的命令。
  */
-export type StreamOpenCommand = {
+export type StreamOpenCommand = RuntimeChatSemantics & {
   type: 'stream.open';
   streamId: string;
   slot: string;

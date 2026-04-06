@@ -57,6 +57,19 @@ export interface ToolNameRegistryOptions<TContext> extends ToolNameRegistryShare
 }
 
 /**
+ * `toolByName()` 的轻量配置。
+ *
+ * 和 `createToolNameRegistry()` 相比，
+ * 这里只保留用户真正高频会写的两部分：
+ * - `definitions`
+ * - `resolveName`
+ */
+export interface ToolByNameOptions<TContext> extends ToolNameRegistrySharedOptions {
+  /** 如何从当前 adapter context 里取出工具名。 */
+  resolveName: (context: TContext) => string | undefined;
+}
+
+/**
  * 工具名注册器最终产出的两部分结果。
  */
 export interface ToolNameRegistryResult<TContext> {
@@ -122,22 +135,23 @@ function collectToolRenderers(definitions: ToolNameComponentMap): RunSurfaceRend
 }
 
 /**
- * 创建一个通用的“按工具名选择 renderer”的注册器。
+ * 创建一个更自然的“按工具名选择 renderer” helper。
  *
  * 这个 helper 的目标是把下面两段重复代码收敛成一份配置：
  * - `protocolOptions.toolRenderer`
  * - `surface.renderers`
  */
-export function createToolNameRegistry<TContext>(
-  options: ToolNameRegistryOptions<TContext>
+export function toolByName<TContext>(
+  definitions: ToolNameComponentMap,
+  options: ToolByNameOptions<TContext>
 ): ToolNameRegistryResult<TContext> {
   const normalizeName = options.normalizeName ?? defaultNormalizeName;
   const fallback = options.fallback ?? 'tool';
-  const definitions = Object.entries(options.definitions).map(([renderer, definition]) => ({
+  const normalizedDefinitions = Object.entries(definitions).map(([renderer, definition]) => ({
     renderer,
     definition
   }));
-  const renderers = collectToolRenderers(options.definitions);
+  const renderers = collectToolRenderers(definitions);
 
   return {
     toolRenderer(context: TContext) {
@@ -149,7 +163,7 @@ export function createToolNameRegistry<TContext>(
 
       const normalizedToolName = normalizeName(resolvedName);
 
-      for (const entry of definitions) {
+      for (const entry of normalizedDefinitions) {
         const matchers = toArray(entry.definition.match);
         const mode = entry.definition.mode ?? 'exact';
 
@@ -162,4 +176,19 @@ export function createToolNameRegistry<TContext>(
     },
     renderers
   };
+}
+
+/**
+ * 兼容旧版命名的注册器入口。
+ *
+ * 内部已经收敛到 `toolByName()`，因此新旧 API 的行为保持一致。
+ */
+export function createToolNameRegistry<TContext>(
+  options: ToolNameRegistryOptions<TContext>
+): ToolNameRegistryResult<TContext> {
+  return toolByName(options.definitions, {
+    resolveName: options.resolveName,
+    ...(options.fallback !== undefined ? { fallback: options.fallback } : {}),
+    ...(options.normalizeName !== undefined ? { normalizeName: options.normalizeName } : {})
+  });
 }

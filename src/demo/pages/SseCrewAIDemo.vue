@@ -4,7 +4,7 @@ import {
   type AgentRuntime,
   type CrewAIEvent,
   cmd,
-  createSseTransport,
+  createJsonSseTransport,
   defineCrewAIToolComponents,
   defineCrewAIPreset,
   parseCrewAISseMessage,
@@ -82,18 +82,14 @@ const crewAIPreset = defineCrewAIPreset<string>({
 
 const { runtime, bridge, surface } = crewAIPreset.createSession({
   bridge: {
-    transport: createSseTransport<CrewAIEvent, string>({
+    transport: createJsonSseTransport<CrewAIEvent, string>({
       parse: parseCrewAISseMessage,
-      init() {
-        return {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
+      request: {
+        body() {
+          return {
             message: prompt.value
-          })
-        };
+          };
+        }
       }
     })
   }

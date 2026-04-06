@@ -203,6 +203,37 @@ await session.replay.play()
 
 这几层的页面级组合封装。
 
+## `useAdapterSession()`
+
+如果你已经在使用官方 starter adapter，例如：
+
+- `createAgnoAdapter()`
+- 后续的 `createLangChainAdapter()`
+
+那更推荐直接用：
+
+```ts
+const session = useAdapterSession(myAdapter, {
+  overrides: {
+    source: '/api/stream/agno',
+    transport: createSseTransport({
+      mode: 'json'
+    })
+  }
+})
+
+await session.connect()
+```
+
+它本质上是在 `adapter.createSession()` 之上，再把这些页面常用能力一起收好：
+
+- `status`
+- `error`
+- `runtimeState`
+- `transcriptState`
+- `replay`
+- `connect()` / `disconnect()` / `restart()`
+
 ## `createRuntimeTranscript()`
 
 把当前 runtime 或 snapshot 导出成一份可序列化 transcript：
@@ -324,6 +355,29 @@ await bridge.consume('/api/stream', { signal })
 - `text`：直接返回 `data` 字符串
 
 如果后端格式更特殊，也可以自定义 `parse(message, context)`。
+
+## `createJsonSseTransport()`
+
+如果你的后端是最常见的“POST JSON body，然后返回 SSE JSON 事件”：
+
+```ts
+const transport = createJsonSseTransport<MyPacket>({
+  request: {
+    body: {
+      message: '帮我查一下北京天气'
+    }
+  }
+})
+
+await bridge.consume('/api/stream', { signal })
+```
+
+这个 helper 会自动处理：
+
+- `mode: 'json'`
+- JSON body 的 `JSON.stringify`
+- 默认 `Content-Type: application/json`
+- 传了 body 但没写 method 时，默认使用 `POST`
 
 ## `createNdjsonTransport()`
 

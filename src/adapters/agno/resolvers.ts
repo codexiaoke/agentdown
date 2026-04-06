@@ -23,6 +23,54 @@ export function resolveGroupId(
 }
 
 /**
+ * 解析本次 run 的 conversationId。
+ */
+export function resolveConversationId(
+  runId: string,
+  packet: AgnoEvent,
+  context: ProtocolContext,
+  options: AgnoProtocolOptions
+): string | null | undefined {
+  if (typeof options.conversationId === 'function') {
+    return options.conversationId(runId, packet, context);
+  }
+
+  return options.conversationId ?? packet.session_id ?? packet.sessionId ?? null;
+}
+
+/**
+ * 解析本次 run 的 turnId。
+ */
+export function resolveTurnId(
+  runId: string,
+  packet: AgnoEvent,
+  context: ProtocolContext,
+  options: AgnoProtocolOptions
+): string | null | undefined {
+  if (typeof options.turnId === 'function') {
+    return options.turnId(runId, packet, context);
+  }
+
+  return options.turnId ?? resolveGroupId(runId, packet, context, options);
+}
+
+/**
+ * 解析本次 assistant 消息的 messageId。
+ */
+export function resolveMessageId(
+  runId: string,
+  packet: AgnoEvent,
+  context: ProtocolContext,
+  options: AgnoProtocolOptions
+): string | null | undefined {
+  if (typeof options.messageId === 'function') {
+    return options.messageId(runId, packet, context);
+  }
+
+  return options.messageId ?? `message:${runId}:assistant`;
+}
+
+/**
  * 解析本次 run 的 streamId。
  */
 export function resolveStreamId(

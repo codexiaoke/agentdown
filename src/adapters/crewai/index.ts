@@ -14,8 +14,10 @@ export { defineCrewAIToolComponents } from './toolComponents';
 export type {
   CrewAIBlockIdResolver,
   CrewAIChunkType,
+  CrewAIConversationIdResolver,
   CrewAIEvent,
   CrewAIGroupIdResolver,
+  CrewAIMessageIdResolver,
   CrewAIMessage,
   CrewAIMessageToolCall,
   CrewAIMessageToolFunction,
@@ -23,6 +25,7 @@ export type {
   CrewAIProtocolOptions,
   CrewAIRunTitleResolver,
   CrewAIStreamIdResolver,
+  CrewAITurnIdResolver,
   CrewAIStreamingToolCall,
   CrewAITaskOutput,
   CrewAIToolPayload,

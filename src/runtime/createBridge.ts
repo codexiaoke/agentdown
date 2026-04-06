@@ -12,6 +12,33 @@ import type {
 import { coalesceStreamDeltas, createIdFactory, isAsyncIterable, isIterable, toArray, toAsyncIterable, trimLog } from './utils';
 
 /**
+ * 判断当前异常是否属于用户主动中断带来的 abort 错误。
+ */
+function isAbortLikeError(cause: unknown): boolean {
+  if (!cause) {
+    return false;
+  }
+
+  if (cause instanceof DOMException && cause.name === 'AbortError') {
+    return true;
+  }
+
+  if (cause instanceof Error) {
+    if (cause.name === 'AbortError') {
+      return true;
+    }
+
+    if (/abort(ed)?/i.test(cause.message)) {
+      return true;
+    }
+
+    return isAbortLikeError((cause as Error & { cause?: unknown }).cause);
+  }
+
+  return false;
+}
+
+/**
  * 构造带阶段信息的 bridge 错误对象。
  */
 function createBridgeError<TRawPacket>(
@@ -387,6 +414,12 @@ export function createBridge<TRawPacket = unknown, TSource = AsyncIterable<TRawP
       flush('consume-complete');
       phase = 'idle';
     } catch (cause) {
+      if (signal.aborted || isAbortLikeError(cause)) {
+        flush('consume-aborted');
+        phase = 'idle';
+        return;
+      }
+
       handleError(
         createBridgeError('consume', 'Bridge consume failed.', {
           cause

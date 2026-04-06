@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
+import type { Component } from 'vue';
 import { createMarkdownAssembler } from '../runtime/assemblers';
 import { createBridge } from '../runtime/createBridge';
-import { createAgnoProtocol, type AgnoEvent } from './agno';
+import {
+  createAgnoAdapter,
+  createAgnoProtocol,
+  createAgnoSseTransport,
+  defineAgnoEventComponents,
+  defineAgnoToolComponents,
+  type AgnoEvent
+} from './agno';
 
 /**
  * 创建一个用于测试 Agno adapter 的同步 bridge。
@@ -240,5 +248,130 @@ describe('createAgnoProtocol', () => {
       nodeId: 'run-4',
       content: '根据查询结果，北京今天（2026年4月5日）的天气情况如下：'
     });
+  });
+
+  it('creates a ready-to-use Agno adapter by composing tools, events and surface renderers', async () => {
+    const WeatherToolCard = {} as Component;
+    const WeatherEventCard = {} as Component;
+    const tools = defineAgnoToolComponents({
+      'tool.weather': {
+        match: 'lookup_weather',
+        component: WeatherToolCard
+      }
+    });
+    const events = defineAgnoEventComponents({
+      'event.weather-summary': {
+        on: 'weather_card',
+        component: WeatherEventCard,
+        resolve: ({ event }) => ({
+          id: 'event:block:weather-summary',
+          mode: 'upsert',
+          groupId: 'turn:run-5',
+          data: {
+            payload: (event as AgnoEvent).result
+          }
+        })
+      }
+    });
+    const adapter = createAgnoAdapter({
+      title: '天气助手',
+      tools,
+      events
+    });
+    const session = adapter.createSession({
+      source: [
+        {
+          event: 'RunStarted',
+          run_id: 'run-5'
+        },
+        {
+          event: 'RunContent',
+          run_id: 'run-5',
+          content: '我来为你查询天气。'
+        },
+        {
+          event: 'ToolCallCompleted',
+          run_id: 'run-5',
+          tool: {
+            id: 'tool-5',
+            tool_name: 'lookup_weather',
+            result: {
+              city: '北京',
+              condition: '晴'
+            }
+          }
+        },
+        {
+          event: 'weather_card',
+          run_id: 'run-5',
+          result: {
+            city: '北京',
+            condition: '晴'
+          }
+        },
+        {
+          event: 'RunCompleted',
+          run_id: 'run-5'
+        }
+      ]
+    });
+
+    await session.connect();
+
+    const snapshot = session.runtime.snapshot();
+    const toolBlock = snapshot.blocks.find((block) => block.nodeId === 'tool-5');
+    const eventBlock = snapshot.blocks.find((block) => block.id === 'event:block:weather-summary');
+
+    expect(adapter.name).toBe('agno');
+    expect(session.surface.renderers?.['tool.weather']).toBe(WeatherToolCard);
+    expect(session.surface.renderers?.['event.weather-summary']).toBe(WeatherEventCard);
+    expect(snapshot.nodes.find((node) => node.id === 'run-5')?.title).toBe('天气助手');
+    expect(toolBlock?.renderer).toBe('tool.weather');
+    expect(eventBlock).toMatchObject({
+      renderer: 'event.weather-summary'
+    });
+    expect(eventBlock?.data.payload).toEqual({
+      city: '北京',
+      condition: '晴'
+    });
+  });
+
+  it('provides a compact Agno SSE transport helper for backend requests', async () => {
+    let capturedInit: RequestInit | undefined;
+    const transport = createAgnoSseTransport<string>({
+      fetch: async (_source, init) => {
+        capturedInit = init;
+
+        return new Response('data: {"event":"RunStarted","run_id":"run-helper"}\n\n', {
+          status: 200,
+          headers: {
+            'Content-Type': 'text/event-stream'
+          }
+        });
+      },
+      message(source) {
+        return `ask:${source}`;
+      },
+      body: {
+        city: '北京'
+      }
+    });
+    const packets: AgnoEvent[] = [];
+
+    for await (const packet of transport.connect('/api/stream/agno', {
+      signal: new AbortController().signal
+    })) {
+      packets.push(packet);
+    }
+
+    expect(capturedInit?.method).toBe('POST');
+    expect(new Headers(capturedInit?.headers).get('Content-Type')).toBe('application/json');
+    expect(capturedInit?.body).toBe('{"city":"北京","message":"ask:/api/stream/agno"}');
+    expect(packets).toEqual([
+      {
+        event: 'RunStarted',
+        run_id: 'run-helper'
+      }
+    ]);
   });
 });

@@ -1,4 +1,5 @@
 import { createAgentRuntime } from './createAgentRuntime';
+import { resolveBlockMessageScope } from './chatSemantics';
 import type {
   AgentRuntime,
   RuntimeHistoryEntry,
@@ -29,6 +30,9 @@ type ReplayStatus = 'idle' | 'playing' | 'completed';
 export interface RuntimeTranscriptMessage {
   id: string;
   slot: string;
+  conversationId?: string | null;
+  turnId?: string | null;
+  messageId?: string | null;
   groupId?: string | null;
   role: TranscriptRole;
   blockIds: string[];
@@ -47,6 +51,9 @@ export interface RuntimeTranscriptTool {
   nodeId?: string;
   blockId?: string;
   slot?: string;
+  conversationId?: string | null;
+  turnId?: string | null;
+  messageId?: string | null;
   groupId?: string | null;
   role?: TranscriptRole;
   title?: string;
@@ -67,6 +74,9 @@ export interface RuntimeTranscriptArtifact {
   id: string;
   blockId: string;
   slot: string;
+  conversationId?: string | null;
+  turnId?: string | null;
+  messageId?: string | null;
   groupId?: string | null;
   role: TranscriptRole;
   title?: string;
@@ -87,6 +97,9 @@ export interface RuntimeTranscriptApproval {
   id: string;
   blockId: string;
   slot: string;
+  conversationId?: string | null;
+  turnId?: string | null;
+  messageId?: string | null;
   groupId?: string | null;
   role: TranscriptRole;
   title?: string;
@@ -281,6 +294,26 @@ function extractBlockText(block: SurfaceBlock): string {
 }
 
 /**
+ * 为 transcript 消息生成稳定 id。
+ */
+function createTranscriptMessageId(
+  block: SurfaceBlock,
+  index: number
+): string {
+  const scope = resolveBlockMessageScope(block);
+
+  if (scope.messageId) {
+    return `${scope.messageId}:${index}`;
+  }
+
+  if (scope.groupId) {
+    return `${scope.groupId}:${index}`;
+  }
+
+  return block.id;
+}
+
+/**
  * 基于 block 和可选 node 信息生成一条 tool transcript 记录。
  */
 function createToolEntryFromBlock(
@@ -288,6 +321,7 @@ function createToolEntryFromBlock(
   snapshot: RuntimeSnapshot,
   node?: RuntimeSnapshot['nodes'][number]
 ): RuntimeTranscriptTool {
+  const scope = resolveBlockMessageScope(block);
   const blockData = resolveRecord(block.data);
   const nodeData = resolveRecord(node?.data);
   const title = readString(blockData.title, node?.title);
@@ -308,6 +342,9 @@ function createToolEntryFromBlock(
     ...(block.nodeId ? { nodeId: block.nodeId } : {}),
     blockId: block.id,
     slot: block.slot,
+    ...(scope.conversationId !== null ? { conversationId: scope.conversationId } : {}),
+    ...(scope.turnId !== null ? { turnId: scope.turnId } : {}),
+    ...(scope.messageId !== null ? { messageId: scope.messageId } : {}),
     ...(block.groupId !== undefined ? { groupId: block.groupId } : {}),
     role: resolveBlockRole(block, snapshot),
     ...(title !== undefined ? { title } : {}),
@@ -407,6 +444,7 @@ function createRuntimeTranscriptArtifacts(
       return block.type === 'artifact' || data.kind === 'artifact';
     })
     .map((block) => {
+      const scope = resolveBlockMessageScope(block);
       const data = resolveRecord(block.data);
       const artifactId = readString(data.artifactId);
       const title = readString(data.title);
@@ -420,6 +458,9 @@ function createRuntimeTranscriptArtifacts(
         id: artifactId ?? block.id,
         blockId: block.id,
         slot: block.slot,
+        ...(scope.conversationId !== null ? { conversationId: scope.conversationId } : {}),
+        ...(scope.turnId !== null ? { turnId: scope.turnId } : {}),
+        ...(scope.messageId !== null ? { messageId: scope.messageId } : {}),
         ...(block.groupId !== undefined ? { groupId: block.groupId } : {}),
         role: resolveBlockRole(block, snapshot),
         ...(title !== undefined ? { title } : {}),
@@ -448,6 +489,7 @@ function createRuntimeTranscriptApprovals(
       return block.type === 'approval' || data.kind === 'approval';
     })
     .map((block) => {
+      const scope = resolveBlockMessageScope(block);
       const data = resolveRecord(block.data);
       const approvalId = readString(data.approvalId);
       const title = readString(data.title);
@@ -459,6 +501,9 @@ function createRuntimeTranscriptApprovals(
         id: approvalId ?? block.id,
         blockId: block.id,
         slot: block.slot,
+        ...(scope.conversationId !== null ? { conversationId: scope.conversationId } : {}),
+        ...(scope.turnId !== null ? { turnId: scope.turnId } : {}),
+        ...(scope.messageId !== null ? { messageId: scope.messageId } : {}),
         ...(block.groupId !== undefined ? { groupId: block.groupId } : {}),
         role: resolveBlockRole(block, snapshot),
         ...(title !== undefined ? { title } : {}),
@@ -474,7 +519,8 @@ function createRuntimeTranscriptApprovals(
 
 /**
  * 把当前 snapshot 的 block 序列整理成更适合导出或展示的消息 transcript。
- * 分组规则和 RunSurface 保持一致：按 slot / groupId / role 做连续聚合。
+ * 分组规则和 RunSurface 保持一致：按 slot / messageId / role 做连续聚合。
+ * 如果未显式提供 `messageId`，会自动回退到旧版 `groupId`。
  */
 export function createRuntimeTranscriptMessages(
   input: TranscriptSource,
@@ -486,13 +532,14 @@ export function createRuntimeTranscriptMessages(
 
   for (const block of blocks) {
     const role = resolveBlockRole(block, snapshot);
+    const scope = resolveBlockMessageScope(block);
     const previous = messages[messages.length - 1];
 
     if (
       previous
       && previous.slot === block.slot
       && previous.role === role
-      && (previous.groupId ?? null) === (block.groupId ?? null)
+      && (previous.messageId ?? previous.groupId ?? null) === (scope.messageId ?? scope.groupId)
     ) {
       previous.blocks.push(block);
       previous.blockIds.push(block.id);
@@ -515,8 +562,11 @@ export function createRuntimeTranscriptMessages(
     }
 
     messages.push({
-      id: block.groupId ? `${block.groupId}:${messages.length}` : block.id,
+      id: createTranscriptMessageId(block, messages.length),
       slot: block.slot,
+      ...(scope.conversationId !== null ? { conversationId: scope.conversationId } : {}),
+      ...(scope.turnId !== null ? { turnId: scope.turnId } : {}),
+      ...(scope.messageId !== null ? { messageId: scope.messageId } : {}),
       ...(block.groupId !== undefined ? { groupId: block.groupId } : {}),
       role,
       blockIds: [block.id],

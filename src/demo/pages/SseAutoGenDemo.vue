@@ -4,7 +4,7 @@ import {
   type AgentRuntime,
   type AutoGenEvent,
   cmd,
-  createSseTransport,
+  createJsonSseTransport,
   defineAutoGenToolComponents,
   defineAutoGenPreset,
   RunSurface,
@@ -81,18 +81,13 @@ const autoGenPreset = defineAutoGenPreset<string>({
 
 const { runtime, bridge, surface } = autoGenPreset.createSession({
   bridge: {
-    transport: createSseTransport<AutoGenEvent, string>({
-      mode: 'json',
-      init() {
-        return {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
+    transport: createJsonSseTransport<AutoGenEvent, string>({
+      request: {
+        body() {
+          return {
             message: prompt.value
-          })
-        };
+          };
+        }
       }
     })
   }

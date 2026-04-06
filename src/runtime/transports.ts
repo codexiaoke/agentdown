@@ -4,7 +4,13 @@ import { toArray, toAsyncIterable } from './utils';
 /**
  * 支持同步或异步返回值的工具类型。
  */
-type Awaitable<T> = T | Promise<T>;
+export type TransportAwaitable<T> = T | Promise<T>;
+
+/**
+ * 支持直接传值或按 source 延迟求值的 transport 配置值。
+ */
+export type TransportResolvable<TSource, TValue> =
+  TValue | ((source: TSource) => TransportAwaitable<TValue>);
 
 /**
  * fetch 类 transport 支持的输入源类型。
@@ -87,11 +93,48 @@ export interface SseTransportOptions<
 > {
   mode?: SseTransportMode;
   fetch?: typeof fetch;
-  init?: RequestInit | ((source: TSource) => Awaitable<RequestInit | undefined>);
+  init?: RequestInit | ((source: TSource) => TransportAwaitable<RequestInit | undefined>);
   parse?: (
     message: SseTransportMessage,
     context: SseTransportContext<TSource>
-  ) => Awaitable<TPacket | TPacket[] | null | void>;
+  ) => TransportAwaitable<TPacket | TPacket[] | null | void>;
+}
+
+/**
+ * 更贴近“请求 JSON SSE 接口”这一业务语义的请求描述。
+ *
+ * 它会自动处理：
+ * - 普通对象 body 的 `JSON.stringify`
+ * - 缺省 `Content-Type: application/json`
+ * - 如果传了 body 但没显式写 method，则默认使用 `POST`
+ */
+export interface JsonRequestOptions<
+  TSource = FetchTransportSource,
+  TBody = BodyInit | Record<string, unknown>
+> {
+  /** 请求方法，可直接传值，也可按 source 动态生成。 */
+  method?: TransportResolvable<TSource, string | undefined>;
+  /** 请求头，可直接传值，也可按 source 动态生成。 */
+  headers?: TransportResolvable<TSource, HeadersInit | undefined>;
+  /** 请求体，可直接传值，也可按 source 动态生成。 */
+  body?: TransportResolvable<TSource, TBody | undefined>;
+}
+
+/**
+ * “请求 JSON SSE 接口” 的 transport 配置。
+ *
+ * 和 `createSseTransport({ mode: 'json', init })` 相比，
+ * 这里更适合常见的 POST JSON body 场景。
+ */
+export interface JsonSseTransportOptions<
+  TPacket = unknown,
+  TSource = FetchTransportSource,
+  TBody = BodyInit | Record<string, unknown>
+> extends Omit<SseTransportOptions<TPacket, TSource>, 'mode' | 'init'> {
+  /** 更贴近业务语义的请求描述。 */
+  request?: JsonRequestOptions<TSource, TBody>;
+  /** 仍然允许叠加一个原始 RequestInit 或工厂函数。 */
+  init?: SseTransportOptions<TPacket, TSource>['init'];
 }
 
 /**
@@ -103,11 +146,11 @@ export interface NdjsonTransportOptions<
 > {
   mode?: NdjsonTransportMode;
   fetch?: typeof fetch;
-  init?: RequestInit | ((source: TSource) => Awaitable<RequestInit | undefined>);
+  init?: RequestInit | ((source: TSource) => TransportAwaitable<RequestInit | undefined>);
   parse?: (
     line: string,
     context: NdjsonTransportContext<TSource>
-  ) => Awaitable<TPacket | TPacket[] | null | void>;
+  ) => TransportAwaitable<TPacket | TPacket[] | null | void>;
 }
 
 /**
@@ -119,13 +162,13 @@ export interface WebSocketTransportOptions<
 > {
   mode?: WebSocketTransportMode;
   WebSocket?: typeof WebSocket;
-  protocols?: string | string[] | ((source: TSource) => Awaitable<string | string[] | undefined>);
+  protocols?: string | string[] | ((source: TSource) => TransportAwaitable<string | string[] | undefined>);
   binaryType?: BinaryType;
-  onOpen?: (context: WebSocketTransportContext<TSource>) => Awaitable<void>;
+  onOpen?: (context: WebSocketTransportContext<TSource>) => TransportAwaitable<void>;
   parse?: (
     message: WebSocketTransportMessage,
     context: WebSocketTransportContext<TSource>
-  ) => Awaitable<TPacket | TPacket[] | null | void>;
+  ) => TransportAwaitable<TPacket | TPacket[] | null | void>;
 }
 
 /**
@@ -157,7 +200,7 @@ function resolveFetcher(fetcher?: typeof fetch): typeof fetch {
  * 统一解析 RequestInit，兼容对象和工厂函数两种写法。
  */
 async function resolveRequestInit<TSource>(
-  init: RequestInit | ((source: TSource) => Awaitable<RequestInit | undefined>) | undefined,
+  init: RequestInit | ((source: TSource) => TransportAwaitable<RequestInit | undefined>) | undefined,
   source: TSource
 ): Promise<RequestInit | undefined> {
   if (!init) {
@@ -172,13 +215,150 @@ async function resolveRequestInit<TSource>(
 }
 
 /**
+ * 判断一组 headers 是否已经是原生 `Headers` 实例。
+ */
+function isHeaders(value: HeadersInit | undefined): value is Headers {
+  return typeof Headers !== 'undefined' && value instanceof Headers;
+}
+
+/**
+ * 合并多份 headers，后面的值覆盖前面的值。
+ */
+function mergeRequestHeaders(...values: Array<HeadersInit | undefined>): Headers {
+  const headers = new Headers();
+
+  for (const value of values) {
+    if (!value) {
+      continue;
+    }
+
+    if (isHeaders(value)) {
+      value.forEach((headerValue, key) => {
+        headers.set(key, headerValue);
+      });
+      continue;
+    }
+
+    if (Array.isArray(value)) {
+      for (const [key, headerValue] of value) {
+        headers.set(key, headerValue);
+      }
+      continue;
+    }
+
+    Object.entries(value).forEach(([key, headerValue]) => {
+      if (headerValue !== undefined) {
+        headers.set(key, String(headerValue));
+      }
+    });
+  }
+
+  return headers;
+}
+
+/**
+ * 判断 body 是否是需要自动 JSON.stringify 的普通对象。
+ */
+function isJsonRecordRequestBody(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+
+  if (Array.isArray(value)) {
+    return false;
+  }
+
+  if (value instanceof FormData || value instanceof URLSearchParams || value instanceof Blob) {
+    return false;
+  }
+
+  if (value instanceof ArrayBuffer || ArrayBuffer.isView(value)) {
+    return false;
+  }
+
+  if (typeof ReadableStream !== 'undefined' && value instanceof ReadableStream) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * 解析一个可直接传值或按 source 计算的配置项。
+ */
+async function resolveResolvableValue<TSource, TValue>(
+  source: TSource,
+  value: TransportResolvable<TSource, TValue> | undefined
+): Promise<TValue | undefined> {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value === 'function') {
+    return (value as (source: TSource) => TransportAwaitable<TValue>)(source);
+  }
+
+  return value;
+}
+
+/**
+ * 把更贴近业务语义的 JSON 请求描述，统一转换成 `transport.init`。
+ *
+ * 这样：
+ * - `useSse()`
+ * - `useSseBridge()`
+ * - `createJsonSseTransport()`
+ *
+ * 都能共用同一套请求拼装规则。
+ */
+export function createJsonRequestInitResolver<
+  TSource = FetchTransportSource,
+  TBody = BodyInit | Record<string, unknown>
+>(
+  request?: JsonRequestOptions<TSource, TBody>,
+  baseInit?: SseTransportOptions<unknown, TSource>['init']
+): SseTransportOptions<unknown, TSource>['init'] | undefined {
+  if (!request && !baseInit) {
+    return undefined;
+  }
+
+  return async (source: TSource) => {
+    const resolvedInit = await resolveRequestInit(baseInit, source);
+    const resolvedMethod = await resolveResolvableValue(source, request?.method);
+    const resolvedHeaders = await resolveResolvableValue(source, request?.headers);
+    const resolvedBody = await resolveResolvableValue(source, request?.body);
+    const headers = mergeRequestHeaders(resolvedInit?.headers, resolvedHeaders);
+    let body: BodyInit | undefined = resolvedBody as BodyInit | undefined;
+
+    if (resolvedBody !== undefined && isJsonRecordRequestBody(resolvedBody)) {
+      if (!headers.has('Content-Type')) {
+        headers.set('Content-Type', 'application/json');
+      }
+
+      body = JSON.stringify(resolvedBody);
+    }
+
+    const mergedMethod = resolvedMethod
+      ?? resolvedInit?.method
+      ?? (body !== undefined ? 'POST' : undefined);
+
+    return {
+      ...resolvedInit,
+      ...(mergedMethod !== undefined ? { method: mergedMethod } : {}),
+      ...(headers.keys().next().done ? {} : { headers }),
+      ...(body !== undefined ? { body: body as BodyInit } : {})
+    };
+  };
+}
+
+/**
  * 发起 transport 对应的 fetch 请求，并验证返回体可读。
  */
 async function openResponse<TSource>(
   source: TSource,
   options: {
     fetch?: typeof fetch;
-    init?: RequestInit | ((source: TSource) => Awaitable<RequestInit | undefined>);
+    init?: RequestInit | ((source: TSource) => TransportAwaitable<RequestInit | undefined>);
   },
   signal?: AbortSignal
 ): Promise<Response> {
@@ -226,7 +406,7 @@ async function resolveWebSocketProtocols<TSource>(
   protocols:
     | string
     | string[]
-    | ((source: TSource) => Awaitable<string | string[] | undefined>)
+    | ((source: TSource) => TransportAwaitable<string | string[] | undefined>)
     | undefined
 ): Promise<string | string[] | undefined> {
   if (!protocols) {
@@ -248,7 +428,7 @@ async function resolveWebSocketEndpoint<TSource = WebSocketTransportSource>(
   protocols:
     | string
     | string[]
-    | ((source: TSource) => Awaitable<string | string[] | undefined>)
+    | ((source: TSource) => TransportAwaitable<string | string[] | undefined>)
     | undefined
 ): Promise<{
   url: string;
@@ -596,6 +776,51 @@ export function createSseTransport<
       yield* flushEvent();
     }
   };
+}
+
+/**
+ * 更适合“请求 JSON SSE 接口”的快捷 transport。
+ *
+ * 相比直接手写：
+ *
+ * ```ts
+ * createSseTransport({
+ *   mode: 'json',
+ *   init() {
+ *     return {
+ *       method: 'POST',
+ *       headers: { 'Content-Type': 'application/json' },
+ *       body: JSON.stringify({ message: 'hello' })
+ *     };
+ *   }
+ * })
+ * ```
+ *
+ * 这里可以直接写：
+ *
+ * ```ts
+ * createJsonSseTransport({
+ *   request: {
+ *     body: { message: 'hello' }
+ *   }
+ * })
+ * ```
+ */
+export function createJsonSseTransport<
+  TPacket = unknown,
+  TSource = FetchTransportSource,
+  TBody = BodyInit | Record<string, unknown>
+>(
+  options: JsonSseTransportOptions<TPacket, TSource, TBody> = {}
+): TransportAdapter<TSource, TPacket> {
+  const init = createJsonRequestInitResolver(options.request, options.init);
+
+  return createSseTransport<TPacket, TSource>({
+    ...(options.fetch ? { fetch: options.fetch } : {}),
+    ...(options.parse ? { parse: options.parse } : {}),
+    mode: 'json',
+    ...(init ? { init } : {})
+  });
 }
 
 /**

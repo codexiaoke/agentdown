@@ -1,4 +1,4 @@
-import { createToolNameRegistry, type ToolNameComponentMap, type ToolNameRegistryResult, type ToolNameRegistrySharedOptions } from '../toolNameRegistry';
+import { toolByName, type ToolNameComponentMap, type ToolNameRegistryResult, type ToolNameRegistrySharedOptions } from '../toolNameRegistry';
 import type { LangChainToolRendererContext } from './types';
 
 /**
@@ -17,9 +17,8 @@ export function defineLangChainToolComponents(
   definitions: ToolNameComponentMap,
   options: ToolNameRegistrySharedOptions = {}
 ): ToolNameRegistryResult<LangChainToolRendererContext> {
-  return createToolNameRegistry<LangChainToolRendererContext>({
+  return toolByName<LangChainToolRendererContext>(definitions, {
     ...options,
-    definitions,
     resolveName: resolveLangChainToolName
   });
 }

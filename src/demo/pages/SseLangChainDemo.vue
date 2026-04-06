@@ -4,7 +4,7 @@ import {
   type AgentRuntime,
   type LangChainEvent,
   cmd,
-  createSseTransport,
+  createJsonSseTransport,
   defineLangChainToolComponents,
   defineLangChainPreset,
   RunSurface,
@@ -81,18 +81,13 @@ const langChainPreset = defineLangChainPreset<string>({
 
 const { runtime, bridge, surface } = langChainPreset.createSession({
   bridge: {
-    transport: createSseTransport<LangChainEvent, string>({
-      mode: 'json',
-      init() {
-        return {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
+    transport: createJsonSseTransport<LangChainEvent, string>({
+      request: {
+        body() {
+          return {
             message: prompt.value
-          })
-        };
+          };
+        }
       }
     })
   }

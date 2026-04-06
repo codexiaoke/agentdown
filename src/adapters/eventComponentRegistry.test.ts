@@ -3,7 +3,7 @@ import type { Component } from 'vue';
 import { createMarkdownAssembler } from '../runtime/assemblers';
 import { createBridge } from '../runtime/createBridge';
 import { composeProtocols } from '../runtime/composeProtocols';
-import { createEventComponentRegistry } from './eventComponentRegistry';
+import { createEventComponentRegistry, eventToBlock } from './eventComponentRegistry';
 import { defineAgnoEventComponents } from './agno';
 import { createAgnoProtocol, type AgnoEvent } from './agno';
 
@@ -115,5 +115,48 @@ describe('createEventComponentRegistry', () => {
     expect(eventBlock?.data.payload).toEqual({
       city: '北京'
     });
+  });
+
+  it('supports the lighter eventToBlock() DSL directly', () => {
+    const WeatherEventCard = {} as Component;
+    const registry = eventToBlock<{ type: string; city: string }>(
+      {
+        'event.weather': {
+          on: 'weather.ready',
+          component: WeatherEventCard,
+          resolve: ({ event }) => ({
+            id: 'event:block:weather-direct',
+            mode: 'upsert',
+            data: {
+              city: event.city
+            }
+          })
+        }
+      },
+      {
+        resolveEventName(event) {
+          return event.type;
+        }
+      }
+    );
+    const bridge = createBridge<{ type: string; city: string }>({
+      scheduler: 'sync',
+      protocol: registry.protocol,
+      assemblers: {}
+    });
+
+    bridge.push([
+      {
+        type: 'weather.ready',
+        city: '上海'
+      }
+    ]);
+    bridge.flush('event-to-block');
+
+    expect(registry.renderers['event.weather']).toBe(WeatherEventCard);
+    expect(bridge.runtime.block('event:block:weather-direct')).toMatchObject({
+      renderer: 'event.weather'
+    });
+    expect(bridge.runtime.block('event:block:weather-direct')?.data.city).toBe('上海');
   });
 });

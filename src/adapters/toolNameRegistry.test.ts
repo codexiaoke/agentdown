@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Component } from 'vue';
 import { defineAgnoToolComponents } from './agno';
+import { toolByName } from './toolNameRegistry';
 
 describe('defineAgnoToolComponents', () => {
   it('builds both toolRenderer and renderers from one tool-name config', () => {
@@ -55,5 +56,28 @@ describe('defineAgnoToolComponents', () => {
         context: {} as never
       })
     ).toBe('tool.default');
+  });
+
+  it('supports the lighter toolByName() DSL directly', () => {
+    const WeatherToolCard = {} as Component;
+    const registry = toolByName<{ toolName?: string }>(
+      {
+        'tool.weather': {
+          match: ['weather', '天气'],
+          mode: 'includes',
+          component: WeatherToolCard
+        }
+      },
+      {
+        resolveName(context) {
+          return context.toolName;
+        }
+      }
+    );
+
+    expect(registry.toolRenderer({
+      toolName: 'lookup_weather'
+    })).toBe('tool.weather');
+    expect(registry.renderers['tool.weather']).toBe(WeatherToolCard);
   });
 });

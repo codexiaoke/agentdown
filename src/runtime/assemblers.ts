@@ -22,6 +22,9 @@ interface TextStreamSession {
   slot: string;
   nodeId: string | null | undefined;
   groupId: string | null | undefined;
+  conversationId: string | null | undefined;
+  turnId: string | null | undefined;
+  messageId: string | null | undefined;
   createdAt: number;
   data: Record<string, unknown>;
   type: string;
@@ -69,6 +72,9 @@ function createTextSession(
     slot: command.slot,
     nodeId: command.nodeId,
     groupId: command.groupId,
+    conversationId: command.conversationId,
+    turnId: command.turnId,
+    messageId: command.messageId,
     createdAt: context.now(),
     data: readRecord(command.data, 'blockData') ?? {},
     type: readString(command.data, 'blockType') ?? defaults.type,
@@ -98,6 +104,18 @@ function createDraftInsertCommand(command: StreamOpenCommand, session: TextStrea
 
   if (command.groupId !== undefined) {
     block.groupId = command.groupId;
+  }
+
+  if (session.conversationId !== undefined) {
+    block.conversationId = session.conversationId;
+  }
+
+  if (session.turnId !== undefined) {
+    block.turnId = session.turnId;
+  }
+
+  if (session.messageId !== undefined) {
+    block.messageId = session.messageId;
   }
 
   if (session.content.length > 0) {
@@ -239,6 +257,18 @@ function markdownBlockToSurfaceBlock(
 
   if (session.groupId !== undefined) {
     next.groupId = session.groupId;
+  }
+
+  if (session.conversationId !== undefined) {
+    next.conversationId = session.conversationId;
+  }
+
+  if (session.turnId !== undefined) {
+    next.turnId = session.turnId;
+  }
+
+  if (session.messageId !== undefined) {
+    next.messageId = session.messageId;
   }
 
   switch (block.kind) {

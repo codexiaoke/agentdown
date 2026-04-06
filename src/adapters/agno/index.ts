@@ -6,17 +6,24 @@
  * 2. 用户在接入时会用到的公共类型
  */
 
+export { createAgnoAdapter } from './adapter';
 export { createAgnoProtocol, defineAgnoPreset } from './protocol';
+export { createAgnoSseTransport } from './transport';
 export { defineAgnoEventComponents } from './eventComponents';
 export { defineAgnoToolComponents } from './toolComponents';
+export type { AgnoRequestBody, AgnoSseTransportOptions } from './transport';
 export type {
+  AgnoAdapterOptions,
   AgnoBlockIdResolver,
+  AgnoConversationIdResolver,
   AgnoEvent,
   AgnoGroupIdResolver,
+  AgnoMessageIdResolver,
   AgnoPresetOptions,
   AgnoProtocolOptions,
   AgnoRunTitleResolver,
   AgnoStreamIdResolver,
+  AgnoTurnIdResolver,
   AgnoToolPayload,
   AgnoToolRendererContext,
   AgnoToolRendererResolver

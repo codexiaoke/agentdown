@@ -4,6 +4,7 @@ import { defaultMarkdownBuiltinComponents } from './defaultMarkdownComponents';
 import { AGENTDOWN_DEFAULT_TEXT_FONT } from './pretextRichText';
 import RunSurfaceAssistantShell from './RunSurfaceAssistantShell.vue';
 import RunSurfaceBlock from './RunSurfaceBlock.vue';
+import RunSurfaceMessageActions from './RunSurfaceMessageActions.vue';
 import RunSurfaceToolRenderer from './RunSurfaceToolRenderer.vue';
 import RunSurfaceUserBubble from './RunSurfaceUserBubble.vue';
 import type {
@@ -12,8 +13,10 @@ import type {
   MarkdownBuiltinComponentOverrides
 } from '../core/types';
 import type { AgentRuntime, RuntimeSnapshot, SurfaceBlock } from '../runtime/types';
+import { resolveBlockMessageScope } from '../runtime/chatSemantics';
 import type {
   RunSurfaceDraftPlaceholder,
+  RunSurfaceMessageActionsMap,
   RunSurfaceMessageShellContext,
   RunSurfaceMessageShellMap,
   RunSurfacePerformanceOptions,
@@ -36,14 +39,18 @@ interface Props {
   renderers?: RunSurfaceRendererMap;
   draftPlaceholder?: RunSurfaceDraftPlaceholder;
   messageShells?: RunSurfaceMessageShellMap;
+  messageActions?: RunSurfaceMessageActionsMap;
 }
 
 /**
- * surface 中按 role 和 groupId 聚合后的消息单元。
+ * surface 中按 role 和 messageId 聚合后的消息单元。
  */
 interface SurfaceGroup {
   id: string;
   groupId: string | null;
+  conversationId: string | null;
+  turnId: string | null;
+  messageId: string | null;
   role: RunSurfaceRole;
   blocks: SurfaceBlock[];
 }
@@ -71,7 +78,8 @@ const props = withDefaults(defineProps<Props>(), {
   draftPlaceholder: false,
   messageShells: () => ({
     user: RunSurfaceUserBubble
-  })
+  }),
+  messageActions: () => ({})
 });
 
 const containerRef = ref<HTMLElement | null>(null);
@@ -128,6 +136,15 @@ const resolvedMessageShells = computed<RunSurfaceMessageShellMap>(() => ({
     props: createDefaultShellProps
   },
   ...(props.messageShells ?? {})
+}));
+
+const resolvedMessageActions = computed<RunSurfaceMessageActionsMap>(() => ({
+  assistant: {
+    enabled: true,
+    showOnDraft: false,
+    showWhileRunning: false
+  },
+  ...(props.messageActions ?? {})
 }));
 
 let unsubscribe: (() => void) | null = null;
@@ -212,24 +229,39 @@ function resolveBlockRole(block: SurfaceBlock): RunSurfaceRole {
 }
 
 /**
- * 按连续的 role + groupId 把 block 聚合成消息 group。
+ * 按连续的 role + messageId 把 block 聚合成消息 group。
+ *
+ * 为了兼容旧数据，如果 block 还没显式写 `messageId`，
+ * 这里会自动回退到 `groupId`。
  */
 const groups = computed<SurfaceGroup[]>(() => {
   const next: SurfaceGroup[] = [];
 
   for (const block of slotBlocks.value) {
     const role = resolveBlockRole(block);
-    const groupId = block.groupId ?? null;
+    const scope = resolveBlockMessageScope(block);
     const previous = next[next.length - 1];
 
-    if (previous && groupId && previous.groupId === groupId && previous.role === role) {
+    if (
+      previous
+      && scope.messageId
+      && previous.messageId === scope.messageId
+      && previous.role === role
+    ) {
       previous.blocks.push(block);
       continue;
     }
 
     next.push({
-      id: groupId ? `${groupId}:${next.length}` : block.id,
-      groupId,
+      id: scope.messageId
+        ? `${scope.messageId}:${next.length}`
+        : scope.groupId
+          ? `${scope.groupId}:${next.length}`
+          : block.id,
+      groupId: scope.groupId,
+      conversationId: scope.conversationId,
+      turnId: scope.turnId,
+      messageId: scope.messageId,
       role,
       blocks: [block]
     });
@@ -472,6 +504,18 @@ onBeforeUnmount(() => {
             :lazy-mount-margin="resolvedPerformance.lazyMountMargin"
             :text-slab-chars="resolvedPerformance.textSlabChars"
             :has-visible-content-before="group.blocks.slice(0, index).some(hasBlockVisibleContent)"
+          />
+
+          <RunSurfaceMessageActions
+            :role="group.role"
+            :blocks="group.blocks"
+            :conversation-id="group.conversationId"
+            :turn-id="group.turnId"
+            :message-id="group.messageId"
+            :group-id="group.groupId"
+            :runtime="runtime"
+            :snapshot="snapshot"
+            :options="resolvedMessageActions[group.role]"
           />
         </div>
       </article>

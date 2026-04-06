@@ -139,6 +139,33 @@ export type AutoGenGroupIdResolver = (
 ) => string | null | undefined;
 
 /**
+ * 生成 conversationId 时的自定义回调签名。
+ */
+export type AutoGenConversationIdResolver = (
+  runId: string,
+  packet: AutoGenEvent,
+  context: ProtocolContext
+) => string | null | undefined;
+
+/**
+ * 生成 turnId 时的自定义回调签名。
+ */
+export type AutoGenTurnIdResolver = (
+  runId: string,
+  packet: AutoGenEvent,
+  context: ProtocolContext
+) => string | null | undefined;
+
+/**
+ * 生成 assistant messageId 时的自定义回调签名。
+ */
+export type AutoGenMessageIdResolver = (
+  runId: string,
+  packet: AutoGenEvent,
+  context: ProtocolContext
+) => string | null | undefined;
+
+/**
  * 生成 run 标题时的自定义回调签名。
  */
 export type AutoGenRunTitleResolver = (
@@ -165,6 +192,12 @@ export interface AutoGenProtocolOptions {
   blockId?: string | AutoGenBlockIdResolver;
   /** 自定义消息分组 id，默认按 `turn:${runId}` 分组。 */
   groupId?: string | AutoGenGroupIdResolver;
+  /** 自定义 conversationId；AutoGen 默认无法可靠推断，所以默认是 `null`。 */
+  conversationId?: string | AutoGenConversationIdResolver;
+  /** 自定义 turnId，默认回退到当前 `groupId`。 */
+  turnId?: string | AutoGenTurnIdResolver;
+  /** 自定义 assistant messageId，默认优先取 `full_message_id`。 */
+  messageId?: string | AutoGenMessageIdResolver;
   /** 自定义 run 标题解析规则。 */
   defaultRunTitle?: string | AutoGenRunTitleResolver;
   /** 把某个工具映射到哪个 renderer，例如 `tool.weather`。 */
@@ -217,6 +250,12 @@ export interface AutoGenRunSession {
   segmentHasContent: boolean;
   /** 当前 run 在 surface 里的消息分组 id。 */
   groupId: string | null | undefined;
+  /** 当前 run 所属的 conversation / session id。 */
+  conversationId: string | null | undefined;
+  /** 当前 run 所属的 turn id。 */
+  turnId: string | null | undefined;
+  /** 当前 assistant 消息的稳定 message id。 */
+  messageId: string | null | undefined;
   /** 当前 run 的显示标题。 */
   title: string | undefined;
   /** 当前分段的内容流是否已经打开。 */

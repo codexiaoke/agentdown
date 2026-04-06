@@ -1,4 +1,4 @@
-import { createEventComponentRegistry, type EventComponentDefinitionMap, type EventComponentRegistryResult, type EventComponentRegistrySharedOptions } from '../eventComponentRegistry';
+import { eventToBlock, type EventComponentDefinitionMap, type EventComponentRegistryResult, type EventComponentRegistrySharedOptions } from '../eventComponentRegistry';
 import { normalizeAutoGenEventName } from './packet';
 import type { AutoGenEvent } from './types';
 
@@ -9,9 +9,8 @@ export function defineAutoGenEventComponents(
   definitions: EventComponentDefinitionMap<AutoGenEvent>,
   options: EventComponentRegistrySharedOptions = {}
 ): EventComponentRegistryResult<AutoGenEvent> {
-  return createEventComponentRegistry<AutoGenEvent>({
+  return eventToBlock<AutoGenEvent>(definitions, {
     ...options,
-    definitions,
     resolveEventName(event) {
       return typeof event.type === 'string'
         ? normalizeAutoGenEventName(event.type)
