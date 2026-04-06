@@ -136,18 +136,65 @@ export interface AgentChatFrameworkDriver<
 }
 
 /**
+ * 当前文件内部复用的“任意 framework driver”宽类型。
+ *
+ * 这里故意统一使用 `unknown`，避免宽类型把整条 `useAgentChat()` 推导链污染成 `any`。
+ */
+type AnyAgentChatFrameworkDriver = AgentChatFrameworkDriver<
+  any,
+  any,
+  unknown,
+  any,
+  any,
+  any
+>;
+
+/**
+ * 从 framework driver 里提取 session options 类型。
+ */
+type ExtractAgentChatFrameworkSessionOptions<TFramework extends AnyAgentChatFrameworkDriver> =
+  TFramework extends AgentChatFrameworkDriver<any, infer TSessionOptions, any, any, any, any>
+    ? TSessionOptions
+    : never;
+
+/**
+ * 从 framework driver 里提取最终返回值类型。
+ */
+type ExtractAgentChatFrameworkResult<TFramework extends AnyAgentChatFrameworkDriver> =
+  TFramework extends AgentChatFrameworkDriver<any, any, infer TResult, any, any, any>
+    ? TResult
+    : never;
+
+/**
+ * 从 framework driver 里提取 tools 输入类型。
+ */
+type ExtractAgentChatFrameworkToolsInput<TFramework extends AnyAgentChatFrameworkDriver> =
+  TFramework extends AgentChatFrameworkDriver<any, any, any, infer TToolsInput, any, any>
+    ? TToolsInput
+    : never;
+
+/**
+ * 从 framework driver 里提取 events 输入类型。
+ */
+type ExtractAgentChatFrameworkEventsInput<TFramework extends AnyAgentChatFrameworkDriver> =
+  TFramework extends AgentChatFrameworkDriver<any, any, any, any, infer TEventsInput, any>
+    ? TEventsInput
+    : never;
+
+/**
+ * 从 framework driver 里提取 eventActions 输入类型。
+ */
+type ExtractAgentChatFrameworkEventActionsInput<TFramework extends AnyAgentChatFrameworkDriver> =
+  TFramework extends AgentChatFrameworkDriver<any, any, any, any, any, infer TEventActionsInput>
+    ? TEventActionsInput
+    : never;
+
+/**
  * framework driver 注册表的最小结构。
  */
 export type AgentChatFrameworkRegistry = Record<
   string,
-  AgentChatFrameworkDriver<
-    any,
-    any,
-    any,
-    any,
-    any,
-    any
-  >
+  AnyAgentChatFrameworkDriver
 >;
 
 /**
@@ -157,7 +204,7 @@ export type AgentChatFrameworkRegistry = Record<
  */
 export type AgentChatFramework =
   | AgentChatBuiltinFrameworkId
-  | AgentChatFrameworkDriver<any, any, any, any, any, any>;
+  | AnyAgentChatFrameworkDriver;
 
 /**
  * 定义一个可插入 `useAgentChat()` 的 framework driver。
@@ -465,12 +512,13 @@ export type UseAgentChatOptions<TSource = string> =
   | UseAgentChatLangChainOptions<TSource>
   | UseAgentChatAutoGenOptions<TSource>
   | UseAgentChatCrewAIOptions<TSource>
-  | UseAgentChatFrameworkOptions<
-    AgentChatFrameworkDriver<any, any, any, any, any, any>,
-    any,
-    any,
-    any,
-    any
+  | UseAgentChatCustomOptions<
+    TSource,
+    AgentChatFrameworkSessionOptions<TSource>,
+    unknown,
+    unknown,
+    unknown,
+    unknown
   >;
 
 /**
@@ -508,9 +556,9 @@ export type ResolveUseAgentChatResult<TOptions> =
         : TFramework extends 'autogen'
           ? UseAutoGenChatSessionResult<InferAgentChatSource<TOptions>>
           : TFramework extends 'crewai'
-            ? UseCrewAIChatSessionResult<InferAgentChatSource<TOptions>>
-            : TFramework extends AgentChatFrameworkDriver<any, any, infer TResult, any, any, any>
-              ? TResult
+        ? UseCrewAIChatSessionResult<InferAgentChatSource<TOptions>>
+            : TFramework extends AnyAgentChatFrameworkDriver
+              ? ExtractAgentChatFrameworkResult<TFramework>
               : never
     : never;
 
@@ -1010,14 +1058,7 @@ export const builtinAgentChatFrameworks = createAgentChatFrameworkRegistry({
  */
 export function resolveAgentChatFrameworkDriver(
   framework: AgentChatFramework
-): AgentChatFrameworkDriver<
-  any,
-  any,
-  any,
-  any,
-  any,
-  any
-> {
+): AnyAgentChatFrameworkDriver {
   if (typeof framework !== 'string') {
     return framework;
   }
@@ -1096,20 +1137,44 @@ function runAgentChatWithFramework<
  * 统一 chat 入口。
  *
  * 目标：
- * - 对用户只保留一套 `useAgentChat()` 心智
+ * - 给“自定义 framework driver”提供一套统一入口
  * - 允许直接传工具组件简写、事件组件简写、事件副作用简写
  * - 内部仍然完全复用四套官方框架各自的适配层
+ *
+ * 推荐用法：
+ * - 内置框架优先使用各自的 `useAgnoChatSession()` / `useLangChainChatSession()` 等专用 helper
+ * - 只有在你要封装自定义 framework 或做统一抽象层时，再使用 `useAgentChat()`
  */
+export function useAgentChat<TSource = string>(
+  options: UseAgentChatAgnoOptions<TSource>
+): UseAgnoChatSessionResult<TSource>;
+export function useAgentChat<TSource = string>(
+  options: UseAgentChatLangChainOptions<TSource>
+): UseLangChainChatSessionResult<TSource>;
+export function useAgentChat<TSource = string>(
+  options: UseAgentChatAutoGenOptions<TSource>
+): UseAutoGenChatSessionResult<TSource>;
+export function useAgentChat<TSource = string>(
+  options: UseAgentChatCrewAIOptions<TSource>
+): UseCrewAIChatSessionResult<TSource>;
 export function useAgentChat<
-  TSource = string,
-  TOptions extends UseAgentChatOptions<TSource> = UseAgentChatOptions<TSource>
+  TFramework extends AnyAgentChatFrameworkDriver
 >(
-  options: TOptions
-): ResolveUseAgentChatResult<TOptions> {
+  options: UseAgentChatFrameworkOptions<
+    TFramework,
+    ExtractAgentChatFrameworkSessionOptions<TFramework>,
+    ExtractAgentChatFrameworkToolsInput<TFramework>,
+    ExtractAgentChatFrameworkEventsInput<TFramework>,
+    ExtractAgentChatFrameworkEventActionsInput<TFramework>
+  >
+): ExtractAgentChatFrameworkResult<TFramework>;
+export function useAgentChat(
+  options: UseAgentChatOptions<any>
+): unknown {
   return runAgentChatWithFramework(
     resolveAgentChatFrameworkDriver(options.framework as AgentChatFramework),
     options as UseAgentChatFrameworkOptions<any, any, any, any, any>
-  ) as ResolveUseAgentChatResult<TOptions>;
+  );
 }
 
 export type {

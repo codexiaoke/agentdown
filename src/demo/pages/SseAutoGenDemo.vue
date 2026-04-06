@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
 import {
+  defineAutoGenToolComponents,
   RunSurface,
-  useAgentChat
+  useAutoGenChatSession
 } from '../../index';
 import MessageLoadingBubble from '../components/MessageLoadingBubble.vue';
 import WeatherToolCard from '../components/WeatherToolCard.vue';
@@ -37,11 +38,6 @@ function buildAutoGenEndpoint(): string {
 const prompt = ref(DEFAULT_PROMPT);
 const endpoint = buildAutoGenEndpoint();
 
-/**
- * AutoGen demo 直接走统一入口 `useAgentChat()`：
- * - 只需要指定 `framework: 'autogen'`
- * - `tools` 直接写成对象简写
- */
 const {
   runtime,
   surface,
@@ -50,15 +46,17 @@ const {
   statusLabel,
   transportError,
   sessionId: backendSessionId
-} = useAgentChat<string>({
-  framework: 'autogen',
+} = useAutoGenChatSession<string>({
   source: endpoint,
   input: prompt,
   conversationId: DEMO_CONVERSATION_ID,
   title: 'AutoGen 助手',
-  tools: {
-    lookup_weather: WeatherToolCard
-  },
+  tools: defineAutoGenToolComponents({
+    lookup_weather: {
+      match: 'lookup_weather',
+      component: WeatherToolCard
+    }
+  }),
   surface: {
     draftPlaceholder: {
       component: MessageLoadingBubble,
@@ -80,7 +78,7 @@ onMounted(() => {
   <section class="demo-page">
     <header class="demo-page__header">
       <h1>AutoGen 真实 SSE</h1>
-      <p>启动 FastAPI backend 后，这个页面会直接请求真实 `/api/stream/autogen`，并使用统一入口 `useAgentChat()` 把官方 `run_stream()` 事件渲染成聊天内容和工具组件。</p>
+      <p>启动 FastAPI backend 后，这个页面会直接请求真实 `/api/stream/autogen`，并使用专用的 `useAutoGenChatSession()` 把官方 `run_stream()` 事件渲染成聊天内容和工具组件。</p>
     </header>
 
     <form

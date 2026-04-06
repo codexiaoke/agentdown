@@ -25,6 +25,11 @@ import type { AutoGenEvent } from '../adapters/autogen';
 import type { CrewAIEvent } from '../adapters/crewai';
 
 /**
+ * 判断一个类型是否被污染成 `any`。
+ */
+type IsAny<T> = 0 extends (1 & T) ? true : false;
+
+/**
  * 把一组 Agno 事件包装成最小可用的 SSE Response。
  */
 function createAgnoSseResponse(events: AgnoEvent[]): Response {
@@ -191,6 +196,8 @@ describe('useAgentChat', () => {
       }
     }));
 
+    expectTypeOf<IsAny<typeof sessionState>>().toEqualTypeOf<false>();
+
     if (!sessionState) {
       throw new Error('Failed to create unified Agno chat session.');
     }
@@ -289,6 +296,8 @@ describe('useAgentChat', () => {
       }
     }));
 
+    expectTypeOf<IsAny<typeof sessionState>>().toEqualTypeOf<false>();
+
     if (!sessionState) {
       throw new Error('Failed to create unified LangChain chat session.');
     }
@@ -381,6 +390,8 @@ describe('useAgentChat', () => {
         ])) as typeof fetch
       }
     }));
+
+    expectTypeOf<IsAny<typeof sessionState>>().toEqualTypeOf<false>();
 
     if (!sessionState) {
       throw new Error('Failed to create unified AutoGen chat session.');
@@ -481,6 +492,8 @@ describe('useAgentChat', () => {
       }
     }));
 
+    expectTypeOf<IsAny<typeof sessionState>>().toEqualTypeOf<false>();
+
     if (!sessionState) {
       throw new Error('Failed to create unified CrewAI chat session.');
     }
@@ -567,6 +580,7 @@ describe('useAgentChat', () => {
       }
     });
 
+    expectTypeOf<IsAny<typeof result>>().toEqualTypeOf<false>();
     expectTypeOf(result).toEqualTypeOf<CustomSessionResult>();
     expect(result.driverId).toBe('custom-sse');
     expect(capturedOptions?.conversationId).toBe('session:demo:custom-framework');

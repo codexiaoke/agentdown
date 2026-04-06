@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
 import {
+  defineAgnoEventActions,
+  defineAgnoToolComponents,
   RunSurface,
-  useAgentChat
+  useAgnoChatSession
 } from '../../index';
 import MessageLoadingBubble from '../components/MessageLoadingBubble.vue';
 import WeatherToolCard from '../components/WeatherToolCard.vue';
@@ -38,12 +40,6 @@ function buildAgnoEndpoint(): string {
 const prompt = ref(DEFAULT_PROMPT);
 const endpoint = buildAgnoEndpoint();
 
-/**
- * 现在 demo 直接走统一入口 `useAgentChat()`：
- * - 只需要指定 `framework`
- * - `tools` 可以直接写成 “工具名 -> 组件” 的最短对象
- * - `eventActions` 可以直接监听非 UI 事件，不必再转 block
- */
 const {
   runtime,
   surface,
@@ -52,27 +48,33 @@ const {
   statusLabel,
   transportError,
   sessionId: backendSessionId
-} = useAgentChat<string>({
-  framework: 'agno',
+} = useAgnoChatSession<string>({
   source: endpoint,
   input: prompt,
   conversationId: DEMO_CONVERSATION_ID,
   title: 'Agno 助手',
-  tools: {
-    lookup_weather: WeatherToolCard
-  },
-  eventActions: {
-    RunStarted({ event }) {
-      lifecycleEvent.value = typeof event.event === 'string'
-        ? event.event
-        : 'RunStarted';
-    },
-    RunCompleted({ event }) {
-      lifecycleEvent.value = typeof event.event === 'string'
-        ? event.event
-        : 'RunCompleted';
+  tools: defineAgnoToolComponents({
+    lookup_weather: {
+      match: 'lookup_weather',
+      component: WeatherToolCard
     }
-  },
+  }),
+  eventActions: defineAgnoEventActions({
+    RunStarted: {
+      run({ event }) {
+        lifecycleEvent.value = typeof event.event === 'string'
+          ? event.event
+          : 'RunStarted';
+      }
+    },
+    RunCompleted: {
+      run({ event }) {
+        lifecycleEvent.value = typeof event.event === 'string'
+          ? event.event
+          : 'RunCompleted';
+      }
+    }
+  }),
   surface: {
     draftPlaceholder: {
       component: MessageLoadingBubble,
@@ -94,7 +96,7 @@ onMounted(() => {
   <section class="demo-page">
     <header class="demo-page__header">
       <h1>Agno 真实 SSE</h1>
-      <p>启动 FastAPI backend 后，这个页面会直接请求真实 `/api/stream/agno`，并优先展示统一入口 `useAgentChat()` 的最短接法。这里的 `RunStarted / RunCompleted` 还会通过 `eventActions` 走副作用通道，而不是强行渲染成 block。</p>
+      <p>启动 FastAPI backend 后，这个页面会直接请求真实 `/api/stream/agno`，并使用专用的 `useAgnoChatSession()` 接入。这里的 `RunStarted / RunCompleted` 仍然通过 `eventActions` 走副作用通道，而不是强行渲染成 block。</p>
     </header>
 
     <form

@@ -44,25 +44,25 @@ const routes: DemoRoute[] = [
   {
     path: '/sse-weather',
     title: 'Agno 真实 SSE',
-    description: '直接请求真实 /api/stream/agno，并优先展示 useAgentChat() + eventActions 的最短接法。',
+    description: '直接请求真实 /api/stream/agno，并展示 useAgnoChatSession() + eventActions 的接法。',
     component: SseWeatherDemo
   },
   {
     path: '/sse-autogen',
     title: 'AutoGen 真实 SSE',
-    description: '直接请求真实 /api/stream/autogen，并用 useAgentChat() 渲染官方 run_stream() 事件。',
+    description: '直接请求真实 /api/stream/autogen，并用 useAutoGenChatSession() 渲染官方 run_stream() 事件。',
     component: SseAutoGenDemo
   },
   {
     path: '/sse-langchain',
     title: 'LangChain 真实 SSE',
-    description: '直接请求真实 /api/stream/langchain，并用 useAgentChat() 渲染官方 astream_events()。',
+    description: '直接请求真实 /api/stream/langchain，并用 useLangChainChatSession() 渲染官方 astream_events()。',
     component: SseLangChainDemo
   },
   {
     path: '/sse-crewai',
     title: 'CrewAI 真实 SSE',
-    description: '直接请求真实 /api/stream/crewai，并用 useAgentChat() 渲染官方流式 chunk + CrewOutput。',
+    description: '直接请求真实 /api/stream/crewai，并用 useCrewAIChatSession() 渲染官方流式 chunk + CrewOutput。',
     component: SseCrewAIDemo
   },
   {
