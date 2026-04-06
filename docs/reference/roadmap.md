@@ -39,6 +39,34 @@ V2 的核心目标不是“把 markdown 渲染得更炫”，而是：
 
 `把 Agentdown 从可用 runtime 推进成真实 Agent 产品前端平台`
 
+## V2 当前状态
+
+`V2 还没有全部完成。`
+
+截至当前这版代码，已经有明显进展的部分包括：
+
+- Renderer 2.0 主链基础已经落地
+- 官方框架适配入口已经覆盖 `Agno / LangChain / AutoGen / CrewAI`
+- 流式 markdown 的 `draft -> stable -> settled` 基础语义已经进入渲染链路
+- 长文档性能实验室、benchmark JSON、窗口化和 pretext 主链已经可用
+- transcript / replay 基础能力已经进入正式导出
+- draft devtools overlay 已经可以直接解释“为什么这段内容还没 stable”
+
+但下面这些还没有完全收口：
+
+- `event inspector`
+- `protocol trace`
+- `runtime snapshot diff`
+- `approval / retry / resume / interrupt` 的完整产品动作层
+- worker parser / SSR handoff
+- graph / team runtime
+
+如果按“最值得继续做”的顺序，下一步最建议先完成：
+
+1. `Devtools 2.0` 的 `event inspector + protocol trace + snapshot diff`
+2. `Adapter Kit 2.0` 的正式 adapter factory 和 starter 文档
+3. `Human-In-The-Loop 2.0` 的 action API
+
 ## Phase 1: Renderer 2.0 + Adapter Kit 2.0
 
 目标：先把最影响接入体验和渲染体验的主链做强。

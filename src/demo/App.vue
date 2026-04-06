@@ -80,7 +80,7 @@ const routes: DemoRoute[] = [
   {
     path: '/streaming-markdown',
     title: '流式 Markdown',
-    description: '演示 useAsyncIterableBridge 接本地 token 流，code/table 只在结构完整后稳定渲染。',
+    description: '演示 useAsyncIterableBridge 接本地 token 流，并附带 draft devtools overlay 观察稳定化过程。',
     component: StreamingMarkdownDemo
   },
   {

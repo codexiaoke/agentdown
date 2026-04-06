@@ -5,6 +5,7 @@ export { default as DefaultMarkdownArtifactBlock } from './components/ArtifactBl
 export { default as MarkdownRenderer } from './components/MarkdownRenderer.vue';
 export { default as RunSurface } from './components/RunSurface.vue';
 export { default as DefaultRunSurfaceAssistantShell } from './components/RunSurfaceAssistantShell.vue';
+export { default as RunSurfaceDraftOverlay } from './components/RunSurfaceDraftOverlay.vue';
 export { default as DefaultRunSurfaceMessageActions } from './components/RunSurfaceMessageActions.vue';
 export { default as DefaultRunSurfaceToolRenderer } from './components/RunSurfaceToolRenderer.vue';
 export { default as DefaultRunSurfaceUserBubble } from './components/RunSurfaceUserBubble.vue';
@@ -95,6 +96,11 @@ export {
 } from './adapters/langchain';
 export { createEventComponentRegistry, eventToBlock } from './adapters/eventComponentRegistry';
 export { createToolNameRegistry, toolByName } from './adapters/toolNameRegistry';
+export {
+  resolveRunSurfaceDraftDiagnostic,
+  resolveRunSurfaceDraftDiagnostics,
+  resolveRunSurfaceDraftReason
+} from './devtools/runSurfaceDraftDiagnostics';
 export {
   useAsyncIterableBridge,
   useBridgeTransport,
@@ -290,6 +296,16 @@ export type {
   EventNameMatchMode,
   EventNameMatcher
 } from './adapters/eventComponentRegistry';
+export type {
+  ResolveRunSurfaceDraftDiagnosticsOptions,
+  RunSurfaceDraftDiagnostic,
+  RunSurfaceDraftDiagnosticKind,
+  RunSurfaceDraftDiagnosticsResult,
+  RunSurfaceDraftDiagnosticsSummary,
+  RunSurfaceDraftDiagnosticStability,
+  RunSurfaceDraftDomAttributes,
+  RunSurfaceDraftReason
+} from './devtools/runSurfaceDraftDiagnostics';
 export type {
   ToolByNameOptions,
   ToolNameComponentDefinition,

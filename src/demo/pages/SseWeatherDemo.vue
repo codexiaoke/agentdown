@@ -4,6 +4,7 @@ import {
   defineAgnoEventActions,
   defineAgnoToolComponents,
   RunSurface,
+  RunSurfaceDraftOverlay,
   useAgnoChatSession
 } from '../../index';
 import MessageLoadingBubble from '../components/MessageLoadingBubble.vue';
@@ -153,6 +154,13 @@ onMounted(() => {
     <RunSurface
       :runtime="runtime"
       v-bind="surface"
+    />
+
+    <RunSurfaceDraftOverlay
+      :runtime="runtime"
+      title="Agno Draft Devtools"
+      :initially-open="true"
+      :max-items="5"
     />
   </section>
 </template>

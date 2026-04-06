@@ -4,6 +4,7 @@ import {
   cmd,
   createMarkdownAssembler,
   RunSurface,
+  RunSurfaceDraftOverlay,
   useAsyncIterableBridge
 } from '../../index';
 import {
@@ -159,6 +160,13 @@ onMounted(() => {
     <RunSurface
       :runtime="runtime"
       v-bind="surface"
+    />
+
+    <RunSurfaceDraftOverlay
+      :runtime="runtime"
+      title="流式草稿观察"
+      :initially-open="true"
+      :max-items="4"
     />
 
     <button

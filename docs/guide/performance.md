@@ -185,7 +185,53 @@ demo 里已经提供“性能实验室”页面，支持：
 
 这对真实优化很重要，因为你可以拿 JSON 前后对比，而不是只靠体感。
 
-### 3. 用 Chrome DevTools
+### 3. 用 Draft Devtools 看稳定化原因
+
+性能问题和流式稳定化问题经常会一起出现。  
+如果你发现某段 markdown 一直没有进入 stable，最直接的做法是把 `RunSurfaceDraftOverlay` 挂到页面上：
+
+```vue
+<script setup lang="ts">
+import {
+  RunSurface,
+  RunSurfaceDraftOverlay
+} from 'agentdown';
+
+defineProps<{
+  runtime: AgentRuntime;
+}>();
+</script>
+
+<template>
+  <RunSurface :runtime="runtime" />
+
+  <RunSurfaceDraftOverlay
+    :runtime="runtime"
+    title="Draft Devtools"
+    :max-items="6"
+  />
+</template>
+```
+
+你可以直接看到：
+
+- 当前哪些 block 还在 draft
+- 它属于 `table / fence / html / paragraph` 哪一类
+- 它为什么还没 stable
+- 当前 DOM 上真实写出来的 `data-draft-*` 属性
+
+如果你需要接自己的调试面板，也可以直接调用：
+
+```ts
+import { resolveRunSurfaceDraftDiagnostics } from 'agentdown';
+
+// 把 runtime snapshot 变成一份可复制、可比较的 draft 诊断结果。
+const diagnostics = resolveRunSurfaceDraftDiagnostics(snapshot, {
+  slot: 'main'
+});
+```
+
+### 4. 用 Chrome DevTools
 
 推荐再配合看：
 

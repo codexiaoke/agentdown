@@ -83,6 +83,71 @@ interface SurfaceBlockStreamingDraftData {
 
 这样你既可以在 Vue 里读 `block.data`，也可以在 devtools 或样式层直接观察当前草稿状态。
 
+## Draft Devtools
+
+如果你想直接看到“为什么这段内容还没 stable”，可以把 `RunSurfaceDraftOverlay` 挂在页面上：
+
+```vue
+<script setup lang="ts">
+import {
+  RunSurface,
+  RunSurfaceDraftOverlay
+} from 'agentdown';
+
+defineProps<{
+  runtime: AgentRuntime;
+}>();
+</script>
+
+<template>
+  <RunSurface :runtime="runtime" />
+
+  <RunSurfaceDraftOverlay
+    :runtime="runtime"
+    title="Draft Devtools"
+    :initially-open="true"
+    :max-items="5"
+  />
+</template>
+```
+
+这个 overlay 会直接显示：
+
+- 当前有多少个 draft block
+- 每个 draft block 的 `data-draft-*` 元数据
+- “为什么它还没 stable”的中文解释
+- 可复制的 JSON 调试快照
+
+适合的场景：
+
+- 调试流式 table / code / html 为什么迟迟不稳定
+- 和后端联调时确认当前尾部到底属于哪种语法草稿
+- 收集最小复现信息，方便提 issue 或回归测试
+
+### 程序化诊断
+
+如果你不想显示 overlay，也可以直接用 devtools helper 读取诊断结果：
+
+```ts
+import { resolveRunSurfaceDraftDiagnostics } from 'agentdown';
+
+// 直接把 runtime snapshot 整理成可展示、可导出的诊断结构。
+const diagnostics = resolveRunSurfaceDraftDiagnostics(snapshot, {
+  slot: 'main',
+  previewChars: 120
+});
+
+console.log(diagnostics.summary.draftBlockCount);
+console.log(diagnostics.diagnostics);
+```
+
+返回结果里会包含：
+
+- `summary`
+  当前 slot 下的 draft 汇总计数
+- `diagnostics`
+  每个 draft block 的详细解释、内容摘要和 DOM 属性快照
+
 ## `performance`
 
 ```ts
