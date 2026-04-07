@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue';
 import {
+  AgentDevtoolsOverlay,
   cmd,
   createMarkdownAssembler,
   RunSurface,
   RunSurfaceDraftOverlay,
+  useAgentDevtools,
   useAsyncIterableBridge
 } from '../../index';
 import {
@@ -18,6 +20,9 @@ const USER_GROUP_ID = 'turn:user:streaming-markdown';
 const ASSISTANT_GROUP_ID = 'turn:assistant:streaming-markdown';
 const runtime = markdownStreamingPreset.createRuntime();
 const surface = markdownStreamingPreset.getSurfaceOptions();
+const devtools = useAgentDevtools<MarkdownStreamingPacket>({
+  maxEntries: 80
+});
 
 /**
  * 把一段文本拆成逐字符 delta，模拟 token 级流式输出。
@@ -129,8 +134,11 @@ const {
   protocol: markdownStreamingPreset.protocol,
   assemblers: {
     markdown: createMarkdownAssembler()
-  }
+  },
+  hooks: devtools.hooks
 });
+
+devtools.attachRuntime(runtime);
 
 const playing = computed(() => consuming.value);
 
@@ -160,6 +168,14 @@ onMounted(() => {
     <RunSurface
       :runtime="runtime"
       v-bind="surface"
+    />
+
+    <AgentDevtoolsOverlay
+      :devtools="devtools"
+      title="Streaming Devtools"
+      :initially-open="true"
+      default-tab="trace"
+      :max-items="5"
     />
 
     <RunSurfaceDraftOverlay

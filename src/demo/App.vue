@@ -44,25 +44,25 @@ const routes: DemoRoute[] = [
   {
     path: '/sse-weather',
     title: 'Agno 真实 SSE',
-    description: '直接请求真实 /api/stream/agno，并展示 useAgnoChatSession() + eventActions 的接法。',
+    description: '直接请求真实 /api/stream/agno，并展示 useAgnoChatSession()、draft overlay 和 Agent Devtools。',
     component: SseWeatherDemo
   },
   {
     path: '/sse-autogen',
     title: 'AutoGen 真实 SSE',
-    description: '直接请求真实 /api/stream/autogen，并用 useAutoGenChatSession() 渲染官方 run_stream() 事件。',
+    description: '直接请求真实 /api/stream/autogen，并附带 raw event / trace / diff devtools。',
     component: SseAutoGenDemo
   },
   {
     path: '/sse-langchain',
     title: 'LangChain 真实 SSE',
-    description: '直接请求真实 /api/stream/langchain，并用 useLangChainChatSession() 渲染官方 astream_events()。',
+    description: '直接请求真实 /api/stream/langchain，并附带 raw event / trace / diff devtools。',
     component: SseLangChainDemo
   },
   {
     path: '/sse-crewai',
     title: 'CrewAI 真实 SSE',
-    description: '直接请求真实 /api/stream/crewai，并用 useCrewAIChatSession() 渲染官方流式 chunk + CrewOutput。',
+    description: '直接请求真实 /api/stream/crewai，并附带 raw event / trace / diff devtools。',
     component: SseCrewAIDemo
   },
   {
@@ -80,7 +80,7 @@ const routes: DemoRoute[] = [
   {
     path: '/streaming-markdown',
     title: '流式 Markdown',
-    description: '演示 useAsyncIterableBridge 接本地 token 流，并附带 draft devtools overlay 观察稳定化过程。',
+    description: '演示 useAsyncIterableBridge 接本地 token 流，并附带 draft overlay + Agent Devtools 观察协议与稳定化过程。',
     component: StreamingMarkdownDemo
   },
   {

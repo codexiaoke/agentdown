@@ -6,6 +6,7 @@ import type { RunSurfaceOptions } from '../../surface/types';
 import {
   createFrameworkChatIds,
   type FrameworkChatAssistantActionsOptions,
+  type FrameworkChatDevtoolsOptions,
   type FrameworkChatIds,
   type FrameworkChatSessionIdOptions,
   type FrameworkChatSessionResult,
@@ -82,6 +83,8 @@ export interface UseCrewAIChatSessionOptions<
   hooks?: BridgeHooks<CrewAIEvent>;
   /** 非 UI 事件的副作用通道。 */
   eventActions?: EventActionRegistryResult<CrewAIEvent> | undefined;
+  /** 是否启用当前聊天会话的内置 devtools。 */
+  devtools?: false | FrameworkChatDevtoolsOptions<CrewAIEvent>;
   /** 是否抓取后端 sessionId。 */
   sessionId?: boolean | CrewAIChatSessionIdOptions;
   /** 是否在真正连接前预插一条用户消息；默认开启。 */

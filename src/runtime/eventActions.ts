@@ -24,6 +24,24 @@ export interface EventActionContext<TRawEvent> {
 }
 
 /**
+ * 一条副作用规则真正被执行后的结构化记录。
+ */
+export interface EventActionExecutionRecord<TRawEvent> {
+  /** 当前命中的规则 key。 */
+  key: string;
+  /** 当前副作用对应的原始事件。 */
+  event: TRawEvent;
+  /** 当前事件解析后的事件名。 */
+  eventName?: string;
+  /** 当前规则是否命中了事件名匹配。 */
+  matchedByName: boolean;
+  /** 当前规则是否命中了自定义谓词。 */
+  matchedByPredicate: boolean;
+  /** 当前副作用被执行的时间戳。 */
+  at: number;
+}
+
+/**
  * 单条“事件 -> 副作用”定义结构。
  */
 export interface EventActionDefinition<TRawEvent> {
@@ -57,7 +75,9 @@ export interface EventToActionOptions<TRawEvent> {
  */
 export interface EventActionRegistryResult<TRawEvent> {
   /** 手动触发一次原始事件处理。 */
-  handleEvent: (packet: TRawEvent) => void;
+  handleEvent: (packet: TRawEvent) => EventActionExecutionRecord<TRawEvent>[];
+  /** 只分析当前事件会命中哪些副作用，但不真正执行。 */
+  inspectEvent: (packet: TRawEvent) => EventActionExecutionRecord<TRawEvent>[];
   /** 可直接挂到 bridge 上的 hooks。 */
   hooks: BridgeHooks<TRawEvent>;
 }
@@ -119,16 +139,17 @@ export function eventToAction<TRawEvent>(
   options: EventToActionOptions<TRawEvent>
 ): EventActionRegistryResult<TRawEvent> {
   const normalizeEventName = options.normalizeEventName ?? defaultNormalizeEventName;
-  const normalizedDefinitions = Object.values(definitions);
+  const normalizedDefinitions = Object.entries(definitions);
 
   /**
-   * 把单个原始事件分发到命中的副作用规则。
+   * 分析一条事件会命中哪些副作用规则。
    */
-  function handleEvent(packet: TRawEvent): void {
+  function inspectEvent(packet: TRawEvent): EventActionExecutionRecord<TRawEvent>[] {
     const rawEventName = options.resolveEventName(packet);
     const normalizedEventName = rawEventName ? normalizeEventName(rawEventName) : undefined;
+    const executions: EventActionExecutionRecord<TRawEvent>[] = [];
 
-    for (const definition of normalizedDefinitions) {
+    for (const [key, definition] of normalizedDefinitions) {
       const context: EventActionContext<TRawEvent> = {
         event: packet,
         ...(normalizedEventName !== undefined ? { eventName: normalizedEventName } : {})
@@ -152,17 +173,52 @@ export function eventToAction<TRawEvent>(
         continue;
       }
 
-      definition.run(context);
+      executions.push({
+        key,
+        event: packet,
+        ...(normalizedEventName !== undefined ? { eventName: normalizedEventName } : {}),
+        matchedByName,
+        matchedByPredicate,
+        at: Date.now()
+      });
     }
+
+    return executions;
   }
+
+  /**
+   * 把单个原始事件分发到命中的副作用规则。
+   */
+  function handleEvent(packet: TRawEvent): EventActionExecutionRecord<TRawEvent>[] {
+    const executions = inspectEvent(packet);
+
+    for (const execution of executions) {
+      const definition = definitions[execution.key];
+
+      if (!definition) {
+        continue;
+      }
+
+      definition.run({
+        event: packet,
+        ...(execution.eventName !== undefined ? { eventName: execution.eventName } : {})
+      });
+    }
+
+    return executions;
+  }
+
+  const packetHook = (packet: TRawEvent) => {
+    handleEvent(packet);
+  };
 
   return {
     handleEvent,
+    inspectEvent,
     hooks: {
-      onPacket(packet) {
-        handleEvent(packet);
-      }
+      onPacket: Object.assign(packetHook, {
+        __agentdownEventActionFromHandle: true as const
+      })
     }
   };
 }
-

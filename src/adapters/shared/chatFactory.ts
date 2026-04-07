@@ -1,5 +1,10 @@
 import { computed, shallowRef, toValue, type ComputedRef, type MaybeRefOrGetter, type ShallowRef } from 'vue';
 import { useAdapterSession, type UseAdapterSessionResult } from '../../composables/useAdapterSession';
+import {
+  useAgentDevtools,
+  type UseAgentDevtoolsOptions,
+  type UseAgentDevtoolsResult
+} from '../../composables/useAgentDevtools';
 import type { AgentdownAdapter, AgentdownAdapterSessionOptions } from '../../runtime/defineAdapter';
 import { cmd } from '../../runtime/defineProtocol';
 import type { BridgeHooks, TransportAdapter } from '../../runtime/types';
@@ -51,6 +56,12 @@ export interface FrameworkChatAssistantActionsOptions {
   /** 节点运行中是否也显示动作栏。 */
   showWhileRunning?: boolean;
 }
+
+/**
+ * 共享 chat helper 暴露的 devtools 配置。
+ */
+export interface FrameworkChatDevtoolsOptions<TRawPacket = unknown>
+  extends UseAgentDevtoolsOptions<TRawPacket> {}
 
 /**
  * chat 工厂内部会识别的最小 protocol 语义字段。
@@ -123,6 +134,8 @@ export interface FrameworkChatSessionOptionsLike<
   hooks?: BridgeHooks<TRawPacket> | undefined;
   /** 非 UI 事件的副作用通道。 */
   eventActions?: EventActionRegistryResult<TRawPacket> | undefined;
+  /** 是否启用内置 devtools 采集。 */
+  devtools?: false | FrameworkChatDevtoolsOptions<TRawPacket> | undefined;
   /** 是否抓取后端 sessionId。 */
   sessionId?: boolean | FrameworkChatSessionIdOptions<TRawPacket> | undefined;
   /** 是否在真正连接前预插一条用户消息。 */
@@ -155,6 +168,8 @@ export interface FrameworkChatSessionResult<
   requestInput: ShallowRef<string>;
   /** 当前这轮消息对应的聊天语义 id。 */
   chatIds: ShallowRef<TChatIds | null>;
+  /** 当前会话绑定的 devtools 状态。 */
+  devtools: UseAgentDevtoolsResult<TRawPacket>;
   /** 发送当前输入框内容。 */
   send: (input?: string, source?: TSource) => Promise<void>;
   /** 重新生成上一条 assistant 回复。 */
@@ -346,6 +361,57 @@ function createFrameworkChatCaptureHooks<TRawPacket>(
 }
 
 /**
+ * 判断当前 onPacket hook 是否只是 `handleEvent()` 的直接包装。
+ *
+ * 如果是，我们就不再额外调用 `hooks.onPacket`，避免副作用执行两次。
+ */
+function isFrameworkEventActionHandleHook<TRawPacket>(
+  hook: BridgeHooks<TRawPacket>['onPacket']
+): boolean {
+  return Boolean(
+    hook
+    && typeof hook === 'function'
+    && '__agentdownEventActionFromHandle' in hook
+  );
+}
+
+/**
+ * 为非 UI eventActions 创建一层可观察的 bridge hooks。
+ *
+ * 这里会做两件事：
+ * 1. 真正执行 `eventActions.handleEvent()`
+ * 2. 把执行结果写进 devtools 的 side effect 日志
+ */
+function createFrameworkChatEventActionHooks<TRawPacket>(
+  registry: EventActionRegistryResult<TRawPacket> | undefined,
+  devtools: UseAgentDevtoolsResult<TRawPacket>
+): BridgeHooks<TRawPacket> | undefined {
+  if (!registry) {
+    return undefined;
+  }
+
+  return {
+    onPacket(packet) {
+      const executions = registry.handleEvent(packet);
+      devtools.recordSideEffects(packet, executions);
+
+      if (!isFrameworkEventActionHandleHook(registry.hooks.onPacket)) {
+        registry.hooks.onPacket?.(packet);
+      }
+    },
+    onMapped(commands, packet) {
+      registry.hooks.onMapped?.(commands, packet);
+    },
+    onFlush(commands) {
+      registry.hooks.onFlush?.(commands);
+    },
+    onError(error) {
+      registry.hooks.onError?.(error);
+    }
+  };
+}
+
+/**
  * 预插入一条用户消息，确保 user / assistant / tool 落在统一聊天语义里。
  */
 function seedFrameworkUserMessage<TRawPacket, TSource, TChatIds extends FrameworkChatIds>(
@@ -479,9 +545,17 @@ export function useFrameworkChatSession<
     config.resolveSessionId
   );
   const captureHooks = createFrameworkChatCaptureHooks(sessionId, sessionIdResolver);
-  const eventActionHooks = config.options.eventActions?.hooks;
-  const mergedUserHooks = mergeFrameworkChatHooks(config.options.hooks, eventActionHooks);
-  const mergedHooks = mergeFrameworkChatHooks(mergedUserHooks, captureHooks);
+  const devtools = useAgentDevtools<TRawPacket>(
+    config.options.devtools === false
+      ? {
+          enabled: false
+        }
+      : (config.options.devtools ?? {})
+  );
+  const eventActionHooks = createFrameworkChatEventActionHooks(config.options.eventActions, devtools);
+  const mergedUserHooks = mergeFrameworkChatHooks(config.options.hooks, captureHooks);
+  const mergedDevtoolsHooks = mergeFrameworkChatHooks(mergedUserHooks, devtools.hooks);
+  const mergedHooks = mergeFrameworkChatHooks(mergedDevtoolsHooks, eventActionHooks);
   const adapterOptions = {
     protocolOptions: {
       ...(config.options.protocolOptions ?? {}),
@@ -549,6 +623,7 @@ export function useFrameworkChatSession<
   const sessionState = useAdapterSession(adapter, {
     overrides: sessionOverrides
   });
+  devtools.attachRuntime(sessionState.runtime);
   const busy = computed(() => sessionState.status.value.phase === 'consuming');
   const statusLabel = computed(() => resolveFrameworkStatusLabel(sessionState.status.value.phase));
   const transportError = computed(() => sessionState.error.value?.message ?? '');
@@ -626,6 +701,7 @@ export function useFrameworkChatSession<
     lastInput,
     requestInput,
     chatIds,
+    devtools,
     send,
     regenerate
   };

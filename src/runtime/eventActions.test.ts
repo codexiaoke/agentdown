@@ -32,7 +32,7 @@ describe('eventToAction', () => {
       }
     );
 
-    actions.handleEvent({
+    const executed = actions.handleEvent({
       event: 'CreateSession',
       sessionId: 'session:1'
     });
@@ -43,6 +43,8 @@ describe('eventToAction', () => {
 
     expect(createSession).toHaveBeenCalledTimes(1);
     expect(complete).toHaveBeenCalledTimes(1);
+    expect(executed).toHaveLength(1);
+    expect(executed[0]?.key).toBe('session');
   });
 
   it('supports custom predicate matching for non-UI business events', () => {
@@ -63,11 +65,36 @@ describe('eventToAction', () => {
       }
     );
 
-    actions.handleEvent({
+    const executed = actions.handleEvent({
       event: 'RunStarted',
       session_id: 'session:demo'
     });
 
     expect(assignSessionId).toHaveBeenCalledWith('session:demo');
+    expect(executed[0]?.matchedByPredicate).toBe(true);
+  });
+
+  it('can inspect matched side effects without executing them', () => {
+    const spy = vi.fn();
+    const actions = eventToAction<DemoEvent>(
+      {
+        session: {
+          on: 'CreateSession',
+          run: spy
+        }
+      },
+      {
+        resolveEventName: (event) => event.event
+      }
+    );
+
+    const inspected = actions.inspectEvent({
+      event: 'CreateSession',
+      sessionId: 'session:2'
+    });
+
+    expect(inspected).toHaveLength(1);
+    expect(inspected[0]?.key).toBe('session');
+    expect(spy).not.toHaveBeenCalled();
   });
 });

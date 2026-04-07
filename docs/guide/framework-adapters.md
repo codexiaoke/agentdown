@@ -56,6 +56,9 @@ const session = useAgnoChatSession<string>({
   input: prompt,
   conversationId: 'session:weather-demo',
   title: 'Agno 助手',
+  devtools: {
+    maxEntries: 120
+  },
   tools: defineAgnoToolComponents({
     'tool.weather': {
       match: ['weather', '天气'],
@@ -73,6 +76,12 @@ await session.send();
   :runtime="session.runtime"
   v-bind="session.surface"
 />
+
+<AgentDevtoolsOverlay
+  :devtools="session.devtools"
+  title="Agno Devtools"
+  default-tab="effects"
+/>
 ```
 
 这种方式最适合：
@@ -80,6 +89,13 @@ await session.send();
 - 标准问答式聊天页
 - 一次一问一答的产品界面
 - 希望拿到最直接的类型提示和最少样板代码
+
+同时也意味着：
+
+- 内置 chat helper 现在可以直接带出 `session.devtools`
+- 不需要你额外手写 raw event / trace / runtime diff 的采集逻辑
+- `eventActions` 触发的非 UI side effect 也会单独进入 `Effects` 页签
+- 页面里就能直接展开单条事件、单条 trace、单条 diff，看完整 JSON
 
 如果你需要更底层控制，再继续往 `create*Adapter()` / `useAdapterSession()` 走。
 

@@ -6,6 +6,7 @@ import type { RunSurfaceOptions } from '../../surface/types';
 import {
   createFrameworkChatIds,
   type FrameworkChatAssistantActionsOptions,
+  type FrameworkChatDevtoolsOptions,
   type FrameworkChatIds,
   type FrameworkChatSessionIdOptions,
   type FrameworkChatSessionResult,
@@ -89,6 +90,8 @@ export interface UseAgnoChatSessionOptions<
   hooks?: BridgeHooks<AgnoEvent>;
   /** 非 UI 事件的副作用通道。 */
   eventActions?: EventActionRegistryResult<AgnoEvent> | undefined;
+  /** 是否启用当前聊天会话的内置 devtools。 */
+  devtools?: false | FrameworkChatDevtoolsOptions<AgnoEvent>;
   /** 是否抓取后端 sessionId；默认开启。 */
   sessionId?: boolean | AgnoChatSessionIdOptions;
   /** 是否在真正连接前预插一条用户消息；默认开启。 */

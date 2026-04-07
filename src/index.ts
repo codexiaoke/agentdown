@@ -1,6 +1,7 @@
 import './styles/theme.css';
 
 export { default as DefaultMarkdownApprovalBlock } from './components/ApprovalBlock.vue';
+export { default as AgentDevtoolsOverlay } from './components/AgentDevtoolsOverlay.vue';
 export { default as DefaultMarkdownArtifactBlock } from './components/ArtifactBlock.vue';
 export { default as MarkdownRenderer } from './components/MarkdownRenderer.vue';
 export { default as RunSurface } from './components/RunSurface.vue';
@@ -21,6 +22,7 @@ export { defaultMarkdownBuiltinComponents } from './components/defaultMarkdownCo
 export { createMarkdownEngine } from './core/createMarkdownEngine';
 export { parseMarkdown } from './core/parseMarkdown';
 export { useAdapterSession } from './composables/useAdapterSession';
+export { useAgentDevtools } from './composables/useAgentDevtools';
 export {
   agnoChatFramework,
   autoGenChatFramework,
@@ -101,6 +103,10 @@ export {
   resolveRunSurfaceDraftDiagnostics,
   resolveRunSurfaceDraftReason
 } from './devtools/runSurfaceDraftDiagnostics';
+export {
+  hasRuntimeSnapshotDiffChanges,
+  resolveRuntimeSnapshotDiff
+} from './devtools/runtimeSnapshotDiff';
 export {
   useAsyncIterableBridge,
   useBridgeTransport,
@@ -217,6 +223,17 @@ export type {
   UseAdapterSessionResult
 } from './composables/useAdapterSession';
 export type {
+  AgentDevtoolsExport,
+  AgentDevtoolsProtocolTraceEntry,
+  AgentDevtoolsRawEventEntry,
+  AgentDevtoolsReproductionExport,
+  AgentDevtoolsSideEffectEntry,
+  AgentDevtoolsSnapshotDiffEntry,
+  AgentDevtoolsSummary,
+  UseAgentDevtoolsOptions,
+  UseAgentDevtoolsResult
+} from './composables/useAgentDevtools';
+export type {
   UseRuntimeBlockResult,
   UseRuntimeBlocksByConversationIdResult,
   UseRuntimeBlocksByGroupResult,
@@ -306,6 +323,15 @@ export type {
   RunSurfaceDraftDomAttributes,
   RunSurfaceDraftReason
 } from './devtools/runSurfaceDraftDiagnostics';
+export type {
+  ResolveRuntimeSnapshotDiffOptions,
+  RuntimeSnapshotBlockPreview,
+  RuntimeSnapshotDiff,
+  RuntimeSnapshotDiffSummary,
+  RuntimeSnapshotIntentPreview,
+  RuntimeSnapshotNodePreview,
+  RuntimeSnapshotUpdatedEntry
+} from './devtools/runtimeSnapshotDiff';
 export type {
   ToolByNameOptions,
   ToolNameComponentDefinition,
@@ -465,6 +491,7 @@ export type {
   RuntimeBlockMessageScope
 } from './runtime/chatSemantics';
 export type {
+  EventActionExecutionRecord,
   EventActionContext,
   EventActionDefinition,
   EventActionDefinitionMap,

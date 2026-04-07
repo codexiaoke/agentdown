@@ -236,6 +236,110 @@ await session.connect()
 - `replay`
 - `connect()` / `disconnect()` / `restart()`
 
+## `useAgentDevtools()`
+
+如果你想直接观察：
+
+- 后端原始事件
+- raw event 到 protocol command 的映射
+- runtime block / node 的快照变化
+
+可以直接挂这层 composable：
+
+```ts
+import { useAgentDevtools } from 'agentdown';
+
+const devtools = useAgentDevtools<MyPacket>({
+  maxEntries: 120
+});
+```
+
+然后把它的 `hooks` 接到 bridge 或 chat helper 上：
+
+```ts
+const bridgeState = useAsyncIterableBridge<MyPacket>({
+  protocol,
+  hooks: devtools.hooks
+});
+
+devtools.attachRuntime(bridgeState.runtime);
+```
+
+当前它会收集三类日志：
+
+- `rawEvents`
+- `protocolTrace`
+- `sideEffects`
+- `snapshotDiffs`
+
+其中：
+
+- `sideEffects`
+  专门记录像 `CreateSession`、`SetTitle`、`RunCompleted` 这类“不渲染 UI、但会更新外部状态”的事件副作用
+- `snapshotDiffs`
+  不只是“页面变了”，还会顺手带上：
+
+  - 当前 diff 最可能对应的 `eventName`
+  - 对应的 `traceOrder / packetOrder`
+  - 本次新增的 `historyEntries`
+  - 上游 `commandTypes`
+
+并且支持：
+
+- `reset()`
+- `exportSnapshot()`
+- `exportReproduction()`
+
+## `AgentDevtoolsOverlay`
+
+如果你不想自己写调试 UI，可以直接挂内置 overlay：
+
+```vue
+<script setup lang="ts">
+import {
+  AgentDevtoolsOverlay,
+  RunSurface
+} from 'agentdown';
+
+defineProps<{
+  runtime: AgentRuntime;
+  devtools: UseAgentDevtoolsResult;
+}>();
+</script>
+
+<template>
+  <RunSurface :runtime="runtime" />
+
+  <AgentDevtoolsOverlay
+    :devtools="devtools"
+    title="Agent Devtools"
+    default-tab="trace"
+    :max-items="6"
+  />
+</template>
+```
+
+这个 overlay 适合回答这些问题：
+
+- 后端刚刚到底发了什么事件
+- 这条事件被协议映射成了哪些 command
+- 哪条非 UI 事件触发了哪些 side effect
+- 为什么页面刚刚新增了一个 block
+- 哪次运行改的是 node，哪次运行改的是 block
+
+现在每条日志都支持：
+
+- 单条展开
+- 单条复制 JSON
+- 在 diff 里直接看到它关联的 trace / history 线索
+
+顶部还会提供两种复制方式：
+
+- `复制 JSON`
+  导出完整调试快照
+- `复制复现`
+  导出更适合提 issue / 做最小复现的精简包
+
 ## `createRuntimeTranscript()`
 
 把当前 runtime 或 snapshot 导出成一份可序列化 transcript：

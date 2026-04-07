@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
 import {
+  AgentDevtoolsOverlay,
   defineCrewAIToolComponents,
   RunSurface,
   useCrewAIChatSession
@@ -45,12 +46,16 @@ const {
   busy,
   statusLabel,
   transportError,
-  sessionId: backendSessionId
+  sessionId: backendSessionId,
+  devtools
 } = useCrewAIChatSession<string>({
   source: endpoint,
   input: prompt,
   conversationId: DEMO_CONVERSATION_ID,
   title: 'CrewAI 助手',
+  devtools: {
+    maxEntries: 120
+  },
   tools: defineCrewAIToolComponents({
     lookup_weather: {
       match: 'lookup_weather',
@@ -131,6 +136,13 @@ onMounted(() => {
     <RunSurface
       :runtime="runtime"
       v-bind="surface"
+    />
+
+    <AgentDevtoolsOverlay
+      :devtools="devtools"
+      title="CrewAI Devtools"
+      default-tab="events"
+      :max-items="6"
     />
   </section>
 </template>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
 import {
+  AgentDevtoolsOverlay,
   defineAgnoEventActions,
   defineAgnoToolComponents,
   RunSurface,
@@ -48,12 +49,16 @@ const {
   busy,
   statusLabel,
   transportError,
-  sessionId: backendSessionId
+  sessionId: backendSessionId,
+  devtools
 } = useAgnoChatSession<string>({
   source: endpoint,
   input: prompt,
   conversationId: DEMO_CONVERSATION_ID,
   title: 'Agno 助手',
+  devtools: {
+    maxEntries: 120
+  },
   tools: defineAgnoToolComponents({
     lookup_weather: {
       match: 'lookup_weather',
@@ -154,6 +159,14 @@ onMounted(() => {
     <RunSurface
       :runtime="runtime"
       v-bind="surface"
+    />
+
+    <AgentDevtoolsOverlay
+      :devtools="devtools"
+      title="Agno Devtools"
+      :initially-open="true"
+      default-tab="effects"
+      :max-items="6"
     />
 
     <RunSurfaceDraftOverlay
