@@ -249,8 +249,41 @@ interface RunSurfaceOptions {
   renderers?: RunSurfaceRendererMap
   draftPlaceholder?: RunSurfaceDraftPlaceholder
   messageShells?: RunSurfaceMessageShellMap
+  messageActions?: RunSurfaceMessageActionsMap
+  approvalActions?: RunSurfaceApprovalActionsOptions | false
 }
 ```
+
+### `RunSurfaceMessageActionsRoleOptions`
+
+```ts
+interface RunSurfaceMessageActionsRoleOptions {
+  enabled?: boolean
+  showOnDraft?: boolean
+  showWhileRunning?: boolean
+  builtinHandlers?: Partial<Record<
+    'copy' | 'regenerate' | 'retry' | 'resume' | 'interrupt' | 'like' | 'dislike' | 'share',
+    RunSurfaceBuiltinMessageActionHandler
+  >>
+  actions?: RunSurfaceMessageActionItem[]
+}
+```
+
+### `RunSurfaceApprovalActionsOptions`
+
+```ts
+interface RunSurfaceApprovalActionsOptions {
+  enabled?: boolean
+  builtinHandlers?: Partial<Record<
+    'approve' | 'reject' | 'changes_requested' | 'submit' | 'retry' | 'resume' | 'interrupt',
+    RunSurfaceBuiltinApprovalActionHandler
+  >>
+  actions?: RunSurfaceApprovalActionItem[]
+}
+```
+
+approval 卡片只有在 `RunSurface` 内渲染时才会读取这一层配置。  
+独立 `MarkdownRenderer` 依然保持纯展示行为。
 
 ### `RunSurfacePerformanceOptions`
 

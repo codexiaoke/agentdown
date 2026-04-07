@@ -75,6 +75,26 @@ export interface AgentdownPreset<
  * 合并基础 surface 配置和局部覆盖配置。
  */
 function mergeSurfaceOptions(base: RunSurfaceOptions = {}, override: RunSurfaceOptions = {}): RunSurfaceOptions {
+  const baseApprovalActions = base.approvalActions;
+  const overrideApprovalActions = override.approvalActions;
+  let approvalActions = overrideApprovalActions;
+
+  if (overrideApprovalActions === undefined) {
+    approvalActions = baseApprovalActions;
+  } else if (
+    overrideApprovalActions !== false
+    && baseApprovalActions
+  ) {
+    approvalActions = {
+      ...baseApprovalActions,
+      ...overrideApprovalActions,
+      builtinHandlers: {
+        ...(baseApprovalActions.builtinHandlers ?? {}),
+        ...(overrideApprovalActions.builtinHandlers ?? {})
+      }
+    };
+  }
+
   return {
     ...base,
     ...override,
@@ -101,7 +121,8 @@ function mergeSurfaceOptions(base: RunSurfaceOptions = {}, override: RunSurfaceO
     messageActions: {
       ...(base.messageActions ?? {}),
       ...(override.messageActions ?? {})
-    }
+    },
+    ...(approvalActions !== undefined ? { approvalActions } : {})
   };
 }
 

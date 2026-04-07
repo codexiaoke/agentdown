@@ -41,6 +41,8 @@ defineProps<{
 | `renderers` | `RunSurfaceRendererMap` | `{}` | 覆写 surface renderer，例如工具卡片 |
 | `draftPlaceholder` | `RunSurfaceDraftPlaceholder` | `false` | 没有可见内容时的草稿 loading 占位 |
 | `messageShells` | `RunSurfaceMessageShellMap` | 内置 assistant/user shell | 覆写不同角色的消息外壳 |
+| `messageActions` | `RunSurfaceMessageActionsMap` | assistant 默认开启 | 配置消息末尾的复制、重试、重新生成等动作 |
+| `approvalActions` | `RunSurfaceApprovalActionsOptions \| false` | 默认开启 | 配置 approval 卡片内部的批准、拒绝、需修改等动作 |
 
 ## 默认行为
 
@@ -238,6 +240,81 @@ const surface = {
 - 头像布局
 - 消息头部信息
 - 不同角色的背景和间距
+
+## message actions
+
+`messageActions` 用来给 assistant / user / system 消息尾部挂操作按钮：
+
+```ts
+const surface = {
+  messageActions: {
+    assistant: {
+      enabled: true,
+      showWhileRunning: true,
+      actions: [
+        'copy',
+        'interrupt',
+        'resume',
+        'retry',
+        'regenerate'
+      ],
+      builtinHandlers: {
+        interrupt: async () => {
+          // 这里接你自己的暂停逻辑
+        }
+      }
+    }
+  }
+};
+```
+
+内置消息动作 key：
+
+- `copy`
+- `regenerate`
+- `retry`
+- `resume`
+- `interrupt`
+- `like`
+- `dislike`
+- `share`
+
+默认点击后会发出 `message.action` intent。  
+如果你传了 `builtinHandlers`，就可以把这些按钮接到真实业务。
+
+## approval actions
+
+approval 卡片现在也可以直接挂动作：
+
+```ts
+const surface = {
+  approvalActions: {
+    enabled: true,
+    builtinHandlers: {
+      approve: async ({ runtime, block }) => {
+        runtime.apply(cmd.approval.update({
+          id: block.id,
+          title: '是否发送客户邮件',
+          status: 'approved'
+        }));
+      }
+    }
+  }
+};
+```
+
+内置 approval 动作 key：
+
+- `approve`
+- `reject`
+- `changes_requested`
+- `submit`
+- `retry`
+- `resume`
+- `interrupt`
+
+默认 approval 卡片在 `RunSurface` 内点击按钮时会发出 `approval.action` intent。  
+如果当前 approval 还是 `pending`，默认会显示 `approve / reject / changes_requested` 这三个动作。
 
 ## 相关导出
 

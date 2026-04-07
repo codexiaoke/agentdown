@@ -99,6 +99,15 @@ export {
 export { createEventComponentRegistry, eventToBlock } from './adapters/eventComponentRegistry';
 export { createToolNameRegistry, toolByName } from './adapters/toolNameRegistry';
 export {
+  DEFAULT_RUN_SURFACE_APPROVAL_ACTIONS,
+  createRunSurfaceApprovalActionIntent,
+  isRunSurfaceApprovalActionDisabled,
+  isRunSurfaceApprovalActionVisible,
+  normalizeRunSurfaceApprovalActionItem,
+  resolveRunSurfaceApprovalActionItems
+} from './surface/approvalActions';
+export { useRunSurfaceBlockContext } from './surface/runSurfaceContext';
+export {
   resolveRunSurfaceDraftDiagnostic,
   resolveRunSurfaceDraftDiagnostics,
   resolveRunSurfaceDraftReason
@@ -574,6 +583,12 @@ export type {
   WebSocketTransportSource
 } from './runtime/transports';
 export type {
+  RunSurfaceApprovalActionContext,
+  RunSurfaceApprovalActionDefinition,
+  RunSurfaceApprovalActionItem,
+  RunSurfaceApprovalActionsOptions,
+  RunSurfaceBuiltinApprovalActionHandler,
+  RunSurfaceBuiltinApprovalActionKey,
   RunSurfaceBuiltinMessageActionKey,
   RunSurfaceBuiltinMessageActionHandler,
   RunSurfaceDraftPlaceholder,
@@ -597,3 +612,4 @@ export type {
   RunSurfaceRole,
   RunSurfaceOptions
 } from './surface/types';
+export type { RunSurfaceBlockContext } from './surface/runSurfaceContext';

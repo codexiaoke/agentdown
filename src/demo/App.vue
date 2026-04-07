@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, type Component } from 'vue';
 import BuiltinBlocksDemo from './pages/BuiltinBlocksDemo.vue';
+import HumanLoopDemo from './pages/HumanLoopDemo.vue';
 import LongDocumentDemo from './pages/LongDocumentDemo.vue';
 import PerformanceLabDemo from './pages/PerformanceLabDemo.vue';
 import ProtocolHelpersDemo from './pages/ProtocolHelpersDemo.vue';
@@ -70,6 +71,12 @@ const routes: DemoRoute[] = [
     title: '高阶 Helper',
     description: '演示 helper protocol factory，统一管理 content.replace、artifact.upsert、approval.update。',
     component: ProtocolHelpersDemo
+  },
+  {
+    path: '/human-loop',
+    title: 'Human-In-The-Loop',
+    description: '审批卡动作、消息动作和 runtime intent 的完整联动示例。',
+    component: HumanLoopDemo
   },
   {
     path: '/replay-transcript',

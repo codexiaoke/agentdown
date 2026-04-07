@@ -53,6 +53,31 @@ function createAgnoSseResponse(events: AgnoEvent[]): Response {
   });
 }
 
+/**
+ * 创建一个会在外部 abort 时关闭的 SSE Response。
+ */
+function createAbortableAgnoSseResponse(events: AgnoEvent[], signal?: AbortSignal): Response {
+  const encoder = new TextEncoder();
+
+  return new Response(new ReadableStream({
+    start(controller) {
+      for (const event of events) {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+      }
+
+      signal?.addEventListener('abort', () => {
+        controller.close();
+      }, {
+        once: true
+      });
+    }
+  }), {
+    headers: {
+      'Content-Type': 'text/event-stream'
+    }
+  });
+}
+
 describe('createAgnoProtocol', () => {
   it('maps a full Agno run into runtime nodes and stable markdown blocks', () => {
     const bridge = createAgnoTestBridge();
@@ -475,6 +500,103 @@ describe('useAgnoChatSession', () => {
     await nextTick();
 
     expect(sessionState.sessionId.value).toBe('backend-session-1');
+
+    scope.stop();
+  });
+
+  it('wires interrupt, resume and retry through the shared chat helper controls', async () => {
+    const scope = effectScope();
+    const prompt = ref('继续处理这封邮件');
+    let requestCount = 0;
+    const sessionState = scope.run(() => useAgnoChatSession<string>({
+      source: 'http://agno.test/api/stream',
+      input: prompt,
+      conversationId: 'session:demo:agno-hitl',
+      transport: {
+        fetch: (async (_input, init) => {
+          requestCount += 1;
+
+          if (requestCount === 1) {
+            return createAbortableAgnoSseResponse([
+              {
+                event: 'RunStarted',
+                run_id: 'run-hitl-1'
+              },
+              {
+                event: 'RunContent',
+                run_id: 'run-hitl-1',
+                content: '我正在继续处理这封邮件'
+              }
+            ], init?.signal as AbortSignal | undefined);
+          }
+
+          return createAgnoSseResponse([
+            {
+              event: 'RunStarted',
+              run_id: `run-hitl-${requestCount}`
+            },
+            {
+              event: 'RunContent',
+              run_id: `run-hitl-${requestCount}`,
+              content: requestCount === 2
+                ? '我恢复了刚才的处理流程'
+                : '我重新执行了上一轮请求'
+            },
+            {
+              event: 'RunContentCompleted',
+              run_id: `run-hitl-${requestCount}`
+            },
+            {
+              event: 'RunCompleted',
+              run_id: `run-hitl-${requestCount}`
+            }
+          ]);
+        }) as typeof fetch
+      }
+    }));
+
+    if (!sessionState) {
+      throw new Error('Failed to create Agno HITL session.');
+    }
+
+    const assistantActions = sessionState.surface.value.messageActions?.assistant;
+    const resolvedAssistantActions = assistantActions === false
+      ? undefined
+      : assistantActions;
+
+    expect(resolvedAssistantActions?.actions?.map((action) => (
+      typeof action === 'string' ? action : action.key
+    ))).toEqual([
+      'copy',
+      'interrupt',
+      'resume',
+      'retry',
+      'regenerate',
+      'like',
+      'dislike',
+      'share'
+    ]);
+
+    const pendingSend = sessionState.send();
+    await nextTick();
+
+    sessionState.interrupt();
+    await pendingSend.catch(() => undefined);
+
+    expect(sessionState.interrupted.value).toBe(true);
+    expect(sessionState.busy.value).toBe(false);
+
+    await sessionState.resume();
+    await nextTick();
+
+    expect(requestCount).toBe(2);
+    expect(sessionState.interrupted.value).toBe(false);
+
+    await sessionState.retry();
+    await nextTick();
+
+    expect(requestCount).toBe(3);
+    expect(sessionState.lastInput.value).toBe('继续处理这封邮件');
 
     scope.stop();
   });

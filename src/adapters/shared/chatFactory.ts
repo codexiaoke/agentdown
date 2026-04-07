@@ -55,6 +55,8 @@ export interface FrameworkChatAssistantActionsOptions {
   showOnDraft?: boolean;
   /** 节点运行中是否也显示动作栏。 */
   showWhileRunning?: boolean;
+  /** 覆写内置动作的实际业务处理。 */
+  builtinHandlers?: RunSurfaceMessageActionsRoleOptions['builtinHandlers'];
 }
 
 /**
@@ -170,10 +172,18 @@ export interface FrameworkChatSessionResult<
   chatIds: ShallowRef<TChatIds | null>;
   /** 当前会话绑定的 devtools 状态。 */
   devtools: UseAgentDevtoolsResult<TRawPacket>;
+  /** 当前是否处于“手动中断后等待恢复”的状态。 */
+  interrupted: ShallowRef<boolean>;
   /** 发送当前输入框内容。 */
   send: (input?: string, source?: TSource) => Promise<void>;
   /** 重新生成上一条 assistant 回复。 */
   regenerate: (source?: TSource) => Promise<void>;
+  /** 重新发起上一条输入；默认行为等价于 retry last input。 */
+  retry: (source?: TSource) => Promise<void>;
+  /** 中断当前连接，但保留现有 runtime 内容。 */
+  interrupt: () => void;
+  /** 在不重置 runtime 的前提下，尝试继续连接当前 source。 */
+  resume: (source?: TSource) => Promise<void>;
 }
 
 /**
@@ -449,7 +459,11 @@ function seedFrameworkUserMessage<TRawPacket, TSource, TChatIds extends Framewor
 function resolveFrameworkChatAssistantActions(
   surface: RunSurfaceOptions,
   busy: ComputedRef<boolean>,
+  interrupted: ShallowRef<boolean>,
   regenerate: () => Promise<void>,
+  retry: () => Promise<void>,
+  resume: () => Promise<void>,
+  interrupt: () => void,
   options: FrameworkChatAssistantActionsOptions | false | undefined
 ): RunSurfaceOptions {
   if (options === false) {
@@ -465,17 +479,39 @@ function resolveFrameworkChatAssistantActions(
   let actions = options?.actions;
 
   if (!actions) {
+    actions = baseAssistantActions?.actions;
+  }
+
+  if (!actions) {
     actions = [
       'copy',
       {
+        key: 'interrupt',
+        visible: () => busy.value
+      },
+      {
+        key: 'resume',
+        visible: () => interrupted.value && !busy.value
+      },
+      {
+        key: 'retry',
+        visible: () => interrupted.value && !busy.value
+      },
+      {
         key: 'regenerate',
-        disabled: () => busy.value
+        disabled: () => busy.value,
+        visible: () => !interrupted.value
       },
       'like',
       'dislike',
       'share'
     ] satisfies RunSurfaceMessageActionItem[];
   }
+
+  const configuredBuiltinHandlers = {
+    ...(baseAssistantActions?.builtinHandlers ?? {}),
+    ...(options?.builtinHandlers ?? {})
+  };
 
   const assistantActions: RunSurfaceMessageActionsRoleOptions = {
     enabled: true,
@@ -485,9 +521,38 @@ function resolveFrameworkChatAssistantActions(
     ...(options ?? {}),
     actions,
     builtinHandlers: {
-      ...(baseAssistantActions?.builtinHandlers ?? {}),
-      regenerate: async () => {
+      ...configuredBuiltinHandlers,
+      regenerate: async (context) => {
+        if (configuredBuiltinHandlers.regenerate) {
+          await configuredBuiltinHandlers.regenerate(context);
+          return;
+        }
+
         await regenerate();
+      },
+      retry: async (context) => {
+        if (configuredBuiltinHandlers.retry) {
+          await configuredBuiltinHandlers.retry(context);
+          return;
+        }
+
+        await retry();
+      },
+      resume: async (context) => {
+        if (configuredBuiltinHandlers.resume) {
+          await configuredBuiltinHandlers.resume(context);
+          return;
+        }
+
+        await resume();
+      },
+      interrupt: async (context) => {
+        if (configuredBuiltinHandlers.interrupt) {
+          await configuredBuiltinHandlers.interrupt(context);
+          return;
+        }
+
+        interrupt();
       }
     }
   };
@@ -533,9 +598,11 @@ export function useFrameworkChatSession<
   const requestInput = shallowRef('');
   const lastInput = shallowRef('');
   const sessionId = shallowRef('');
+  const initialSource = resolveFrameworkChatInitialSource(config.options.source);
+  const interrupted = shallowRef(false);
+  const activeSource = shallowRef<TSource | undefined>(initialSource);
   const chatIds: ShallowRef<TChatIds | null> = shallowRef<TChatIds | null>(null);
   const createIds = resolveFrameworkChatIdFactory(config.options.createIds);
-  const initialSource = resolveFrameworkChatInitialSource(config.options.source);
   const transport = config.createTransport({
     ...(config.options.transport ?? {}),
     message: () => requestInput.value
@@ -662,6 +729,8 @@ export function useFrameworkChatSession<
     lastInput.value = text;
     requestInput.value = text;
     chatIds.value = ids;
+    activeSource.value = nextSource;
+    interrupted.value = false;
     sessionState.disconnect();
     sessionState.reset();
     seedFrameworkUserMessage(text, ids, sessionState.runtime, config.options.userMessage, at);
@@ -676,17 +745,82 @@ export function useFrameworkChatSession<
   }
 
   /**
+   * 重新发起上一条输入。
+   */
+  async function retry(source?: TSource) {
+    await send(lastInput.value, source);
+  }
+
+  /**
+   * 中断当前连接，但保留现有 runtime 内容。
+   */
+  function interrupt() {
+    const pendingButNotYetMarkedBusy = (
+      sessionState.status.value.phase === 'idle'
+      && chatIds.value !== null
+    );
+
+    if (!busy.value && !pendingButNotYetMarkedBusy) {
+      return;
+    }
+
+    sessionState.disconnect();
+    interrupted.value = true;
+  }
+
+  /**
+   * 在不清空 runtime 的前提下继续连接当前 source。
+   */
+  async function resume(source?: TSource) {
+    const resolvedSourceInput = toValue(config.options.source);
+    let fallbackSource = activeSource.value ?? sessionState.source.value;
+
+    if (resolvedSourceInput !== null && resolvedSourceInput !== undefined) {
+      fallbackSource = resolvedSourceInput as TSource;
+    }
+
+    const nextSource = resolveFrameworkChatSource(
+      config.frameworkName,
+      source,
+      fallbackSource
+    );
+
+    activeSource.value = nextSource;
+    interrupted.value = false;
+
+    try {
+      await sessionState.connect(nextSource);
+    } catch (error) {
+      interrupted.value = true;
+      throw error;
+    }
+  }
+
+  /**
    * 基于当前 session surface 再叠一层更顺手的聊天默认值。
    */
   const surface = computed<RunSurfaceOptions>(() => {
     const handleRegenerate = async () => {
       await regenerate();
     };
+    const handleRetry = async () => {
+      await retry();
+    };
+    const handleResume = async () => {
+      await resume();
+    };
+    const handleInterrupt = () => {
+      interrupt();
+    };
 
     return resolveFrameworkChatAssistantActions(
       sessionState.surface,
       busy,
+      interrupted,
       handleRegenerate,
+      handleRetry,
+      handleResume,
+      handleInterrupt,
       config.options.assistantActions
     );
   });
@@ -702,7 +836,11 @@ export function useFrameworkChatSession<
     requestInput,
     chatIds,
     devtools,
+    interrupted,
     send,
-    regenerate
+    regenerate,
+    retry,
+    interrupt,
+    resume
   };
 }

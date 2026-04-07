@@ -16,6 +16,7 @@ import type { AgentRuntime, RuntimeSnapshot, SurfaceBlock } from '../runtime/typ
 import { resolveBlockMessageScope } from '../runtime/chatSemantics';
 import type {
   RunSurfaceDraftPlaceholder,
+  RunSurfaceApprovalActionsOptions,
   RunSurfaceMessageActionsMap,
   RunSurfaceMessageShellContext,
   RunSurfaceMessageShellMap,
@@ -40,6 +41,7 @@ interface Props {
   draftPlaceholder?: RunSurfaceDraftPlaceholder;
   messageShells?: RunSurfaceMessageShellMap;
   messageActions?: RunSurfaceMessageActionsMap;
+  approvalActions?: RunSurfaceApprovalActionsOptions | false;
 }
 
 /**
@@ -79,7 +81,10 @@ const props = withDefaults(defineProps<Props>(), {
   messageShells: () => ({
     user: RunSurfaceUserBubble
   }),
-  messageActions: () => ({})
+  messageActions: () => ({}),
+  approvalActions: () => ({
+    enabled: true
+  })
 });
 
 const containerRef = ref<HTMLElement | null>(null);
@@ -146,6 +151,23 @@ const resolvedMessageActions = computed<RunSurfaceMessageActionsMap>(() => ({
   },
   ...(props.messageActions ?? {})
 }));
+
+/**
+ * 统一收敛 approval 动作区域配置。
+ *
+ * 这里默认启用 approval actions，
+ * 但真正显示哪些按钮仍由 approval block 状态和动作配置决定。
+ */
+const resolvedApprovalActions = computed<RunSurfaceApprovalActionsOptions | false>(() => {
+  if (props.approvalActions === false) {
+    return false;
+  }
+
+  return {
+    enabled: true,
+    ...(props.approvalActions ?? {})
+  };
+});
 
 let unsubscribe: (() => void) | null = null;
 let observer: ResizeObserver | null = null;
@@ -500,6 +522,7 @@ onBeforeUnmount(() => {
             :renderers="resolvedRenderers"
             :draft-placeholder="resolvedDraftPlaceholder"
             :message-shells="resolvedMessageShells"
+            :approval-actions="resolvedApprovalActions"
             :lazy-mount="resolvedPerformance.lazyMount"
             :lazy-mount-margin="resolvedPerformance.lazyMountMargin"
             :text-slab-chars="resolvedPerformance.textSlabChars"

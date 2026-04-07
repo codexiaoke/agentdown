@@ -21,6 +21,7 @@ import type {
   RunSurfaceDraftPlaceholder,
   RunSurfaceDraftPlaceholderContext,
   RunSurfaceDraftPlaceholderRegistration,
+  RunSurfaceApprovalActionsOptions,
   RunSurfaceMessageShellContext,
   RunSurfaceMessageShellMap,
   RunSurfaceMessageShellRegistration,
@@ -36,6 +37,7 @@ import {
 import {
   resolveSurfaceBlockStreamingDraftData
 } from '../surface/draftMetadata';
+import { provideRunSurfaceBlockContext } from '../surface/runSurfaceContext';
 
 /**
  * `RunSurfaceBlock` 的组件输入参数。
@@ -53,6 +55,7 @@ interface Props {
   renderers: RunSurfaceRendererMap;
   draftPlaceholder: RunSurfaceDraftPlaceholder;
   messageShells: RunSurfaceMessageShellMap;
+  approvalActions: RunSurfaceApprovalActionsOptions | false | undefined;
   lazyMount: boolean;
   lazyMountMargin: string;
   textSlabChars: number;
@@ -78,6 +81,26 @@ const MARKDOWN_KINDS = new Set<MarkdownBlock['kind']>([
 ]);
 
 let visibilityObserver: IntersectionObserver | null = null;
+
+/**
+ * 把一个结构化 intent 上抛给 runtime。
+ */
+function emitIntent(intent: Omit<RuntimeIntent, 'id' | 'at'>) {
+  return props.runtime.emitIntent(intent);
+}
+
+/**
+ * 向当前 block 子树注入 RunSurface 上下文，
+ * 让 approval 这类内置 markdown 组件也能读到运行态数据。
+ */
+provideRunSurfaceBlockContext({
+  block: computed(() => props.block),
+  role: computed(() => props.role),
+  runtime: props.runtime,
+  snapshot: computed(() => props.snapshot),
+  approvalActions: computed(() => props.approvalActions),
+  emitIntent
+});
 
 /**
  * 读取当前 block 关联的 runtime node。
@@ -649,13 +672,6 @@ onMounted(() => {
 onBeforeUnmount(() => {
   disconnectVisibilityObserver();
 });
-
-/**
- * 把一个结构化 intent 上抛给 runtime。
- */
-function emitIntent(intent: Omit<RuntimeIntent, 'id' | 'at'>) {
-  return props.runtime.emitIntent(intent);
-}
 </script>
 
 <template>

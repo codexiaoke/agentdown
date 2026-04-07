@@ -1,6 +1,7 @@
 import type { Component } from 'vue';
 import type {
   AguiComponentMap,
+  MarkdownApprovalStatus,
   MarkdownBlock,
   MarkdownBuiltinComponentOverrides
 } from '../core/types';
@@ -198,6 +199,9 @@ export type RunSurfaceMessageShellMap = Partial<Record<RunSurfaceRole, RunSurfac
 export type RunSurfaceBuiltinMessageActionKey =
   | 'copy'
   | 'regenerate'
+  | 'retry'
+  | 'resume'
+  | 'interrupt'
   | 'like'
   | 'dislike'
   | 'share';
@@ -296,6 +300,93 @@ export type RunSurfaceMessageActionsMap = Partial<Record<
 >>;
 
 /**
+ * 内置 approval 动作支持的稳定 key。
+ */
+export type RunSurfaceBuiltinApprovalActionKey =
+  | 'approve'
+  | 'reject'
+  | 'changes_requested'
+  | 'submit'
+  | 'retry'
+  | 'resume'
+  | 'interrupt';
+
+/**
+ * approval 卡片在点击动作时可拿到的完整上下文。
+ */
+export interface RunSurfaceApprovalActionContext {
+  /** 当前卡片标题。 */
+  title: string;
+  /** 当前卡片说明文案。 */
+  message?: string;
+  /** 当前审批项唯一标识。 */
+  approvalId?: string;
+  /** 当前审批状态。 */
+  status: MarkdownApprovalStatus;
+  /** 当前 runtime ref。 */
+  refId?: string;
+  /** 当前 approval 对应的 surface block。 */
+  block: SurfaceBlock;
+  /** 当前卡片所在消息角色。 */
+  role: RunSurfaceRole;
+  /** 当前运行时实例。 */
+  runtime: AgentRuntime;
+  /** 当前 runtime 的完整快照。 */
+  snapshot: RuntimeSnapshot;
+  /** 向 runtime 主动发出一条结构化 intent。 */
+  emitIntent: (intent: Omit<RuntimeIntent, 'id' | 'at'>) => RuntimeIntent;
+}
+
+/**
+ * 单个 approval 动作按钮的完整定义结构。
+ */
+export interface RunSurfaceApprovalActionDefinition {
+  /** 当前动作的稳定 key。 */
+  key: string;
+  /** 当前动作的可读标签。 */
+  label?: string;
+  /** 当前动作按钮的提示文案。 */
+  title?: string;
+  /** 自定义图标组件；不传时默认使用文本按钮。 */
+  icon?: Component;
+  /** 是否显示当前动作。 */
+  visible?: boolean | ((context: RunSurfaceApprovalActionContext) => boolean);
+  /** 是否禁用当前动作。 */
+  disabled?: boolean | ((context: RunSurfaceApprovalActionContext) => boolean);
+  /** 当前动作点击后的处理函数。 */
+  onClick?: (context: RunSurfaceApprovalActionContext) => void | Promise<void>;
+}
+
+/**
+ * approval 内置动作的业务处理器签名。
+ */
+export type RunSurfaceBuiltinApprovalActionHandler = (
+  context: RunSurfaceApprovalActionContext
+) => void | Promise<void>;
+
+/**
+ * approval 动作条目的声明方式。
+ */
+export type RunSurfaceApprovalActionItem =
+  | RunSurfaceBuiltinApprovalActionKey
+  | RunSurfaceApprovalActionDefinition;
+
+/**
+ * approval 卡片动作区域的完整配置。
+ */
+export interface RunSurfaceApprovalActionsOptions {
+  /** 是否启用当前 approval 动作区域。 */
+  enabled?: boolean;
+  /** 覆写内置 approval 动作的业务行为。 */
+  builtinHandlers?: Partial<Record<
+    RunSurfaceBuiltinApprovalActionKey,
+    RunSurfaceBuiltinApprovalActionHandler
+  >>;
+  /** 当前 approval 卡片要展示的动作列表。 */
+  actions?: RunSurfaceApprovalActionItem[];
+}
+
+/**
  * RunSurface 的完整渲染配置。
  *
  * 这一层决定的是“runtime 最终怎么显示”，包括：
@@ -328,4 +419,6 @@ export interface RunSurfaceOptions {
   messageShells?: RunSurfaceMessageShellMap;
   /** assistant / user / system 三类消息末尾的操作栏配置。 */
   messageActions?: RunSurfaceMessageActionsMap;
+  /** approval 卡片对应的动作区域配置。 */
+  approvalActions?: RunSurfaceApprovalActionsOptions | false;
 }

@@ -58,6 +58,9 @@ let transientSuccessTimer: number | undefined;
 const BUILTIN_ACTION_KEYS = new Set<RunSurfaceBuiltinMessageActionKey>([
   'copy',
   'regenerate',
+  'retry',
+  'resume',
+  'interrupt',
   'like',
   'dislike',
   'share'
@@ -229,6 +232,12 @@ function resolveActionLabel(action: RunSurfaceMessageActionDefinition): string {
       return transientSuccessAction.value === 'copy' ? '已复制' : '复制';
     case 'regenerate':
       return '重新生成';
+    case 'retry':
+      return '重试';
+    case 'resume':
+      return '继续';
+    case 'interrupt':
+      return '中断';
     case 'like':
       return '喜欢';
     case 'dislike':
@@ -277,7 +286,7 @@ const actions = computed<ResolvedMessageAction[]>(() => {
         icon: action.icon,
         disabled: builtinDisabled || isRunSurfaceMessageActionDisabled(action, context),
         onClick: async () => {
-    if (action.onClick) {
+          if (action.onClick) {
             await action.onClick(context);
             return;
           }
@@ -371,6 +380,46 @@ function isActionActive(actionKey: string): boolean {
         <path d="M21 3v5h-5" />
         <path d="M21 12a9 9 0 0 1-15.4 6.4L3 16" />
         <path d="M3 21v-5h5" />
+      </svg>
+
+      <svg
+        v-else-if="action.key === 'retry'"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        class="agentdown-run-surface-message-action-icon"
+      >
+        <path d="M21 12a9 9 0 1 1-3.2-6.9" />
+        <path d="M21 4v6h-6" />
+      </svg>
+
+      <svg
+        v-else-if="action.key === 'resume'"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        class="agentdown-run-surface-message-action-icon"
+      >
+        <path d="M7 5.5v13l10-6.5Z" />
+      </svg>
+
+      <svg
+        v-else-if="action.key === 'interrupt'"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        class="agentdown-run-surface-message-action-icon"
+      >
+        <rect x="6.5" y="6.5" width="11" height="11" rx="1.8" />
       </svg>
 
       <svg
