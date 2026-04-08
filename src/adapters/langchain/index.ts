@@ -23,13 +23,23 @@ export type {
   UseLangChainChatSessionOptions,
   UseLangChainChatSessionResult
 } from './chat';
-export type { LangChainRequestBody, LangChainSseTransportOptions } from './transport';
+export type {
+  LangChainRequestBody,
+  LangChainResumeRequestBody,
+  LangChainSseTransportOptions
+} from './transport';
 export type {
   LangChainAdapterOptions,
   LangChainBlockIdResolver,
+  LangChainEditedAction,
   LangChainConversationIdResolver,
   LangChainEvent,
   LangChainGroupIdResolver,
+  LangChainHumanDecision,
+  LangChainInterruptActionRequest,
+  LangChainInterruptPayload,
+  LangChainInterruptReviewConfig,
+  LangChainInterruptValue,
   LangChainMessageIdResolver,
   LangChainPresetOptions,
   LangChainProtocolOptions,

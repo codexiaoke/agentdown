@@ -4,11 +4,12 @@ import {
   defineAgentdownPreset,
   type AgentdownPreset
 } from '../../runtime/definePreset';
-import type { RuntimeCommand, RuntimeProtocol } from '../../runtime/types';
+import type { ProtocolContext, RuntimeCommand, RuntimeProtocol } from '../../runtime/types';
 import {
   extractContent,
   extractErrorMessage,
   extractExplicitRunId,
+  extractInterrupts,
   extractTool,
   extractToolName,
   extractToolResult,
@@ -33,9 +34,124 @@ import {
 } from './session';
 import type {
   LangChainEvent,
+  LangChainInterruptActionRequest,
+  LangChainInterruptPayload,
+  LangChainInterruptReviewConfig,
   LangChainPresetOptions,
   LangChainProtocolOptions
 } from './types';
+
+/**
+ * 基于 interrupt id 和索引生成默认 approval block id。
+ */
+function createLangChainApprovalBlockId(interruptId: string, index: number): string {
+  return `block:approval:${interruptId}:${index}`;
+}
+
+/**
+ * 读取 interrupt request 对应的标题。
+ */
+function resolveLangChainApprovalTitle(
+  actionRequest: LangChainInterruptActionRequest | undefined
+): string {
+  const name = typeof actionRequest?.name === 'string'
+    ? actionRequest.name
+    : '';
+
+  return name.length > 0
+    ? `工具调用确认：${name}`
+    : '工具调用确认';
+}
+
+/**
+ * 读取 interrupt request 最适合直接展示给用户的说明文案。
+ */
+function resolveLangChainApprovalMessage(
+  actionRequest: LangChainInterruptActionRequest | undefined,
+  index: number,
+  total: number
+): string {
+  if (typeof actionRequest?.description === 'string' && actionRequest.description.length > 0) {
+    return actionRequest.description;
+  }
+
+  const name = typeof actionRequest?.name === 'string'
+    ? actionRequest.name
+    : '工具调用';
+
+  if (total <= 1) {
+    return `LangChain 正在等待你确认是否执行 ${name}。`;
+  }
+
+  return `LangChain 正在等待你确认第 ${index + 1} / ${total} 个工具调用：${name}。`;
+}
+
+/**
+ * 读取当前 interrupt request 允许的决策列表。
+ */
+function resolveLangChainAllowedDecisions(
+  reviewConfig: LangChainInterruptReviewConfig | undefined
+): string[] {
+  return Array.isArray(reviewConfig?.allowed_decisions)
+    ? reviewConfig.allowed_decisions.filter((item): item is string => (
+      typeof item === 'string' && item.length > 0
+    ))
+    : [];
+}
+
+/**
+ * 把 LangChain interrupt 映射成一组 approval block。
+ */
+function createLangChainInterruptCommands(
+  interrupt: LangChainInterruptPayload,
+  session: ReturnType<typeof ensureRunSession>,
+  context: ProtocolContext,
+  options: LangChainProtocolOptions
+): RuntimeCommand[] {
+  const interruptId = typeof interrupt.id === 'string' && interrupt.id.length > 0
+    ? interrupt.id
+    : context.makeId('langchain-interrupt');
+  const value = interrupt.value;
+  const actionRequests = Array.isArray(value?.action_requests)
+    ? value.action_requests
+    : [];
+  const reviewConfigs = Array.isArray(value?.review_configs)
+    ? value.review_configs
+    : [];
+
+  return actionRequests.map((actionRequest, index) => {
+    const reviewConfig = reviewConfigs[index];
+    const allowedDecisions = resolveLangChainAllowedDecisions(reviewConfig);
+    const approvalId = `${interruptId}:${index}`;
+
+    return cmd.approval.update({
+      id: createLangChainApprovalBlockId(interruptId, index),
+      role: 'assistant',
+      slot: options.slot ?? 'main',
+      title: resolveLangChainApprovalTitle(actionRequest),
+      message: resolveLangChainApprovalMessage(actionRequest, index, actionRequests.length),
+      approvalId,
+      refId: interruptId,
+      status: 'pending',
+      ...(session.groupId !== undefined ? { groupId: session.groupId } : {}),
+      ...(session.conversationId !== undefined ? { conversationId: session.conversationId } : {}),
+      ...(session.turnId !== undefined ? { turnId: session.turnId } : {}),
+      ...(session.messageId !== undefined ? { messageId: session.messageId } : {}),
+      data: {
+        rawEvent: interrupt,
+        interruptId,
+        interruptIndex: index,
+        interruptCount: actionRequests.length,
+        actionRequest,
+        reviewConfig,
+        toolName: actionRequest?.name,
+        toolArgs: actionRequest?.args,
+        allowedDecisions
+      },
+      at: context.now()
+    });
+  });
+}
 
 /**
  * 创建一次 LangChain 事件到 RuntimeCommand 的映射协议。
@@ -86,6 +202,25 @@ export function createLangChainProtocol(
           commands.push(...createStreamOpenCommands(session, options));
           commands.push(cmd.content.append(session.streamId, content));
           session.segmentHasContent = true;
+          break;
+        }
+        case 'on_chain_stream': {
+          const interrupts = extractInterrupts(packet);
+
+          if (interrupts.length === 0) {
+            break;
+          }
+
+          ensureRunStarted(state, session, packet, context, commands, options);
+          closeCurrentStream(session, commands, {
+            advanceSegment: true
+          });
+          session.interrupted = true;
+
+          for (const interrupt of interrupts) {
+            commands.push(...createLangChainInterruptCommands(interrupt, session, context, options));
+          }
+
           break;
         }
         case 'on_tool_start': {
@@ -145,6 +280,12 @@ export function createLangChainProtocol(
               cmd.run.finish({
                 id: session.runId,
                 ...(session.title ? { title: session.title } : {}),
+                ...(session.interrupted
+                  ? {
+                      status: 'paused',
+                      message: 'LangChain 正在等待人工确认。'
+                    }
+                  : {}),
                 data: {
                   rawEvent: packet
                 },

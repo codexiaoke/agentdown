@@ -32,6 +32,9 @@ export function isHeavyMarkdownKind(kind: MarkdownBlock['kind']): boolean {
     || kind === 'agui'
     || kind === 'artifact'
     || kind === 'approval'
+    || kind === 'attachment'
+    || kind === 'branch'
+    || kind === 'handoff'
     || kind === 'timeline'
   );
 }

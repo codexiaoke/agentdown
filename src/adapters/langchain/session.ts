@@ -142,7 +142,8 @@ export function ensureRunSession(
     streamOpen: false,
     pendingTools: [],
     startedToolIds: new Set<string>(),
-    fallbackToolCount: 0
+    fallbackToolCount: 0,
+    interrupted: false
   };
   syncStreamSegmentIds(created);
 

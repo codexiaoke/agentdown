@@ -1,5 +1,10 @@
 import type { RuntimeData } from '../../runtime/types';
-import type { AgnoEvent, AgnoToolPayload } from './types';
+import type {
+  AgnoEvent,
+  AgnoRequirementPayload,
+  AgnoToolExecutionPayload,
+  AgnoToolPayload
+} from './types';
 
 /**
  * 从未知值中读取非空字符串。
@@ -16,6 +21,23 @@ function readString(value: unknown): string | undefined {
 function readRecord(value: unknown): RuntimeData | undefined {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? value as RuntimeData
+    : undefined;
+}
+
+/**
+ * 从未知值中读取对象数组。
+ */
+function readRecordArray(value: unknown): RuntimeData[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const records = value
+    .map((item) => readRecord(item))
+    .filter((item): item is RuntimeData => item !== undefined);
+
+  return records.length > 0
+    ? records
     : undefined;
 }
 
@@ -42,6 +64,20 @@ export function normalizeAgnoEventName(eventName: string): string {
 export function extractTool(packet: AgnoEvent): AgnoToolPayload | undefined {
   const tool = readRecord(packet.tool);
   return tool as AgnoToolPayload | undefined;
+}
+
+/**
+ * 读取 Agno 事件根级的工具执行数组。
+ */
+export function extractTools(packet: AgnoEvent): AgnoToolExecutionPayload[] {
+  return (readRecordArray(packet.tools) ?? []) as AgnoToolExecutionPayload[];
+}
+
+/**
+ * 读取 Agno 事件里的 requirement 数组。
+ */
+export function extractRequirements(packet: AgnoEvent): AgnoRequirementPayload[] {
+  return (readRecordArray(packet.requirements) ?? []) as AgnoRequirementPayload[];
 }
 
 /**
@@ -143,6 +179,115 @@ export function extractToolName(tool: AgnoToolPayload | undefined): string | und
 
   return readString(tool.tool_name)
     ?? readString(tool.name);
+}
+
+/**
+ * 读取 requirement 的稳定 id。
+ */
+export function extractRequirementId(requirement: AgnoRequirementPayload | undefined): string | undefined {
+  if (!requirement) {
+    return undefined;
+  }
+
+  return readString(requirement.id);
+}
+
+/**
+ * 读取 requirement 关联的工具执行对象。
+ */
+export function extractRequirementTool(
+  requirement: AgnoRequirementPayload | undefined
+): AgnoToolExecutionPayload | undefined {
+  if (!requirement) {
+    return undefined;
+  }
+
+  return readRecord(requirement.tool_execution) as AgnoToolExecutionPayload | undefined;
+}
+
+/**
+ * 判断 requirement 当前是否仍然在等待人工确认。
+ */
+export function isPendingConfirmationRequirement(
+  requirement: AgnoRequirementPayload | undefined
+): boolean {
+  const tool = extractRequirementTool(requirement);
+
+  if (!tool || tool.requires_confirmation !== true) {
+    return false;
+  }
+
+  if (typeof requirement?.confirmation === 'boolean') {
+    return false;
+  }
+
+  if (typeof tool.confirmed === 'boolean') {
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * 读取 confirmation requirement 当前应显示的 approval 状态。
+ */
+export function extractRequirementApprovalStatus(
+  requirement: AgnoRequirementPayload | undefined
+): 'pending' | 'approved' | 'rejected' {
+  const tool = extractRequirementTool(requirement);
+
+  if (requirement?.confirmation === true || tool?.confirmed === true) {
+    return 'approved';
+  }
+
+  if (requirement?.confirmation === false || tool?.confirmed === false) {
+    return 'rejected';
+  }
+
+  return 'pending';
+}
+
+/**
+ * 为 requirement 生成一个更适合展示的标题。
+ */
+export function extractRequirementTitle(
+  requirement: AgnoRequirementPayload | undefined
+): string | undefined {
+  const tool = extractRequirementTool(requirement);
+  const toolName = extractToolName(tool);
+
+  return toolName
+    ? `确认执行 ${toolName}`
+    : undefined;
+}
+
+/**
+ * 为 requirement 生成一条可读的说明文案。
+ */
+export function extractRequirementMessage(
+  requirement: AgnoRequirementPayload | undefined
+): string | undefined {
+  const tool = extractRequirementTool(requirement);
+  const toolName = extractToolName(tool);
+  const toolArgs = extractToolArgs(tool);
+
+  if (!toolName) {
+    return undefined;
+  }
+
+  if (toolArgs === undefined) {
+    return `是否允许执行 ${toolName}？`;
+  }
+
+  if (typeof toolArgs === 'string') {
+    return `是否允许执行 ${toolName}(${toolArgs})？`;
+  }
+
+  try {
+    return `是否允许执行 ${toolName}(${JSON.stringify(toolArgs, null, 0)})？`;
+  } catch {
+    return `是否允许执行 ${toolName}？`;
+  }
 }
 
 /**

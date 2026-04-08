@@ -22,6 +22,9 @@ const syntaxChips = [
   'agui',
   'artifact',
   'approval',
+  'attachment',
+  'branch',
+  'handoff',
   'timeline'
 ];
 
@@ -88,7 +91,7 @@ function createLongDocumentSource(): string {
 # Agentdown 长文档总览 Demo
 
 这是一个专门用于查看“长文阅读 + 复杂 markdown + Agentdown 扩展块”混排效果的页面。  
-这一页会尽量覆盖 **当前支持的常用 Markdown 语法**，以及 \`thought / agui / artifact / approval / timeline\` 这些扩展块。
+这一页会尽量覆盖 **当前支持的常用 Markdown 语法**，以及 \`thought / agui / artifact / approval / attachment / branch / handoff / timeline\` 这些扩展块。
 
 ![Agentdown Long Demo](${heroImageSrc})
 
@@ -256,6 +259,18 @@ const idea = '先把复杂结构收敛成 block，再交给 Vue 渲染';
 ### Approval
 
 :::approval title="是否发布到生产环境" approval-id="approval:release-long-doc" status="pending" message="这是一条演示用审批块，用来确认审批卡片在长文档里的视觉表现。"
+
+### Attachment
+
+:::attachment title="客户补充附件" attachment-id="file:release-notes" kind="file" label="release-notes.pdf" size-text="860 KB" message="用户输入也可以是结构化附件，不必退回成一段纯文本描述。"
+
+### Branch
+
+:::branch title="修订分支" branch-id="branch:release-revision" source-run-id="run:release-main" target-run-id="run:release-revision" status="running" label="release-revision" message="当审批意见要求修改时，可以在长文和聊天页面里都用同一类 branch block 表达。"
+
+### Handoff
+
+:::handoff title="人工交接" handoff-id="handoff:release-review" target-type="team" assignee="发布团队" status="pending" message="handoff block 用来表达当前工作已经交给谁继续处理。"
 
 ### Timeline
 

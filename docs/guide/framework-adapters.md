@@ -233,6 +233,26 @@ createSseTransport<CrewAIEvent, string>({
 })
 ```
 
+## LangChain 真实联调建议
+
+如果你现在接的是仓库里的 FastAPI backend，推荐先把 LangChain 真后端跑通，再回到前端看 UI。
+
+最短验收顺序：
+
+1. `python3 backend/run.py`
+2. `npm run backend:smoke:langchain`
+3. 打开前端 `/sse-langchain` demo 页面
+
+`backend:smoke:langchain` 会直接校验：
+
+- 根 `on_chain_start`
+- `on_tool_start`
+- `on_tool_end`
+- 根 `on_chain_end`
+- 真实 assistant 文本流
+
+这样你可以先确认“后端事件真的来了”，再看前端 adapter 是不是映射正确。
+
 ## 什么时候该直接自己写 protocol
 
 推荐自己写 `defineEventProtocol()` / `defineProtocol()` 的情况只有两类：

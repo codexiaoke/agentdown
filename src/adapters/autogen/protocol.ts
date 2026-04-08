@@ -4,16 +4,20 @@ import {
   defineAgentdownPreset,
   type AgentdownPreset
 } from '../../runtime/definePreset';
-import type { RuntimeCommand, RuntimeProtocol } from '../../runtime/types';
+import type { ProtocolContext, RuntimeCommand, RuntimeProtocol } from '../../runtime/types';
 import {
   extractAssistantMessageId,
   extractAssistantText,
   extractErrorMessage,
   extractExecutedTools,
+  extractHandoffId,
+  extractHandoffTarget,
   extractRequestedTools,
   extractSummaryTools,
+  extractStopReason,
   extractToolName,
   extractToolResult,
+  isAutoGenHandoffStop,
   isAssistantEvent,
   isUserEvent,
   normalizeAutoGenEventName
@@ -42,6 +46,56 @@ import type {
   AutoGenPresetOptions,
   AutoGenProtocolOptions
 } from './types';
+
+/**
+ * 生成 AutoGen HITL approval block 的稳定 id。
+ */
+function createAutoGenApprovalBlockId(
+  packet: AutoGenEvent,
+  context: ProtocolContext
+): string {
+  const handoffId = extractHandoffId(packet);
+
+  return handoffId !== undefined
+    ? `block:approval:${handoffId}`
+    : context.makeId('autogen-approval');
+}
+
+/**
+ * 读取 AutoGen HITL approval block 的标题。
+ */
+function resolveAutoGenApprovalTitle(packet: AutoGenEvent): string {
+  const target = extractHandoffTarget(packet);
+
+  if (target === 'human') {
+    return '等待人工确认';
+  }
+
+  return target !== undefined
+    ? `等待 ${target} 确认`
+    : '等待确认';
+}
+
+/**
+ * 把 AutoGen handoff 目标映射成内置 handoff target 类型。
+ */
+function resolveAutoGenHandoffTargetType(packet: AutoGenEvent): string {
+  const target = extractHandoffTarget(packet)?.trim().toLowerCase();
+
+  if (target === 'human') {
+    return 'human';
+  }
+
+  if (target?.includes('team')) {
+    return 'team';
+  }
+
+  if (target?.includes('system')) {
+    return 'system';
+  }
+
+  return 'agent';
+}
 
 /**
  * 创建一次 AutoGen 事件到 RuntimeCommand 的映射协议。
@@ -224,16 +278,78 @@ export function createAutoGenProtocol(
           }
           break;
         }
+        case 'handoff_message': {
+          const target = extractHandoffTarget(packet);
+          const message = extractAssistantText(packet);
+          const handoffId = extractHandoffId(packet);
+
+          ensureRunStarted(state, session, packet, context, commands, options);
+          closeCurrentStream(session, commands, {
+            advanceSegment: true
+          });
+          session.interrupted = true;
+          commands.push(cmd.approval.upsert({
+            id: createAutoGenApprovalBlockId(packet, context),
+            role: 'assistant',
+            title: resolveAutoGenApprovalTitle(packet),
+            status: 'pending',
+            ...(handoffId
+              ? {
+                  approvalId: handoffId
+                }
+              : {}),
+            ...(message
+              ? {
+                  message
+                }
+              : {}),
+            refId: session.runId,
+            ...(session.groupId !== undefined ? { groupId: session.groupId } : {}),
+            ...(session.conversationId !== undefined ? { conversationId: session.conversationId } : {}),
+            ...(session.turnId !== undefined ? { turnId: session.turnId } : {}),
+            ...(session.messageId !== undefined ? { messageId: session.messageId } : {}),
+            data: {
+              rawEvent: packet,
+              ...(handoffId
+                ? {
+                    handoffId
+                  }
+                : {}),
+              targetType: resolveAutoGenHandoffTargetType(packet),
+              ...(target
+                ? {
+                    target,
+                    assignee: target
+                  }
+                : {}),
+              ...(packet.context
+                ? {
+                    context: packet.context
+                  }
+                : {})
+            },
+            at: context.now()
+          }));
+          break;
+        }
         case 'task_result':
           ensureRunStarted(state, session, packet, context, commands, options);
           closeCurrentStream(session, commands);
+          session.interrupted = session.interrupted || isAutoGenHandoffStop(packet);
 
           commands.push(
             cmd.run.finish({
               id: session.runId,
               ...(session.title ? { title: session.title } : {}),
+              ...(session.interrupted
+                ? {
+                    status: 'paused',
+                    message: 'AutoGen 正在等待人工继续。'
+                  }
+                : {}),
               data: {
-                rawEvent: packet
+                rawEvent: packet,
+                stopReason: extractStopReason(packet)
               },
               at: context.now()
             })

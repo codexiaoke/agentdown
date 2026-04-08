@@ -298,6 +298,9 @@ function markdownBlockToSurfaceBlock(
       break;
     case 'artifact':
     case 'approval':
+    case 'attachment':
+    case 'branch':
+    case 'handoff':
     case 'agui':
     case 'timeline':
     case 'thought':

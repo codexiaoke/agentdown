@@ -55,6 +55,9 @@ export function estimateMarkdownBlockHeight(
 
     case 'artifact':
     case 'approval':
+    case 'attachment':
+    case 'branch':
+    case 'handoff':
     case 'timeline':
       return 112;
 

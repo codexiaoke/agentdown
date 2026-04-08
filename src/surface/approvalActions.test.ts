@@ -1,10 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_RUN_SURFACE_APPROVAL_ACTIONS,
+  doesRunSurfaceApprovalActionRequireReason,
   createRunSurfaceApprovalActionIntent,
   isRunSurfaceApprovalActionDisabled,
   isRunSurfaceApprovalActionVisible,
-  resolveRunSurfaceApprovalActionItems
+  resolveRunSurfaceApprovalActionItems,
+  resolveRunSurfaceApprovalActionReasonMode,
+  shouldRunSurfaceApprovalActionOpenReasonPrompt,
+  validateRunSurfaceApprovalActionReason
 } from './approvalActions';
 import type { RunSurfaceApprovalActionContext } from './types';
 
@@ -64,8 +68,74 @@ describe('surface approvalActions helpers', () => {
     }, context)).toBe(true);
   });
 
-  it('builds a normalized approval.action intent payload', () => {
+  it('requires a reason for reject and changes_requested by default', () => {
     const context = createApprovalActionContext();
+
+    expect(resolveRunSurfaceApprovalActionReasonMode({
+      key: 'approve'
+    }, context)).toBe('hidden');
+
+    expect(resolveRunSurfaceApprovalActionReasonMode({
+      key: 'reject'
+    }, context)).toBe('required');
+
+    expect(doesRunSurfaceApprovalActionRequireReason({
+      key: 'approve'
+    }, context)).toBe(false);
+
+    expect(doesRunSurfaceApprovalActionRequireReason({
+      key: 'reject'
+    }, context)).toBe(true);
+
+    expect(doesRunSurfaceApprovalActionRequireReason({
+      key: 'changes_requested'
+    }, context)).toBe(true);
+
+    expect(shouldRunSurfaceApprovalActionOpenReasonPrompt({
+      key: 'approve'
+    }, context)).toBe(false);
+
+    expect(shouldRunSurfaceApprovalActionOpenReasonPrompt({
+      key: 'reject'
+    }, context)).toBe(true);
+  });
+
+  it('supports optional reason mode and custom validation', () => {
+    const context = createApprovalActionContext();
+
+    expect(resolveRunSurfaceApprovalActionReasonMode({
+      key: 'approve',
+      reasonMode: 'optional'
+    }, context)).toBe('optional');
+
+    expect(validateRunSurfaceApprovalActionReason({
+      key: 'approve',
+      reasonMode: 'optional',
+      reasonMinLength: 4
+    }, context, '')).toBeNull();
+
+    expect(validateRunSurfaceApprovalActionReason({
+      key: 'approve',
+      reasonMode: 'optional',
+      reasonMinLength: 4
+    }, context, '好')).toBe('原因至少需要 4 个字。');
+
+    expect(validateRunSurfaceApprovalActionReason({
+      key: 'approve',
+      reasonMode: 'optional',
+      validateReason: ({ reason }) => {
+        return reason.includes('客户')
+          ? null
+          : '备注里请带上客户。';
+      }
+    }, context, '已确认')).toBe('备注里请带上客户。');
+  });
+
+  it('builds a normalized approval.action intent payload', () => {
+    const context = {
+      ...createApprovalActionContext(),
+      reason: '请补充客户名称'
+    };
 
     expect(createRunSurfaceApprovalActionIntent('approve', context)).toEqual({
       type: 'approval.action',
@@ -75,6 +145,7 @@ describe('surface approvalActions helpers', () => {
         action: 'approve',
         title: '是否发送客户邮件',
         status: 'pending',
+        reason: '请补充客户名称',
         message: '确认无误后再继续发送。',
         approvalId: 'approval:demo',
         refId: 'ref:approval-demo',

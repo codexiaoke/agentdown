@@ -290,12 +290,19 @@ approval 卡片现在也可以直接挂动作：
 const surface = {
   approvalActions: {
     enabled: true,
+    actions: [
+      {
+        key: 'reject',
+        reasonMinLength: 4
+      }
+    ],
     builtinHandlers: {
       approve: async ({ runtime, block }) => {
         runtime.apply(cmd.approval.update({
           id: block.id,
           title: '是否发送客户邮件',
-          status: 'approved'
+          status: 'approved',
+          message: '已批准。'
         }));
       }
     }
@@ -315,6 +322,25 @@ const surface = {
 
 默认 approval 卡片在 `RunSurface` 内点击按钮时会发出 `approval.action` intent。  
 如果当前 approval 还是 `pending`，默认会显示 `approve / reject / changes_requested` 这三个动作。
+
+其中有一个内置交互规则：
+
+- `reject`
+  默认要求先填写拒绝原因
+- `changes_requested`
+  默认要求先填写修改原因
+- `approve`
+  默认不显示原因输入
+
+这些原因会一起写进 `approval.action` intent 的 `payload.reason`，  
+内置 `builtinHandlers.reject` / `builtinHandlers.changes_requested` 也能直接从 `context.reason` 里读取。
+
+如果你需要更细的校验，还可以继续配置：
+
+- `reasonMinLength`
+  约束最小字数
+- `validateReason`
+  返回自定义错误文案
 
 ## 相关导出
 

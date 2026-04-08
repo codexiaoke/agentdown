@@ -22,7 +22,11 @@ export type {
   UseAgnoChatSessionOptions,
   UseAgnoChatSessionResult
 } from './chat';
-export type { AgnoRequestBody, AgnoSseTransportOptions } from './transport';
+export type {
+  AgnoRequestBody,
+  AgnoResumeRequestBody,
+  AgnoSseTransportOptions
+} from './transport';
 export type {
   AgnoAdapterOptions,
   AgnoBlockIdResolver,
@@ -32,9 +36,11 @@ export type {
   AgnoMessageIdResolver,
   AgnoPresetOptions,
   AgnoProtocolOptions,
+  AgnoRequirementPayload,
   AgnoRunTitleResolver,
   AgnoStreamIdResolver,
   AgnoTurnIdResolver,
+  AgnoToolExecutionPayload,
   AgnoToolPayload,
   AgnoToolRendererContext,
   AgnoToolRendererResolver

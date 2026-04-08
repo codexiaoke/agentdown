@@ -77,6 +77,10 @@ export interface AutoGenEvent extends RuntimeData {
   created_at?: string;
   /** 文本、数组或其他复杂结构。 */
   content?: unknown;
+  /** HandoffMessage 的目标对象，例如 `human`。 */
+  target?: string;
+  /** HandoffMessage 透传给目标端的上下文消息。 */
+  context?: RuntimeData[];
   /** 流式 token 所属的完整消息 id。 */
   full_message_id?: string;
   /** ToolCallSummaryMessage 上的工具调用数组。 */
@@ -287,6 +291,8 @@ export interface AutoGenRunSession {
   title: string | undefined;
   /** 当前分段的内容流是否已经打开。 */
   streamOpen: boolean;
+  /** 当前 run 是否已经进入等待人工继续的暂停状态。 */
+  interrupted: boolean;
   /** 当前正在流式输出的 assistant message id。 */
   activeAssistantMessageId: string | undefined;
   /** 已完成去重的 assistant message id 集合。 */

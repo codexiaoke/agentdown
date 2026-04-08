@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import ssl
+import time
 from typing import Any
 
 import httpx
@@ -87,11 +89,43 @@ def _feature_priority(feature_code: str | None) -> int:
 
 
 def _fetch_json(url: str, params: dict[str, Any]) -> dict[str, Any]:
-    """Perform a blocking JSON HTTP request for tool execution inside agent frameworks."""
+    """Perform a blocking JSON HTTP request for tool execution inside agent frameworks.
 
-    response = httpx.get(url, params=params, timeout=10.0)
-    response.raise_for_status()
-    return response.json()
+    Open-Meteo is a public upstream endpoint. In some local environments, inherited
+    proxy variables can cause TLS negotiation failures such as
+    `SSL: UNEXPECTED_EOF_WHILE_READING`.
+
+    To keep the backend demo stable, weather lookups bypass environment proxy
+    settings by default and surface a clearer application-level error when the
+    upstream request fails.
+    """
+
+    last_error: Exception | None = None
+
+    for attempt, timeout in enumerate((10.0, 20.0), start=1):
+        try:
+            response = httpx.get(
+                url,
+                params=params,
+                timeout=timeout,
+                follow_redirects=True,
+                trust_env=False,
+                headers={
+                    "User-Agent": "agentdown-weather-demo/0.0.3",
+                    "Accept": "application/json",
+                },
+            )
+            response.raise_for_status()
+            return response.json()
+        except (httpx.HTTPError, ssl.SSLError) as exc:
+            last_error = exc
+
+            if attempt >= 2:
+                break
+
+            time.sleep(0.4)
+
+    raise RuntimeError(f"天气服务请求失败: {last_error}") from last_error
 
 
 def _select_best_location(city: str, candidates: list[dict[str, Any]]) -> dict[str, Any]:

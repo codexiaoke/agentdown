@@ -120,6 +120,26 @@ export type MarkdownArtifactKind = 'file' | 'diff' | 'report' | 'image' | 'json'
 
 export type MarkdownApprovalStatus = 'pending' | 'approved' | 'rejected' | 'changes_requested';
 
+/**
+ * 用户输入或 Agent 中间态里常见的附件类型。
+ */
+export type MarkdownAttachmentKind = 'file' | 'image' | 'audio' | 'video' | 'json' | 'input';
+
+/**
+ * branch block 默认支持的状态集合。
+ */
+export type MarkdownBranchStatus = 'pending' | 'running' | 'done' | 'merged' | 'rejected';
+
+/**
+ * handoff block 可表达的交接目标类型。
+ */
+export type MarkdownHandoffTarget = 'human' | 'team' | 'agent' | 'system';
+
+/**
+ * handoff block 默认支持的状态集合。
+ */
+export type MarkdownHandoffStatus = 'pending' | 'accepted' | 'completed' | 'declined';
+
 export interface MarkdownArtifactBlock {
   /** 当前 block 的稳定标识。 */
   id: string;
@@ -158,6 +178,79 @@ export interface MarkdownApprovalBlock {
   status?: MarkdownApprovalStatus;
 }
 
+export interface MarkdownAttachmentBlock {
+  /** 当前 block 的稳定标识。 */
+  id: string;
+  /** block 类型，固定为 attachment。 */
+  kind: 'attachment';
+  /** 绑定的 runtime ref。 */
+  refId?: string;
+  /** 卡片标题。 */
+  title: string;
+  /** 说明文案。 */
+  message?: string;
+  /** 附件唯一标识。 */
+  attachmentId?: string;
+  /** 附件类型。 */
+  attachmentKind: MarkdownAttachmentKind;
+  /** 对外展示的文件名或标签。 */
+  label?: string;
+  /** 附件下载或预览地址。 */
+  href?: string;
+  /** 附件的 MIME 类型。 */
+  mimeType?: string;
+  /** 已格式化的大小文案。 */
+  sizeText?: string;
+  /** 图片类附件的预览地址。 */
+  previewSrc?: string;
+  /** 业务层可选状态文案。 */
+  status?: string;
+}
+
+export interface MarkdownBranchBlock {
+  /** 当前 block 的稳定标识。 */
+  id: string;
+  /** block 类型，固定为 branch。 */
+  kind: 'branch';
+  /** 绑定的 runtime ref。 */
+  refId?: string;
+  /** 卡片标题。 */
+  title: string;
+  /** 说明文案。 */
+  message?: string;
+  /** branch 的稳定标识。 */
+  branchId?: string;
+  /** 分支来源 run id。 */
+  sourceRunId?: string;
+  /** 分支目标 run id。 */
+  targetRunId?: string;
+  /** 分支状态。 */
+  status?: MarkdownBranchStatus | string;
+  /** 对外展示的分支标签，例如 revision-2。 */
+  label?: string;
+}
+
+export interface MarkdownHandoffBlock {
+  /** 当前 block 的稳定标识。 */
+  id: string;
+  /** block 类型，固定为 handoff。 */
+  kind: 'handoff';
+  /** 绑定的 runtime ref。 */
+  refId?: string;
+  /** 卡片标题。 */
+  title: string;
+  /** 说明文案。 */
+  message?: string;
+  /** handoff 的稳定标识。 */
+  handoffId?: string;
+  /** 交接状态。 */
+  status?: MarkdownHandoffStatus | string;
+  /** 交接目标类型。 */
+  targetType?: MarkdownHandoffTarget | string;
+  /** 交接对象，例如人工审核员或某个团队。 */
+  assignee?: string;
+}
+
 export interface MarkdownTimelineBlock {
   /** 当前 block 的稳定标识。 */
   id: string;
@@ -183,6 +276,9 @@ export type MarkdownBlock =
   | MarkdownAguiBlock
   | MarkdownArtifactBlock
   | MarkdownApprovalBlock
+  | MarkdownAttachmentBlock
+  | MarkdownBranchBlock
+  | MarkdownHandoffBlock
   | MarkdownTimelineBlock;
 
 export interface MarkdownBuiltinComponents {
@@ -204,6 +300,12 @@ export interface MarkdownBuiltinComponents {
   artifact: Component;
   /** 负责渲染 approval 卡片的组件。 */
   approval: Component;
+  /** 负责渲染 attachment 卡片的组件。 */
+  attachment: Component;
+  /** 负责渲染 branch 卡片的组件。 */
+  branch: Component;
+  /** 负责渲染 handoff 卡片的组件。 */
+  handoff: Component;
   /** 负责渲染 timeline 卡片的组件。 */
   timeline: Component;
 }

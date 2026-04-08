@@ -1,8 +1,14 @@
-import type { MaybeRefOrGetter } from 'vue';
+import { computed, shallowRef, toValue, watch, type MaybeRefOrGetter } from 'vue';
 import type { FetchTransportSource } from '../../runtime/transports';
-import type { BridgeHooks } from '../../runtime/types';
+import type { BridgeHooks, RuntimeData, SurfaceBlock } from '../../runtime/types';
+import { cmd } from '../../runtime/defineProtocol';
 import type { EventActionRegistryResult } from '../../runtime/eventActions';
-import type { RunSurfaceOptions } from '../../surface/types';
+import type {
+  RunSurfaceApprovalActionContext,
+  RunSurfaceApprovalActionsOptions,
+  RunSurfaceBuiltinApprovalActionKey,
+  RunSurfaceOptions
+} from '../../surface/types';
 import {
   createFrameworkChatIds,
   type FrameworkChatAssistantActionsOptions,
@@ -14,7 +20,11 @@ import {
   useFrameworkChatSession
 } from '../shared/chatFactory';
 import { createAgnoAdapter } from './adapter';
-import { createAgnoSseTransport, type AgnoSseTransportOptions } from './transport';
+import {
+  createAgnoSseTransport,
+  type AgnoResumeRequestBody,
+  type AgnoSseTransportOptions
+} from './transport';
 import type {
   AgnoAdapterOptions,
   AgnoEvent,
@@ -72,6 +82,10 @@ export interface UseAgnoChatSessionOptions<
   input?: MaybeRefOrGetter<string | undefined>;
   /** 当前整段聊天所属的 conversationId。 */
   conversationId: MaybeRefOrGetter<string>;
+  /** 透传给 Agno backend 的运行模式，例如 `hitl`。 */
+  mode?: MaybeRefOrGetter<string | undefined>;
+  /** 透传给 Agno backend 的 end-user id。 */
+  userId?: MaybeRefOrGetter<string | undefined>;
   /** Agno adapter 的 run 标题简写。 */
   title?: AgnoAdapterOptions<TSource>['title'];
   /** 传给 `createAgnoProtocol()` 的额外协议配置。 */
@@ -105,7 +119,230 @@ export interface UseAgnoChatSessionOptions<
  */
 export interface UseAgnoChatSessionResult<
   TSource = FetchTransportSource
-> extends FrameworkChatSessionResult<AgnoEvent, TSource, AgnoChatIds> {}
+> extends FrameworkChatSessionResult<AgnoEvent, TSource, AgnoChatIds> {
+  /** 手动继续一个已暂停的 Agno requirement。 */
+  resolveRequirement: (
+    input: AgnoResumeRequestBody,
+    source?: TSource
+  ) => Promise<void>;
+}
+
+/**
+ * 读取一个 transport 可解析配置项的当前值。
+ */
+async function resolveAgnoTransportValue<TSource, TValue>(
+  source: TSource,
+  value: ((source: TSource) => Promise<TValue> | TValue) | TValue | undefined
+): Promise<TValue | undefined> {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value === 'function') {
+    return (value as (source: TSource) => Promise<TValue> | TValue)(source);
+  }
+
+  return value;
+}
+
+/**
+ * 从未知 block data 中读取普通对象。
+ */
+function readAgnoRecord(value: unknown): RuntimeData | undefined {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? value as RuntimeData
+    : undefined;
+}
+
+/**
+ * 从未知值中读取非空字符串。
+ */
+function readAgnoString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0
+    ? value
+    : undefined;
+}
+
+/**
+ * 从已有 approval block data 中提取需要继续保留的 Agno 元数据。
+ *
+ * 这一步会去掉由 approval helper 顶层字段直接管理的键，
+ * 避免旧的 `status/message/title` 在 merge 时把新值覆盖回去。
+ */
+function extractAgnoApprovalMetadata(block: SurfaceBlock): RuntimeData | undefined {
+  const data = readAgnoRecord(block.data);
+
+  if (!data) {
+    return undefined;
+  }
+
+  const {
+    kind: _kind,
+    title: _title,
+    approvalId: _approvalId,
+    status: _status,
+    message: _message,
+    refId: _refId,
+    ...metadata
+  } = data;
+
+  return Object.keys(metadata).length > 0
+    ? metadata
+    : undefined;
+}
+
+/**
+ * 从 approval block 上提取继续 requirement 所需的关键 id。
+ */
+function resolveAgnoRequirementTarget(
+  block: SurfaceBlock,
+  approvalId?: string,
+  refId?: string
+): Pick<AgnoResumeRequestBody, 'run_id' | 'requirement_id'> | null {
+  const data = readAgnoRecord(block.data);
+  const runId = readAgnoString(data?.runId) ?? readAgnoString(refId);
+  const requirementId = readAgnoString(data?.requirementId) ?? readAgnoString(approvalId);
+
+  if (!runId || !requirementId) {
+    return null;
+  }
+
+  return {
+    run_id: runId,
+    requirement_id: requirementId
+  };
+}
+
+/**
+ * 把 approval 动作 key 转换成 Agno requirement action。
+ */
+function resolveAgnoRequirementAction(
+  actionKey: RunSurfaceBuiltinApprovalActionKey
+): AgnoResumeRequestBody['action'] | null {
+  switch (actionKey) {
+    case 'approve':
+      return 'approve';
+    case 'reject':
+      return 'reject';
+    default:
+      return null;
+  }
+}
+
+/**
+ * 把 approval 动作 key 映射成前端本地审批状态。
+ */
+function resolveAgnoApprovalStatus(
+  actionKey: RunSurfaceBuiltinApprovalActionKey
+): 'approved' | 'rejected' {
+  return actionKey === 'approve'
+    ? 'approved'
+    : 'rejected';
+}
+
+/**
+ * 读取当前 approval block 关联的 tool id。
+ */
+function resolveAgnoApprovalToolId(block: SurfaceBlock): string | undefined {
+  const data = readAgnoRecord(block.data);
+
+  return readAgnoString(data?.toolId);
+}
+
+/**
+ * 乐观更新 approval 对应的工具状态，避免 reject 后卡片仍停在 pending。
+ */
+function patchAgnoApprovalToolBlock(
+  context: RunSurfaceApprovalActionContext,
+  actionKey: RunSurfaceBuiltinApprovalActionKey
+) {
+  const toolId = resolveAgnoApprovalToolId(context.block);
+
+  if (!toolId) {
+    return;
+  }
+
+  const status = actionKey === 'approve'
+    ? 'pending'
+    : 'rejected';
+  const message = actionKey === 'approve'
+    ? '已批准，等待执行'
+    : '已拒绝执行';
+
+  context.runtime.apply(cmd.tool.update({
+    id: toolId,
+    ...(context.block.groupId ? { groupId: context.block.groupId } : {}),
+    ...(context.block.conversationId ? { conversationId: context.block.conversationId } : {}),
+    ...(context.block.turnId ? { turnId: context.block.turnId } : {}),
+    ...(context.block.messageId ? { messageId: context.block.messageId } : {}),
+    status,
+    message,
+    at: Date.now()
+  }));
+}
+
+/**
+ * 先在 runtime 里乐观更新 approval block，再继续新的 SSE 流。
+ */
+function patchAgnoApprovalBlock(
+  context: RunSurfaceApprovalActionContext,
+  actionKey: RunSurfaceBuiltinApprovalActionKey
+) {
+  const status = resolveAgnoApprovalStatus(actionKey);
+  const input = {
+    id: context.block.id,
+    role: context.role,
+    title: context.title,
+    ...(context.message ? { message: context.message } : {}),
+    ...(context.approvalId ? { approvalId: context.approvalId } : {}),
+    ...(context.refId ? { refId: context.refId } : {}),
+    ...(context.block.groupId ? { groupId: context.block.groupId } : {}),
+    ...(context.block.conversationId ? { conversationId: context.block.conversationId } : {}),
+    ...(context.block.turnId ? { turnId: context.block.turnId } : {}),
+    ...(context.block.messageId ? { messageId: context.block.messageId } : {}),
+    status,
+    at: Date.now()
+  };
+  const data = extractAgnoApprovalMetadata(context.block);
+
+  context.runtime.apply(cmd.approval.update({
+    ...input,
+    ...(data ? { data } : {})
+  }));
+  patchAgnoApprovalToolBlock(context, actionKey);
+}
+
+/**
+ * 为 Agno chat helper 自动装配 approval 卡片动作。
+ */
+function resolveAgnoChatApprovalActions(
+  baseSurface: RunSurfaceOptions,
+  handlers: Partial<Record<RunSurfaceBuiltinApprovalActionKey, (context: RunSurfaceApprovalActionContext) => Promise<void>>>
+): RunSurfaceOptions {
+  const baseApprovalActions = baseSurface.approvalActions;
+
+  if (baseApprovalActions === false) {
+    return baseSurface;
+  }
+
+  const actions = baseApprovalActions?.actions ?? ['approve', 'reject'];
+  const builtinHandlers = {
+    ...handlers,
+    ...(baseApprovalActions?.builtinHandlers ?? {})
+  };
+
+  const approvalActions: RunSurfaceApprovalActionsOptions = {
+    enabled: true,
+    ...(baseApprovalActions ?? {}),
+    actions,
+    builtinHandlers
+  };
+
+  return {
+    ...baseSurface,
+    approvalActions
+  };
+}
 
 /**
  * 为一轮新请求生成默认聊天语义 id。
@@ -140,7 +377,9 @@ export function useAgnoChatSession<
 >(
   options: UseAgnoChatSessionOptions<TSource>
 ): UseAgnoChatSessionResult<TSource> {
-  return useFrameworkChatSession<
+  const backendSessionIdForTransport = shallowRef('');
+  const pendingResumeRequest = shallowRef<AgnoResumeRequestBody | null>(null);
+  const sessionState = useFrameworkChatSession<
     AgnoEvent,
     TSource,
     AgnoChatIds,
@@ -149,9 +388,118 @@ export function useAgnoChatSession<
     AgnoSseTransportOptions<TSource>
   >({
     frameworkName: 'Agno',
-    options,
+    options: {
+      ...options,
+      transport: {
+        ...(options.transport ?? {}),
+        body: async (source: TSource) => {
+          const resolvedBody = await resolveAgnoTransportValue(source, options.transport?.body);
+          const mode = toValue(options.mode);
+          const userId = toValue(options.userId);
+
+          return {
+            ...(resolvedBody ?? {}),
+            ...(backendSessionIdForTransport.value
+              ? {
+                  session_id: backendSessionIdForTransport.value
+                }
+              : {}),
+            ...(mode
+              ? {
+                  mode
+                }
+              : {}),
+            ...(userId
+              ? {
+                  user_id: userId
+                }
+              : {}),
+            ...(pendingResumeRequest.value
+              ? {
+                  agno_resume: pendingResumeRequest.value
+                }
+              : {})
+          };
+        }
+      }
+    },
     createAdapter: createAgnoAdapter,
     createTransport: createAgnoSseTransport,
     resolveSessionId: resolveDefaultAgnoSessionId
   }) as UseAgnoChatSessionResult<TSource>;
+
+  watch(
+    () => sessionState.sessionId.value,
+    (nextSessionId) => {
+      backendSessionIdForTransport.value = nextSessionId;
+    },
+    {
+      immediate: true
+    }
+  );
+
+  /**
+   * 继续一个已暂停的 Agno requirement，并复用同一个 `/api/stream/agno` SSE 入口。
+   */
+  async function resolveRequirement(
+    input: AgnoResumeRequestBody,
+    source?: TSource
+  ) {
+    const previousRequestInput = sessionState.requestInput.value;
+    pendingResumeRequest.value = input;
+    sessionState.requestInput.value = '';
+
+    try {
+      await sessionState.connect(source);
+    } finally {
+      sessionState.requestInput.value = previousRequestInput;
+      pendingResumeRequest.value = null;
+    }
+  }
+
+  const surface = computed(() => {
+    const baseSurface = sessionState.surface.value;
+
+    return resolveAgnoChatApprovalActions(baseSurface, {
+      approve: async (context) => {
+        const target = resolveAgnoRequirementTarget(context.block, context.approvalId, context.refId);
+        const action = resolveAgnoRequirementAction('approve');
+
+        if (!target || !action) {
+          throw new Error('Agno requirement target is missing on the current approval block.');
+        }
+
+        patchAgnoApprovalBlock(context, 'approve');
+        await resolveRequirement({
+          ...target,
+          action
+        });
+      },
+      reject: async (context) => {
+        const target = resolveAgnoRequirementTarget(context.block, context.approvalId, context.refId);
+        const action = resolveAgnoRequirementAction('reject');
+
+        if (!target || !action) {
+          throw new Error('Agno requirement target is missing on the current approval block.');
+        }
+
+        patchAgnoApprovalBlock(context, 'reject');
+        await resolveRequirement({
+          ...target,
+          action,
+          ...(context.reason
+            ? {
+                note: context.reason
+              }
+            : {})
+        });
+      }
+    });
+  });
+
+  return {
+    ...sessionState,
+    surface,
+    resolveRequirement
+  };
 }

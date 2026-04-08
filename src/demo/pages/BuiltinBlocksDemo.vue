@@ -62,6 +62,7 @@ $$
 | --- | --- |
 | artifact | 展示产物 |
 | approval | 展示审批 |
+| attachment | 展示附件 |
 `;
 
 const agentUiSource = `
@@ -78,6 +79,18 @@ const agentUiSource = `
 ### approval
 
 :::approval title="上线审批" approval-id="approval:release-001" status="pending" message="等待负责人确认后再继续发布"
+
+### attachment
+
+:::attachment title="用户上传文件" attachment-id="file:proposal" kind="file" label="proposal.pdf" size-text="2.4 MB" message="这是一份由用户上传的 PDF，可以和文本一起组成同一条 message。"
+
+### branch
+
+:::branch title="修订分支" branch-id="branch:revision-2" source-run-id="run:main" target-run-id="run:revision-2" status="running" label="revision-2" message="当用户点了“需修改”后，可以显式展示当前运行已经派生出一个新分支。"
+
+### handoff
+
+:::handoff title="人工复核交接" handoff-id="handoff:legal-review" target-type="team" assignee="法务团队" status="pending" message="handoff 不强绑具体后端协议，只关心“交给谁、当前状态是什么”。"
 
 > \`timeline\` 更适合跟 runtime history 连起来展示，所以在聊天运行页里演示会更自然。
 `;
@@ -137,6 +150,9 @@ seedRuntimePreview();
       <span>agui</span>
       <span>artifact</span>
       <span>approval</span>
+      <span>attachment</span>
+      <span>branch</span>
+      <span>handoff</span>
       <span>tool(default)</span>
     </div>
 

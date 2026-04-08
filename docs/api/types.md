@@ -285,6 +285,32 @@ interface RunSurfaceApprovalActionsOptions {
 approval 卡片只有在 `RunSurface` 内渲染时才会读取这一层配置。  
 独立 `MarkdownRenderer` 依然保持纯展示行为。
 
+`RunSurfaceApprovalActionDefinition` 还支持这些常用字段：
+
+```ts
+interface RunSurfaceApprovalActionDefinition {
+  key: string
+  label?: string
+  title?: string
+  reasonMode?: 'hidden' | 'required' | 'optional'
+  requireReason?: boolean | ((context: RunSurfaceApprovalActionContext) => boolean)
+  reasonLabel?: string
+  reasonPlaceholder?: string
+  reasonSubmitLabel?: string
+  reasonMinLength?: number
+  validateReason?: (input: {
+    reason: string
+    context: RunSurfaceApprovalActionContext
+  }) => string | null | void
+  onClick?: (context: RunSurfaceApprovalActionContext) => void | Promise<void>
+}
+```
+
+默认内置动作里：
+
+- `reject` 会要求填写拒绝原因
+- `changes_requested` 会要求填写修改原因
+
 ### `RunSurfacePerformanceOptions`
 
 ```ts

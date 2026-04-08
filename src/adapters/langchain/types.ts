@@ -30,6 +30,70 @@ export interface LangChainToolPayload extends RuntimeData {
 }
 
 /**
+ * LangChain HITL interrupt 里的单个 action request。
+ */
+export interface LangChainInterruptActionRequest extends RuntimeData {
+  /** 当前等待人工确认的工具名称。 */
+  name?: string;
+  /** 当前工具调用参数。 */
+  args?: unknown;
+  /** LangChain middleware 生成的说明文案。 */
+  description?: string;
+}
+
+/**
+ * LangChain HITL interrupt 里的 review config。
+ */
+export interface LangChainInterruptReviewConfig extends RuntimeData {
+  /** 当前审批项对应的 action name。 */
+  action_name?: string;
+  /** LangChain 当前允许的决策列表，例如 `approve` / `edit` / `reject`。 */
+  allowed_decisions?: string[];
+}
+
+/**
+ * LangChain HITL interrupt `value` 里的常见结构。
+ */
+export interface LangChainInterruptValue extends RuntimeData {
+  /** 当前这批等待人工确认的 action request 列表。 */
+  action_requests?: LangChainInterruptActionRequest[];
+  /** 与 action request 按索引对齐的 review config 列表。 */
+  review_configs?: LangChainInterruptReviewConfig[];
+}
+
+/**
+ * LangGraph `Interrupt` 经 SSE 序列化后的结构。
+ */
+export interface LangChainInterruptPayload extends RuntimeData {
+  /** 当前 interrupt 的稳定 id。 */
+  id?: string;
+  /** 当前 interrupt 暴露给客户端的值。 */
+  value?: LangChainInterruptValue;
+}
+
+/**
+ * LangChain HITL `edit` 决策里使用的编辑后工具调用。
+ */
+export interface LangChainEditedAction extends RuntimeData {
+  /** 编辑后的工具名称。 */
+  name: string;
+  /** 编辑后的工具参数。 */
+  args: Record<string, unknown>;
+}
+
+/**
+ * 前端继续一个 LangChain HITL interrupt 时提交的单条决策。
+ */
+export interface LangChainHumanDecision extends RuntimeData {
+  /** 当前决策类型。 */
+  type: 'approve' | 'edit' | 'reject';
+  /** `reject` 时带回 LangChain 的说明文案。 */
+  message?: string;
+  /** `edit` 时提交的编辑后工具调用。 */
+  edited_action?: LangChainEditedAction;
+}
+
+/**
  * LangChain `astream_events(version="v2")` 的最小公共结构。
  */
 export interface LangChainEvent extends RuntimeData {
@@ -257,6 +321,8 @@ export interface LangChainRunSession {
   startedToolIds: Set<string>;
   /** 当官方事件没给工具 id 时，本地生成一个兜底序号。 */
   fallbackToolCount: number;
+  /** 当前这次根 run 是否因为 HITL interrupt 而进入等待人工确认。 */
+  interrupted: boolean;
 }
 
 /**

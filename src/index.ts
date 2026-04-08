@@ -1,8 +1,10 @@
 import './styles/theme.css';
 
 export { default as DefaultMarkdownApprovalBlock } from './components/ApprovalBlock.vue';
+export { default as DefaultMarkdownAttachmentBlock } from './components/AttachmentBlock.vue';
 export { default as AgentDevtoolsOverlay } from './components/AgentDevtoolsOverlay.vue';
 export { default as DefaultMarkdownArtifactBlock } from './components/ArtifactBlock.vue';
+export { default as DefaultMarkdownBranchBlock } from './components/BranchBlock.vue';
 export { default as MarkdownRenderer } from './components/MarkdownRenderer.vue';
 export { default as RunSurface } from './components/RunSurface.vue';
 export { default as DefaultRunSurfaceAssistantShell } from './components/RunSurfaceAssistantShell.vue';
@@ -12,6 +14,7 @@ export { default as DefaultRunSurfaceToolRenderer } from './components/RunSurfac
 export { default as DefaultRunSurfaceUserBubble } from './components/RunSurfaceUserBubble.vue';
 export { default as DefaultMarkdownAguiBlock } from './components/AguiComponentWrapper.vue';
 export { default as DefaultMarkdownCodeBlock } from './components/CodeBlock.vue';
+export { default as DefaultMarkdownHandoffBlock } from './components/HandoffBlock.vue';
 export { default as DefaultMarkdownHtmlBlock } from './components/HtmlBlock.vue';
 export { default as DefaultMarkdownMathBlock } from './components/MathBlock.vue';
 export { default as DefaultMarkdownMermaidBlock } from './components/MermaidBlock.vue';
@@ -23,6 +26,7 @@ export { createMarkdownEngine } from './core/createMarkdownEngine';
 export { parseMarkdown } from './core/parseMarkdown';
 export { useAdapterSession } from './composables/useAdapterSession';
 export { useAgentDevtools } from './composables/useAgentDevtools';
+export { useAgentDevtoolsReproductionPlayer } from './composables/useAgentDevtoolsReproductionPlayer';
 export {
   agnoChatFramework,
   autoGenChatFramework,
@@ -100,18 +104,45 @@ export { createEventComponentRegistry, eventToBlock } from './adapters/eventComp
 export { createToolNameRegistry, toolByName } from './adapters/toolNameRegistry';
 export {
   DEFAULT_RUN_SURFACE_APPROVAL_ACTIONS,
+  DEFAULT_RUN_SURFACE_APPROVAL_REASON_REQUIRED_ACTIONS,
   createRunSurfaceApprovalActionIntent,
+  doesRunSurfaceApprovalActionRequireReason,
   isRunSurfaceApprovalActionDisabled,
   isRunSurfaceApprovalActionVisible,
   normalizeRunSurfaceApprovalActionItem,
-  resolveRunSurfaceApprovalActionItems
+  resolveRunSurfaceApprovalActionReasonMode,
+  resolveRunSurfaceApprovalActionItems,
+  shouldRunSurfaceApprovalActionOpenReasonPrompt,
+  validateRunSurfaceApprovalActionReason
 } from './surface/approvalActions';
+export {
+  DEFAULT_RUN_SURFACE_HANDOFF_ACTIONS,
+  DEFAULT_RUN_SURFACE_HANDOFF_INPUT_REQUIRED_ACTIONS,
+  createRunSurfaceHandoffActionIntent,
+  doesRunSurfaceHandoffActionRequireInput,
+  isRunSurfaceHandoffActionDisabled,
+  isRunSurfaceHandoffActionVisible,
+  normalizeRunSurfaceHandoffActionItem,
+  resolveRunSurfaceHandoffActionInputMode,
+  resolveRunSurfaceHandoffActionItems,
+  validateRunSurfaceHandoffActionInput
+} from './surface/handoffActions';
 export { useRunSurfaceBlockContext } from './surface/runSurfaceContext';
 export {
   resolveRunSurfaceDraftDiagnostic,
   resolveRunSurfaceDraftDiagnostics,
   resolveRunSurfaceDraftReason
 } from './devtools/runSurfaceDraftDiagnostics';
+export {
+  createAgentDevtoolsReproductionStream,
+  isAgentDevtoolsReproduction,
+  parseAgentDevtoolsReproduction
+} from './devtools/reproduction';
+export { createAgentDevtoolsReproductionPlayer } from './devtools/reproductionPlayer';
+export {
+  resolveRuntimeCommandTargetBlockIds,
+  resolveRuntimeSnapshotDiffTargetBlockIds
+} from './devtools/runtimeCommandTargets';
 export {
   hasRuntimeSnapshotDiffChanges,
   resolveRuntimeSnapshotDiff
@@ -182,16 +213,23 @@ export type {
   AguiComponentMap,
   AguiComponentRegistration,
   MarkdownAguiBlock,
+  MarkdownAttachmentBlock,
+  MarkdownAttachmentKind,
   MarkdownApprovalBlock,
   MarkdownApprovalStatus,
   MarkdownArtifactBlock,
   MarkdownArtifactKind,
   MarkdownBlock,
+  MarkdownBranchBlock,
+  MarkdownBranchStatus,
   MarkdownBuiltinComponents,
   MarkdownBuiltinComponentOverrides,
   MarkdownCodeBlock,
   MarkdownEnginePlugin,
   MarkdownHeadingTag,
+  MarkdownHandoffBlock,
+  MarkdownHandoffStatus,
+  MarkdownHandoffTarget,
   MarkdownHtmlBlock,
   MarkdownMathBlock,
   MarkdownMermaidBlock,
@@ -242,6 +280,7 @@ export type {
   UseAgentDevtoolsOptions,
   UseAgentDevtoolsResult
 } from './composables/useAgentDevtools';
+export type { UseAgentDevtoolsReproductionPlayerResult } from './composables/useAgentDevtoolsReproductionPlayer';
 export type {
   UseRuntimeBlockResult,
   UseRuntimeBlocksByConversationIdResult,
@@ -300,10 +339,13 @@ export type {
   AgnoPresetOptions,
   AgnoProtocolOptions,
   AgnoRequestBody,
+  AgnoRequirementPayload,
+  AgnoResumeRequestBody,
   AgnoRunTitleResolver,
   AgnoSseTransportOptions,
   AgnoStreamIdResolver,
   AgnoTurnIdResolver,
+  AgnoToolExecutionPayload,
   AgnoToolPayload,
   AgnoToolRendererContext,
   AgnoToolRendererResolver,
@@ -322,6 +364,21 @@ export type {
   EventNameMatchMode,
   EventNameMatcher
 } from './adapters/eventComponentRegistry';
+export type {
+  AgentDevtoolsReproductionInput,
+  AgentDevtoolsReproductionPacketContext,
+  CreateAgentDevtoolsReproductionStreamOptions
+} from './devtools/reproduction';
+export type {
+  AgentDevtoolsReproductionPlayOptions,
+  AgentDevtoolsReproductionPlayer,
+  AgentDevtoolsReproductionStepResult,
+  CreateAgentDevtoolsReproductionPlayerOptions
+} from './devtools/reproductionPlayer';
+export type {
+  ResolveRuntimeCommandTargetBlockIdsOptions,
+  ResolveRuntimeSnapshotDiffTargetBlockIdsOptions
+} from './devtools/runtimeCommandTargets';
 export type {
   ResolveRunSurfaceDraftDiagnosticsOptions,
   RunSurfaceDraftDiagnostic,
@@ -397,6 +454,7 @@ export type {
   AutoGenPresetOptions,
   AutoGenProtocolOptions,
   AutoGenRequestBody,
+  AutoGenResumeRequestBody,
   AutoGenRunTitleResolver,
   AutoGenSseTransportOptions,
   AutoGenStreamIdResolver,
@@ -418,12 +476,19 @@ export type {
   LangChainChatSessionIdOptions,
   LangChainChatUserMessageOptions,
   LangChainConversationIdResolver,
+  LangChainEditedAction,
   LangChainEvent,
   LangChainGroupIdResolver,
+  LangChainHumanDecision,
+  LangChainInterruptActionRequest,
+  LangChainInterruptPayload,
+  LangChainInterruptReviewConfig,
+  LangChainInterruptValue,
   LangChainMessageIdResolver,
   LangChainPresetOptions,
   LangChainProtocolOptions,
   LangChainRequestBody,
+  LangChainResumeRequestBody,
   LangChainRunTitleResolver,
   LangChainSseTransportOptions,
   LangChainStreamIdResolver,
@@ -540,6 +605,7 @@ export type {
 } from './runtime/replay';
 export type {
   ApprovalUpdateInput,
+  BranchUpdateInput,
   ContentAbortInput,
   ContentAppendInput,
   ContentCloseInput,
@@ -554,6 +620,8 @@ export type {
   HelperProtocolOptions,
   HelperProtocolOverrides,
   HelperProtocolSemanticEvent,
+  HandoffUpdateInput,
+  MessageAttachmentInput,
   MessageArtifactInput,
   MessageBlockInput,
   MessageTextInput,
@@ -587,13 +655,21 @@ export type {
   RunSurfaceApprovalActionDefinition,
   RunSurfaceApprovalActionItem,
   RunSurfaceApprovalActionsOptions,
+  RunSurfaceApprovalReasonMode,
   RunSurfaceBuiltinApprovalActionHandler,
   RunSurfaceBuiltinApprovalActionKey,
+  RunSurfaceBuiltinHandoffActionHandler,
+  RunSurfaceBuiltinHandoffActionKey,
   RunSurfaceBuiltinMessageActionKey,
   RunSurfaceBuiltinMessageActionHandler,
   RunSurfaceDraftPlaceholder,
   RunSurfaceDraftPlaceholderContext,
   RunSurfaceDraftPlaceholderRegistration,
+  RunSurfaceHandoffActionContext,
+  RunSurfaceHandoffActionDefinition,
+  RunSurfaceHandoffActionInputMode,
+  RunSurfaceHandoffActionItem,
+  RunSurfaceHandoffActionsOptions,
   RunSurfaceMessageActionContext,
   RunSurfaceMessageActionDefinition,
   RunSurfaceMessageActionItem,

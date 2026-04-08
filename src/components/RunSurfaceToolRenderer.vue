@@ -22,6 +22,13 @@ const statusLabel = computed(() => {
     case 'completed':
     case 'success':
       return '已完成';
+    case 'approved':
+      return '已批准';
+    case 'rejected':
+      return '已拒绝';
+    case 'cancelled':
+    case 'canceled':
+      return '已取消';
     case 'error':
     case 'failed':
       return '失败';

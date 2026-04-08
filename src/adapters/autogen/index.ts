@@ -24,6 +24,7 @@ export type {
   UseAutoGenChatSessionResult
 } from './chat';
 export type { AutoGenRequestBody, AutoGenSseTransportOptions } from './transport';
+export type { AutoGenResumeRequestBody } from './transport';
 export type {
   AutoGenAdapterOptions,
   AutoGenBlockIdResolver,

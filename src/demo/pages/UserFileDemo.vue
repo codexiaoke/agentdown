@@ -74,7 +74,7 @@ function clearTimers() {
 }
 
 /**
- * 预先插入一条用户文本消息和一个文件 artifact。
+ * 预先插入一条用户文本消息和一个文件 attachment。
  */
 function seedConversation() {
   const now = Date.now();
@@ -87,16 +87,18 @@ function seedConversation() {
       groupId: USER_GROUP_ID,
       at: now
     }),
-    cmd.message.artifact({
-      id: 'block:user:file:artifact',
+    cmd.message.attachment({
+      id: 'block:user:file:attachment',
       role: 'user',
       groupId: USER_GROUP_ID,
       title: '用户上传文件',
-      artifactKind: 'file',
-      artifactId: 'file:beijing-trip-pdf',
+      attachmentKind: 'file',
+      attachmentId: 'file:beijing-trip-pdf',
       label: '北京行程单.pdf',
       message: '一个 PDF 文件，想让助手帮忙快速提炼重点。',
       href: 'https://example.com/beijing-trip.pdf',
+      sizeText: '1.8 MB',
+      mimeType: 'application/pdf',
       at: now + 1
     })
   ]);
@@ -145,7 +147,7 @@ onBeforeUnmount(() => {
   <section class="demo-page">
     <header class="demo-page__header">
       <h1>用户上传文件</h1>
-      <p>用户消息可以不只是 text，也可以直接是文件 block，然后助手继续流式回复和工具解析。</p>
+      <p>用户消息可以不只是 text，也可以直接挂一个 attachment block，然后助手继续流式回复和工具解析。</p>
     </header>
 
     <RunSurface

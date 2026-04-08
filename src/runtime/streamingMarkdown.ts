@@ -62,7 +62,7 @@ export interface StreamingMarkdownTailInfo {
 }
 
 const AGUI_DIRECTIVE_RE = /^\s*:::\s*vue-component\s+[A-Za-z][\w-]*(?:\s+.*)?$/;
-const AGENT_DIRECTIVE_RE = /^\s*:::\s*(approval|artifact|timeline)(?:\s+.*)?$/;
+const AGENT_DIRECTIVE_RE = /^\s*:::\s*(approval|artifact|attachment|branch|handoff|timeline)(?:\s+.*)?$/;
 const THOUGHT_OPEN_RE = /^\s*:::\s*thought\s*$/;
 const THOUGHT_CLOSE_RE = /^\s*:::\s*$/;
 const HEADING_RE = /^\s{0,3}#{1,6}(?:\s|$)/;

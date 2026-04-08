@@ -17,6 +17,9 @@ const variant = computed(() => {
   if (
     props.blockKind === 'artifact'
     || props.blockKind === 'approval'
+    || props.blockKind === 'attachment'
+    || props.blockKind === 'branch'
+    || props.blockKind === 'handoff'
     || props.blockKind === 'agui'
     || props.blockKind === 'code'
     || props.blockKind === 'mermaid'

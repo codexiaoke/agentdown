@@ -100,6 +100,47 @@ defineProps<Props>();
   />
 
   <component
+    :is="builtinComponents.attachment"
+    v-else-if="block.kind === 'attachment'"
+    :title="block.title"
+    :message="block.message"
+    :attachment-id="block.attachmentId"
+    :attachment-kind="block.attachmentKind"
+    :label="block.label"
+    :href="block.href"
+    :mime-type="block.mimeType"
+    :size-text="block.sizeText"
+    :preview-src="block.previewSrc"
+    :status="block.status"
+    :ref-id="block.refId"
+  />
+
+  <component
+    :is="builtinComponents.branch"
+    v-else-if="block.kind === 'branch'"
+    :title="block.title"
+    :message="block.message"
+    :branch-id="block.branchId"
+    :source-run-id="block.sourceRunId"
+    :target-run-id="block.targetRunId"
+    :status="block.status"
+    :label="block.label"
+    :ref-id="block.refId"
+  />
+
+  <component
+    :is="builtinComponents.handoff"
+    v-else-if="block.kind === 'handoff'"
+    :title="block.title"
+    :message="block.message"
+    :handoff-id="block.handoffId"
+    :status="block.status"
+    :target-type="block.targetType"
+    :assignee="block.assignee"
+    :ref-id="block.refId"
+  />
+
+  <component
     :is="builtinComponents.timeline"
     v-else-if="block.kind === 'timeline'"
     :title="block.title"

@@ -9,6 +9,20 @@ import type { AutoGenEvent } from './types';
 export interface AutoGenRequestBody extends RuntimeData {
   /** 用户当前输入的问题。 */
   message?: string;
+  /** 后端运行模式，例如 `hitl`。 */
+  mode?: string;
+  /** 当前会话真正绑定的后端 sessionId。 */
+  session_id?: string;
+  /** 继续一个已暂停 AutoGen handoff 时使用的人类回复。 */
+  autogen_resume?: AutoGenResumeRequestBody;
+}
+
+/**
+ * 继续一个已暂停 AutoGen handoff 时使用的请求体。
+ */
+export interface AutoGenResumeRequestBody extends RuntimeData {
+  /** 作为下一条 user turn 送回 AutoGen 的人工回复。 */
+  content: string;
 }
 
 /**

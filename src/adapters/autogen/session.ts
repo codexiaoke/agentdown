@@ -142,6 +142,7 @@ export function ensureRunSession(
     messageId: resolveMessageId(runId, packet, context, options),
     title: resolveRunTitle(packet, runId, context, options),
     streamOpen: false,
+    interrupted: false,
     activeAssistantMessageId: undefined,
     finalizedAssistantMessageIds: new Set<string>(),
     pendingTools: [],

@@ -9,9 +9,17 @@ import {
   extractContent,
   extractErrorMessage,
   extractExplicitRunId,
+  extractRequirementApprovalStatus,
+  extractRequirementId,
+  extractRequirementMessage,
+  extractRequirementTitle,
+  extractRequirementTool,
+  extractRequirements,
   extractTool,
   extractToolName,
   extractToolResult,
+  extractTools,
+  isPendingConfirmationRequirement,
   normalizeAgnoEventName
 } from './packet';
 import {
@@ -31,9 +39,80 @@ import {
 import { resolveToolRenderer } from './resolvers';
 import type {
   AgnoEvent,
+  AgnoRequirementPayload,
   AgnoPresetOptions,
   AgnoProtocolOptions
 } from './types';
+
+/**
+ * 基于 requirement id 生成默认 approval block id。
+ */
+function createRequirementApprovalBlockId(requirementId: string): string {
+  return `block:approval:${requirementId}`;
+}
+
+/**
+ * 把 `RunPaused` 里的 confirmation requirement 映射成 approval block。
+ */
+function appendPausedRequirementCommands(
+  session: ReturnType<typeof ensureRunSession>,
+  packet: AgnoEvent,
+  requirement: AgnoRequirementPayload,
+  context: Parameters<NonNullable<RuntimeProtocol<AgnoEvent>['map']>>[0]['context'],
+  commands: RuntimeCommand[],
+  options: AgnoProtocolOptions
+) {
+  const requirementId = extractRequirementId(requirement);
+
+  if (!requirementId || !isPendingConfirmationRequirement(requirement)) {
+    return;
+  }
+
+  const tool = extractRequirementTool(requirement);
+  const pendingTool = ensurePendingTool(session, tool);
+  const approvalBlockId = createRequirementApprovalBlockId(requirementId);
+  const approvalMessage = extractRequirementMessage(requirement);
+
+  ensureToolStarted(session, pendingTool.id, tool, packet, context, commands, options, 'pending');
+  commands.push(
+    ...cmd.tool.update({
+      id: pendingTool.id,
+      title: extractToolName(tool) ?? pendingTool.name ?? '工具调用',
+      renderer: resolveToolRenderer(session.runId, pendingTool.id, tool, packet, context, options),
+      status: 'pending',
+      data: {
+        ...buildToolData(packet, tool),
+        requirementId,
+        requirement,
+        runId: session.runId
+      },
+      at: context.now()
+    }),
+    cmd.approval.update({
+      id: approvalBlockId,
+      role: 'assistant',
+      slot: options.slot ?? 'main',
+      title: extractRequirementTitle(requirement) ?? '等待人工确认',
+      ...(approvalMessage ? { message: approvalMessage } : {}),
+      approvalId: requirementId,
+      status: extractRequirementApprovalStatus(requirement),
+      refId: session.runId,
+      ...(session.groupId !== undefined ? { groupId: session.groupId } : {}),
+      ...(session.conversationId !== undefined ? { conversationId: session.conversationId } : {}),
+      ...(session.turnId !== undefined ? { turnId: session.turnId } : {}),
+      ...(session.messageId !== undefined ? { messageId: session.messageId } : {}),
+      data: {
+        rawEvent: packet,
+        runId: session.runId,
+        requirementId,
+        toolId: pendingTool.id,
+        requirement,
+        tool
+      },
+      at: context.now()
+    })
+  );
+}
 
 /**
  * 创建一次 Agno 事件到 RuntimeCommand 的映射协议。
@@ -103,6 +182,16 @@ export function createAgnoProtocol(options: AgnoProtocolOptions = {}): RuntimePr
             advanceSegment: true
           });
           ensureToolStarted(session, pendingTool.id, tool, packet, context, commands, options);
+          commands.push(
+            ...cmd.tool.update({
+              id: pendingTool.id,
+              title: extractToolName(tool) ?? pendingTool.name ?? '工具调用',
+              renderer: resolveToolRenderer(session.runId, pendingTool.id, tool, packet, context, options),
+              status: 'running',
+              data: buildToolData(packet, tool),
+              at: context.now()
+            })
+          );
           break;
         }
         case 'tool_call_completed': {
@@ -147,6 +236,58 @@ export function createAgnoProtocol(options: AgnoProtocolOptions = {}): RuntimePr
           }
           break;
         }
+        case 'run_paused': {
+          // Agno 真正的人机交互入口：run 进入 paused，并暴露 active requirements。
+          ensureRunStarted(state, session, packet, context, commands, options);
+          closeCurrentStream(session, commands);
+
+          commands.push(
+            cmd.node.patch(session.runId, {
+              status: 'blocked',
+              message: extractContent(packet) ?? '等待人工确认后继续执行。',
+              updatedAt: context.now(),
+              data: {
+                rawEvent: packet
+              }
+            })
+          );
+
+          for (const tool of extractTools(packet)) {
+            const pendingTool = ensurePendingTool(session, tool);
+
+            ensureToolStarted(session, pendingTool.id, tool, packet, context, commands, options, 'pending');
+            commands.push(
+              ...cmd.tool.update({
+                id: pendingTool.id,
+                title: extractToolName(tool) ?? pendingTool.name ?? '工具调用',
+                renderer: resolveToolRenderer(session.runId, pendingTool.id, tool, packet, context, options),
+                status: 'pending',
+                data: buildToolData(packet, tool),
+                at: context.now()
+              })
+            );
+          }
+
+          for (const requirement of extractRequirements(packet)) {
+            appendPausedRequirementCommands(session, packet, requirement, context, commands, options);
+          }
+          break;
+        }
+        case 'run_continued':
+          // requirement 被处理后，run 会重新回到 running 状态。
+          ensureRunStarted(state, session, packet, context, commands, options);
+          {
+            const nextPatch: Parameters<typeof cmd.node.patch>[1] = {
+              status: 'running',
+              updatedAt: context.now(),
+              data: {
+                rawEvent: packet
+              }
+            };
+
+            commands.push(cmd.node.patch(session.runId, nextPatch));
+          }
+          break;
         case 'run_cancelled': {
           // 取消场景要先中止打开中的流，再结束 run。
           ensureRunStarted(state, session, packet, context, commands, options);

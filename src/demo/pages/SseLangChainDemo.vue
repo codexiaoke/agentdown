@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
 import {
-  AgentDevtoolsOverlay,
   defineLangChainToolComponents,
   RunSurface,
   useLangChainChatSession
@@ -46,16 +45,13 @@ const {
   busy,
   statusLabel,
   transportError,
-  sessionId: backendSessionId,
-  devtools
+  sessionId: backendSessionId
 } = useLangChainChatSession<string>({
   source: endpoint,
   input: prompt,
   conversationId: DEMO_CONVERSATION_ID,
+  mode: 'hitl',
   title: 'LangChain 助手',
-  devtools: {
-    maxEntries: 120
-  },
   tools: defineLangChainToolComponents({
     lookup_weather: {
       match: 'lookup_weather',
@@ -83,7 +79,7 @@ onMounted(() => {
   <section class="demo-page">
     <header class="demo-page__header">
       <h1>LangChain 真实 SSE</h1>
-      <p>启动 FastAPI backend 后，这个页面会直接请求真实 `/api/stream/langchain`，并使用专用的 `useLangChainChatSession()` 把官方 `astream_events()` 渲染成聊天内容和工具组件。</p>
+      <p>启动 FastAPI backend 后，这个页面会直接请求真实 `/api/stream/langchain`，默认启用 `mode=hitl`，先展示 LangChain 官方 interrupt 审批，再继续执行工具并回写最终答案。</p>
     </header>
 
     <form
@@ -136,13 +132,6 @@ onMounted(() => {
     <RunSurface
       :runtime="runtime"
       v-bind="surface"
-    />
-
-    <AgentDevtoolsOverlay
-      :devtools="devtools"
-      title="LangChain Devtools"
-      default-tab="events"
-      :max-items="6"
     />
   </section>
 </template>

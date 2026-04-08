@@ -5,7 +5,10 @@ import {
   createRunSurfaceApprovalActionIntent,
   isRunSurfaceApprovalActionDisabled,
   isRunSurfaceApprovalActionVisible,
-  resolveRunSurfaceApprovalActionItems
+  resolveRunSurfaceApprovalActionItems,
+  resolveRunSurfaceApprovalActionReasonMode,
+  shouldRunSurfaceApprovalActionOpenReasonPrompt,
+  validateRunSurfaceApprovalActionReason
 } from '../surface/approvalActions';
 import { useRunSurfaceBlockContext } from '../surface/runSurfaceContext';
 import type {
@@ -61,6 +64,9 @@ const runSurfaceContext = useRunSurfaceBlockContext();
 const pendingActionKey = ref<string | null>(null);
 const successActionKey = ref<string | null>(null);
 const actionError = ref('');
+const reasonPromptActionKey = ref<string | null>(null);
+const reasonPromptValue = ref('');
+const reasonPromptError = ref('');
 let successTimer: number | undefined;
 
 /**
@@ -175,6 +181,15 @@ function markSuccess(actionKey: string) {
 }
 
 /**
+ * 关闭当前原因输入区，并清理临时输入状态。
+ */
+function closeReasonPrompt() {
+  reasonPromptActionKey.value = null;
+  reasonPromptValue.value = '';
+  reasonPromptError.value = '';
+}
+
+/**
  * 读取 approval 动作的默认显示标签。
  */
 function resolveActionLabel(action: RunSurfaceApprovalActionDefinition): string {
@@ -207,6 +222,72 @@ function resolveActionLabel(action: RunSurfaceApprovalActionDefinition): string 
  */
 function resolveActionTitle(action: RunSurfaceApprovalActionDefinition): string {
   return action.title ?? resolveActionLabel(action);
+}
+
+/**
+ * 读取某个动作的原因输入标题。
+ */
+function resolveReasonLabel(action: RunSurfaceApprovalActionDefinition): string {
+  if (action.reasonLabel) {
+    return action.reasonLabel;
+  }
+
+  const context = actionContext.value;
+  const reasonMode = context
+    ? resolveRunSurfaceApprovalActionReasonMode(action, context)
+    : 'hidden';
+
+  if (reasonMode === 'optional') {
+    return '可选备注';
+  }
+
+  return action.key === 'reject'
+    ? '请填写拒绝原因'
+    : '请填写修改原因';
+}
+
+/**
+ * 读取某个动作的原因输入占位文案。
+ */
+function resolveReasonPlaceholder(action: RunSurfaceApprovalActionDefinition): string {
+  if (action.reasonPlaceholder) {
+    return action.reasonPlaceholder;
+  }
+
+  const context = actionContext.value;
+  const reasonMode = context
+    ? resolveRunSurfaceApprovalActionReasonMode(action, context)
+    : 'hidden';
+
+  if (reasonMode === 'optional') {
+    return '可选填写备注，例如：客户已电话确认，可以直接发送。';
+  }
+
+  return action.key === 'reject'
+    ? '例如：当前内容还不准确，先不要发送。'
+    : '例如：请补充客户名称和最后确认时间。';
+}
+
+/**
+ * 读取某个动作的原因确认按钮文案。
+ */
+function resolveReasonSubmitLabel(action: RunSurfaceApprovalActionDefinition): string {
+  if (action.reasonSubmitLabel) {
+    return action.reasonSubmitLabel;
+  }
+
+  const context = actionContext.value;
+  const reasonMode = context
+    ? resolveRunSurfaceApprovalActionReasonMode(action, context)
+    : 'hidden';
+
+  if (reasonMode === 'optional') {
+    return '继续提交';
+  }
+
+  return action.key === 'reject'
+    ? '提交拒绝原因'
+    : '提交修改原因';
 }
 
 /**
@@ -262,6 +343,41 @@ async function runBuiltinApprovalAction(
 }
 
 /**
+ * 统一执行一次 approval 动作，并在需要时把 reason 一起带给 handler 和 intent。
+ */
+async function executeApprovalAction(
+  action: RunSurfaceApprovalActionDefinition,
+  context: RunSurfaceApprovalActionContext,
+  reason?: string
+) {
+  actionError.value = '';
+  reasonPromptError.value = '';
+  pendingActionKey.value = action.key;
+
+  const executionContext: RunSurfaceApprovalActionContext = {
+    ...context,
+    ...(reason !== undefined ? { reason } : {})
+  };
+
+  try {
+    if (action.onClick) {
+      await action.onClick(executionContext);
+    } else {
+      await runBuiltinApprovalAction(action.key, executionContext);
+    }
+
+    markSuccess(action.key);
+    closeReasonPrompt();
+  } catch (error) {
+    actionError.value = error instanceof Error
+      ? error.message
+      : '审批动作执行失败，请稍后再试。';
+  } finally {
+    pendingActionKey.value = null;
+  }
+}
+
+/**
  * 生成当前 approval 卡片真正会渲染的动作按钮列表。
  */
 const actions = computed<ResolvedApprovalAction[]>(() => {
@@ -281,27 +397,60 @@ const actions = computed<ResolvedApprovalAction[]>(() => {
       loading: pendingActionKey.value === action.key,
       success: successActionKey.value === action.key,
       onClick: async () => {
-        actionError.value = '';
-        pendingActionKey.value = action.key;
+        if (shouldRunSurfaceApprovalActionOpenReasonPrompt(action, context)) {
+          actionError.value = '';
+          reasonPromptError.value = '';
+          const previousActionKey = reasonPromptActionKey.value;
+          reasonPromptActionKey.value = action.key;
 
-        try {
-          if (action.onClick) {
-            await action.onClick(context);
-          } else {
-            await runBuiltinApprovalAction(action.key, context);
+          if (previousActionKey !== action.key) {
+            reasonPromptValue.value = '';
           }
 
-          markSuccess(action.key);
-        } catch (error) {
-          actionError.value = error instanceof Error
-            ? error.message
-            : '审批动作执行失败，请稍后再试。';
-        } finally {
-          pendingActionKey.value = null;
+          return;
         }
+
+        await executeApprovalAction(action, context);
       }
     }));
 });
+
+/**
+ * 当前正在等待填写原因的动作定义。
+ */
+const activeReasonAction = computed<RunSurfaceApprovalActionDefinition | null>(() => {
+  const context = actionContext.value;
+
+  if (!context || !reasonPromptActionKey.value || !resolvedApprovalActions.value) {
+    return null;
+  }
+
+  return resolveRunSurfaceApprovalActionItems(resolvedApprovalActions.value)
+    .find((action) => action.key === reasonPromptActionKey.value)
+    ?? null;
+});
+
+/**
+ * 提交当前原因输入区。
+ */
+async function submitReasonPrompt() {
+  const action = activeReasonAction.value;
+  const context = actionContext.value;
+
+  if (!action || !context) {
+    return;
+  }
+
+  const reason = reasonPromptValue.value.trim();
+  const validationError = validateRunSurfaceApprovalActionReason(action, context, reason);
+
+  if (validationError) {
+    reasonPromptError.value = validationError;
+    return;
+  }
+
+  await executeApprovalAction(action, context, reason.length > 0 ? reason : undefined);
+}
 </script>
 
 <template>
@@ -324,21 +473,6 @@ const actions = computed<ResolvedApprovalAction[]>(() => {
       {{ resolvedMessage }}
     </p>
 
-    <dl
-      v-if="resolvedApprovalId || resolvedRefId"
-      class="agentdown-approval-meta"
-    >
-      <div v-if="resolvedApprovalId">
-        <dt>ID</dt>
-        <dd>{{ resolvedApprovalId }}</dd>
-      </div>
-
-      <div v-if="resolvedRefId">
-        <dt>Ref</dt>
-        <dd>{{ resolvedRefId }}</dd>
-      </div>
-    </dl>
-
     <div
       v-if="actions.length > 0"
       class="agentdown-approval-actions"
@@ -356,6 +490,49 @@ const actions = computed<ResolvedApprovalAction[]>(() => {
       >
         {{ action.label }}
       </button>
+    </div>
+
+    <div
+      v-if="activeReasonAction"
+      class="agentdown-approval-reason"
+    >
+      <label class="agentdown-approval-reason__label">
+        {{ resolveReasonLabel(activeReasonAction) }}
+      </label>
+
+      <textarea
+        v-model="reasonPromptValue"
+        class="agentdown-approval-reason__textarea"
+        rows="3"
+        :placeholder="resolveReasonPlaceholder(activeReasonAction)"
+      />
+
+      <p
+        v-if="reasonPromptError"
+        class="agentdown-approval-reason__error"
+      >
+        {{ reasonPromptError }}
+      </p>
+
+      <div class="agentdown-approval-reason__actions">
+        <button
+          type="button"
+          class="agentdown-approval-action agentdown-approval-action--secondary"
+          :disabled="pendingActionKey !== null"
+          @click="closeReasonPrompt"
+        >
+          取消
+        </button>
+
+        <button
+          type="button"
+          class="agentdown-approval-action"
+          :disabled="pendingActionKey !== null"
+          @click="submitReasonPrompt().catch(() => {})"
+        >
+          {{ resolveReasonSubmitLabel(activeReasonAction) }}
+        </button>
+      </div>
     </div>
 
     <p
@@ -393,9 +570,7 @@ const actions = computed<ResolvedApprovalAction[]>(() => {
   border-color: rgba(217, 119, 6, 0.22);
 }
 
-.agentdown-approval-head,
-.agentdown-approval-meta,
-.agentdown-approval-meta div {
+.agentdown-approval-head {
   display: flex;
   align-items: center;
 }
@@ -455,35 +630,62 @@ const actions = computed<ResolvedApprovalAction[]>(() => {
   line-height: 1.7;
 }
 
-.agentdown-approval-meta {
-  flex-wrap: wrap;
-  gap: 0.9rem;
-}
-
-.agentdown-approval-meta div {
-  gap: 0.42rem;
-  min-width: 0;
-}
-
-.agentdown-approval-meta dt {
-  color: var(--agentdown-muted-color);
-  font-size: 0.8rem;
-}
-
-.agentdown-approval-meta dd {
-  margin: 0;
-  color: var(--agentdown-text-color);
-  font-family:
-    'SFMono-Regular',
-    'JetBrains Mono',
-    'Fira Code',
-    'Menlo',
-    monospace;
-  font-size: 0.82rem;
-}
-
 .agentdown-approval-actions {
   display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.agentdown-approval-reason {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.7rem;
+  border: 1px solid rgba(226, 232, 240, 0.92);
+  border-radius: 14px;
+  padding: 0.85rem;
+  background: rgba(248, 250, 252, 0.9);
+}
+
+.agentdown-approval-reason__label {
+  color: #334155;
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+.agentdown-approval-reason__textarea {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  min-height: 88px;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  padding: 0.72rem 0.82rem;
+  resize: vertical;
+  background: #fff;
+  color: #0f172a;
+  font: inherit;
+  font-size: 0.88rem;
+  line-height: 1.65;
+}
+
+.agentdown-approval-reason__textarea:focus {
+  outline: 2px solid rgba(59, 130, 246, 0.18);
+  outline-offset: 1px;
+  border-color: #93c5fd;
+}
+
+.agentdown-approval-reason__error {
+  margin: 0;
+  color: #b91c1c;
+  font-size: 0.8rem;
+  line-height: 1.6;
+}
+
+.agentdown-approval-reason__actions {
+  display: flex;
+  justify-content: flex-end;
   flex-wrap: wrap;
   gap: 0.55rem;
 }
@@ -525,6 +727,11 @@ const actions = computed<ResolvedApprovalAction[]>(() => {
   cursor: not-allowed;
   opacity: 0.58;
   transform: none;
+}
+
+.agentdown-approval-action--secondary {
+  background: transparent;
+  color: #475569;
 }
 
 .agentdown-approval-error {

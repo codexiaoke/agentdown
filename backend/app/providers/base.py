@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from dataclasses import asdict, is_dataclass
 import json
 from typing import Any
 
@@ -26,19 +27,19 @@ def create_provider_descriptors() -> list[ProviderDescriptor]:
             id="agno",
             path="/api/stream/agno",
             label="Agno",
-            note="基于 DeepSeek 的真实 Agno Agent SSE。",
+            note="基于 DeepSeek 的真实 Agno Agent SSE，支持 `mode=hitl` 的 requirement 暂停与继续运行。",
         ),
         ProviderDescriptor(
             id="langchain",
             path="/api/stream/langchain",
             label="LangChain / LangGraph",
-            note="基于 DeepSeek 的真实 LangChain Agent SSE。",
+            note="基于 DeepSeek 的真实 LangChain Agent SSE，支持 `mode=hitl` 的 LangChain Human-in-the-Loop 暂停与继续运行。",
         ),
         ProviderDescriptor(
             id="autogen",
             path="/api/stream/autogen",
             label="AutoGen",
-            note="基于 DeepSeek 的真实 AutoGen Agent SSE。",
+            note="基于 DeepSeek 的真实 AutoGen Agent SSE，支持 `mode=hitl` 的官方 handoff 暂停与继续运行。",
         ),
         ProviderDescriptor(
             id="crewai",
@@ -98,6 +99,9 @@ def serialize_payload(value: Any) -> Any:
 
     if value is None or isinstance(value, (str, int, float, bool)):
         return value
+
+    if is_dataclass(value):
+        return serialize_payload(asdict(value))
 
     if isinstance(value, dict):
         return {str(key): serialize_payload(item) for key, item in value.items()}

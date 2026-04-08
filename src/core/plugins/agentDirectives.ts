@@ -2,7 +2,7 @@ import type MarkdownIt from 'markdown-it';
 import type Token from 'markdown-it/lib/token.mjs';
 import { parseDirectiveProps } from './directiveProps';
 
-const AGENT_DIRECTIVE = /^:::\s*(approval|artifact|timeline)(?:\s+(.*))?$/;
+const AGENT_DIRECTIVE = /^:::\s*(approval|artifact|attachment|branch|handoff|timeline)(?:\s+(.*))?$/;
 
 /** 注册 agent-native 单行指令。 */
 export function agentDirectivesPlugin(md: MarkdownIt): void {

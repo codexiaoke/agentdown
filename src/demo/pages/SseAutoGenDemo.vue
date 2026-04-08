@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
 import {
-  AgentDevtoolsOverlay,
   defineAutoGenToolComponents,
   RunSurface,
   useAutoGenChatSession
@@ -46,16 +45,13 @@ const {
   busy,
   statusLabel,
   transportError,
-  sessionId: backendSessionId,
-  devtools
+  sessionId: backendSessionId
 } = useAutoGenChatSession<string>({
   source: endpoint,
   input: prompt,
   conversationId: DEMO_CONVERSATION_ID,
+  mode: 'hitl',
   title: 'AutoGen 助手',
-  devtools: {
-    maxEntries: 120
-  },
   tools: defineAutoGenToolComponents({
     lookup_weather: {
       match: 'lookup_weather',
@@ -83,7 +79,7 @@ onMounted(() => {
   <section class="demo-page">
     <header class="demo-page__header">
       <h1>AutoGen 真实 SSE</h1>
-      <p>启动 FastAPI backend 后，这个页面会直接请求真实 `/api/stream/autogen`，并使用专用的 `useAutoGenChatSession()` 把官方 `run_stream()` 事件渲染成聊天内容和工具组件。</p>
+      <p>启动 FastAPI backend 后，这个页面会直接请求真实 `/api/stream/autogen`，默认启用 `mode=hitl`。当 AutoGen 发出官方 `HandoffMessage` 时，前端会渲染成更轻量的 approval 卡片，直接点击继续或拒绝即可复用同一个 SSE 入口。</p>
     </header>
 
     <form
@@ -136,13 +132,6 @@ onMounted(() => {
     <RunSurface
       :runtime="runtime"
       v-bind="surface"
-    />
-
-    <AgentDevtoolsOverlay
-      :devtools="devtools"
-      title="AutoGen Devtools"
-      default-tab="events"
-      :max-items="6"
     />
   </section>
 </template>

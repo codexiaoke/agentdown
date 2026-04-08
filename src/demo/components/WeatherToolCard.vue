@@ -103,7 +103,88 @@ const weather = computed(() => {
   };
 });
 
-const isDone = computed(() => props.status === 'done');
+/**
+ * 把工具状态映射成天气卡片上的短标签。
+ */
+const statusLabel = computed(() => {
+  switch (props.status) {
+    case 'done':
+    case 'completed':
+    case 'success':
+      return '已返回';
+    case 'approved':
+      return '已批准';
+    case 'rejected':
+      return '已拒绝';
+    case 'cancelled':
+    case 'canceled':
+      return '已取消';
+    case 'error':
+    case 'failed':
+      return '失败';
+    default:
+      return '查询中';
+  }
+});
+
+/**
+ * 读取当前状态是否已经拿到了最终天气结果。
+ */
+const isDone = computed(() => (
+  props.status === 'done'
+  || props.status === 'completed'
+  || props.status === 'success'
+));
+
+/**
+ * 读取当前状态是否仍应展示 loading 动画。
+ */
+const isLoading = computed(() => (
+  props.status === undefined
+  || props.status === 'running'
+  || props.status === 'pending'
+  || props.status === 'waiting'
+  || props.status === 'approved'
+));
+
+/**
+ * 读取当前状态对应的视觉语义。
+ */
+const statusTone = computed(() => {
+  switch (props.status) {
+    case 'rejected':
+    case 'error':
+    case 'failed':
+      return 'danger';
+    case 'cancelled':
+    case 'canceled':
+      return 'muted';
+    case 'done':
+    case 'completed':
+    case 'success':
+      return 'success';
+    default:
+      return 'info';
+  }
+});
+
+/**
+ * 在非成功终态下给出一条简短说明，避免用户误以为仍在执行。
+ */
+const terminalHint = computed(() => {
+  switch (props.status) {
+    case 'rejected':
+      return '这次工具调用已被拒绝，没有继续执行。';
+    case 'cancelled':
+    case 'canceled':
+      return '这次工具调用已取消。';
+    case 'error':
+    case 'failed':
+      return '这次工具调用执行失败。';
+    default:
+      return '';
+  }
+});
 </script>
 
 <template>
@@ -114,7 +195,7 @@ const isDone = computed(() => props.status === 'done');
         <p>{{ title }}</p>
       </div>
 
-      <span>{{ isDone ? '已返回' : '查询中' }}</span>
+      <span :data-tone="statusTone">{{ statusLabel }}</span>
     </div>
 
     <div
@@ -132,13 +213,20 @@ const isDone = computed(() => props.status === 'done');
     </div>
 
     <div
-      v-else
+      v-else-if="isLoading"
       class="weather-tool-card__loading"
     >
       <span class="weather-tool-card__dot" />
       <span class="weather-tool-card__dot" />
       <span class="weather-tool-card__dot" />
     </div>
+
+    <p
+      v-else-if="terminalHint"
+      class="weather-tool-card__hint"
+    >
+      {{ terminalHint }}
+    </p>
   </article>
 </template>
 
@@ -177,6 +265,21 @@ const isDone = computed(() => props.status === 'done');
   font-size: 12px;
 }
 
+.weather-tool-card__header span[data-tone='success'] {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.weather-tool-card__header span[data-tone='danger'] {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.weather-tool-card__header span[data-tone='muted'] {
+  background: #e2e8f0;
+  color: #475569;
+}
+
 .weather-tool-card__body {
   display: flex;
   align-items: flex-end;
@@ -204,6 +307,13 @@ const isDone = computed(() => props.status === 'done');
   display: flex;
   gap: 8px;
   margin-top: 14px;
+}
+
+.weather-tool-card__hint {
+  margin: 14px 0 0;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .weather-tool-card__dot {

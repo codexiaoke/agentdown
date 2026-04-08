@@ -193,6 +193,49 @@ describe('createAutoGenProtocol', () => {
     expect(toolBlock?.renderer).toBe('tool.weather');
   });
 
+  it('maps AutoGen HandoffMessage into an approval block and pauses the run', () => {
+    const bridge = createAutoGenTestBridge();
+
+    bridge.push([
+      {
+        type: 'TaskStarted',
+        id: 'task-hitl-1',
+        source: 'assistant',
+        session_id: 'autogen-session-hitl-1'
+      },
+      {
+        type: 'HandoffMessage',
+        id: 'handoff-hitl-1',
+        source: 'assistant',
+        target: 'human',
+        content: '请确认是否继续执行天气查询。',
+        session_id: 'autogen-session-hitl-1'
+      },
+      {
+        type: 'TaskResult',
+        id: 'task-result-hitl-1',
+        session_id: 'autogen-session-hitl-1',
+        stop_reason: 'Handoff to human from assistant detected.',
+        messages: []
+      }
+    ]);
+    bridge.flush('autogen-handoff');
+
+    const snapshot = bridge.runtime.snapshot();
+    const runNode = snapshot.nodes.find((node) => node.type === 'run');
+    const approvalBlock = snapshot.blocks.find((block) => block.type === 'approval');
+
+    expect(runNode?.status).toBe('paused');
+    expect(approvalBlock?.data).toMatchObject({
+      approvalId: 'handoff-hitl-1',
+      status: 'pending',
+      handoffId: 'handoff-hitl-1',
+      targetType: 'human',
+      assignee: 'human',
+      message: '请确认是否继续执行天气查询。'
+    });
+  });
+
   it('creates a ready-to-use AutoGen adapter by composing tools, events and surface renderers', async () => {
     const WeatherToolCard = {} as Component;
     const WeatherEventCard = {} as Component;
@@ -415,6 +458,419 @@ describe('useAutoGenChatSession', () => {
     await nextTick();
 
     expect(sessionState.sessionId.value).toBe('autogen-session-1');
+
+    scope.stop();
+  });
+
+  it('resumes a paused AutoGen approval through the same endpoint and keeps the transcript intact', async () => {
+    const scope = effectScope();
+    const prompt = ref('帮我查一下北京天气，并说明工具调用过程。');
+    const capturedBodies: Array<Record<string, unknown>> = [];
+    let requestCount = 0;
+    const sessionState = scope.run(() => useAutoGenChatSession<string>({
+      source: 'http://autogen.test/api/stream',
+      input: prompt,
+      conversationId: 'session:demo:autogen-hitl',
+      mode: 'hitl',
+      title: 'AutoGen 助手',
+      transport: {
+        fetch: (async (_source, init) => {
+          requestCount += 1;
+          capturedBodies.push(JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>);
+
+          if (requestCount === 1) {
+            return createAutoGenSseResponse([
+              {
+                type: 'TaskStarted',
+                id: 'task-hitl-1',
+                source: 'assistant',
+                session_id: 'autogen-session-hitl-1'
+              },
+              {
+                type: 'HandoffMessage',
+                id: 'handoff-hitl-1',
+                source: 'assistant',
+                target: 'human',
+                content: '请确认是否继续执行天气查询。',
+                session_id: 'autogen-session-hitl-1'
+              },
+              {
+                type: 'TaskResult',
+                id: 'task-result-hitl-1',
+                session_id: 'autogen-session-hitl-1',
+                stop_reason: 'Handoff to human from assistant detected.',
+                messages: []
+              }
+            ]);
+          }
+
+          return createAutoGenSseResponse([
+            {
+              type: 'TaskStarted',
+              id: 'task-hitl-2',
+              source: 'assistant',
+              session_id: 'autogen-session-hitl-1'
+            },
+            {
+              type: 'ModelClientStreamingChunkEvent',
+              id: 'chunk-hitl-2',
+              source: 'assistant',
+              session_id: 'autogen-session-hitl-1',
+              full_message_id: 'assistant-msg-hitl-2',
+              content: '已根据你的确认完成天气查询。'
+            },
+            {
+              type: 'TextMessage',
+              id: 'assistant-msg-hitl-2',
+              source: 'assistant',
+              session_id: 'autogen-session-hitl-1',
+              content: '已根据你的确认完成天气查询。'
+            },
+            {
+              type: 'TaskResult',
+              id: 'task-result-hitl-2',
+              session_id: 'autogen-session-hitl-1',
+              stop_reason: 'Maximum number of turns 1 reached.',
+              messages: []
+            }
+          ]);
+        }) as typeof fetch
+      }
+    }));
+
+    if (!sessionState) {
+      throw new Error('Failed to create AutoGen HITL chat session.');
+    }
+
+    await sessionState.send();
+    await nextTick();
+
+    const pausedSnapshot = sessionState.runtime.snapshot();
+    const pausedApprovalBlock = pausedSnapshot.blocks.find((block) => block.type === 'approval');
+
+    expect(sessionState.sessionId.value).toBe('autogen-session-hitl-1');
+    expect(pausedApprovalBlock?.data).toMatchObject({
+      status: 'pending'
+    });
+
+    await sessionState.resolveHandoff({
+      content: '已确认，请继续调用天气工具并返回结果。'
+    });
+    await nextTick();
+
+    const finalSnapshot = sessionState.runtime.snapshot();
+    const replyUserBlock = finalSnapshot.blocks.find((block) => {
+      return block.messageId === sessionState.chatIds.value?.userMessageId;
+    });
+    const finalAssistantBlock = finalSnapshot.blocks.find((block) => {
+      return block.messageId === sessionState.chatIds.value?.assistantMessageId;
+    });
+    const finalApprovalBlock = finalSnapshot.blocks.find((block) => block.type === 'approval');
+
+    expect(capturedBodies[0]).toMatchObject({
+      message: '帮我查一下北京天气，并说明工具调用过程。',
+      mode: 'hitl'
+    });
+    expect(capturedBodies[1]).toMatchObject({
+      message: '已确认，请继续调用天气工具并返回结果。',
+      mode: 'hitl',
+      session_id: 'autogen-session-hitl-1',
+      autogen_resume: {
+        content: '已确认，请继续调用天气工具并返回结果。'
+      }
+    });
+    expect(replyUserBlock?.content).toBe('已确认，请继续调用天气工具并返回结果。');
+    expect(finalAssistantBlock?.content).toBe('已根据你的确认完成天气查询。');
+    expect(finalApprovalBlock?.data).toMatchObject({
+      status: 'approved'
+    });
+
+    scope.stop();
+  });
+
+  it('wires AutoGen approval actions without requiring extra input', async () => {
+    const scope = effectScope();
+    const prompt = ref('帮我查一下北京天气，并说明工具调用过程。');
+    const capturedBodies: Array<Record<string, unknown>> = [];
+    let requestCount = 0;
+    const sessionState = scope.run(() => useAutoGenChatSession<string>({
+      source: 'http://autogen.test/api/stream',
+      input: prompt,
+      conversationId: 'session:demo:autogen-approval',
+      mode: 'hitl',
+      title: 'AutoGen 助手',
+      transport: {
+        fetch: (async (_source, init) => {
+          requestCount += 1;
+          capturedBodies.push(JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>);
+
+          if (requestCount === 1) {
+            return createAutoGenSseResponse([
+              {
+                type: 'TaskStarted',
+                id: 'task-approval-1',
+                source: 'assistant',
+                session_id: 'autogen-session-approval-1'
+              },
+              {
+                type: 'HandoffMessage',
+                id: 'handoff-approval-1',
+                source: 'assistant',
+                target: 'human',
+                content: '请确认是否继续执行天气查询。',
+                session_id: 'autogen-session-approval-1'
+              },
+              {
+                type: 'TaskResult',
+                id: 'task-result-approval-1',
+                session_id: 'autogen-session-approval-1',
+                stop_reason: 'Handoff to human from assistant detected.',
+                messages: []
+              }
+            ]);
+          }
+
+          return createAutoGenSseResponse([
+            {
+              type: 'TaskStarted',
+              id: 'task-approval-2',
+              source: 'assistant',
+              session_id: 'autogen-session-approval-1'
+            },
+            {
+              type: 'TextMessage',
+              id: 'assistant-msg-approval-2',
+              source: 'assistant',
+              session_id: 'autogen-session-approval-1',
+              content: '我继续完成了天气查询。'
+            },
+            {
+              type: 'TaskResult',
+              id: 'task-result-approval-2',
+              session_id: 'autogen-session-approval-1',
+              stop_reason: 'Maximum number of turns 1 reached.',
+              messages: []
+            }
+          ]);
+        }) as typeof fetch
+      }
+    }));
+
+    if (!sessionState) {
+      throw new Error('Failed to create AutoGen approval session.');
+    }
+
+    await sessionState.send();
+    await nextTick();
+
+    const pausedSnapshot = sessionState.runtime.snapshot();
+    const approvalBlock = pausedSnapshot.blocks.find((block) => block.type === 'approval');
+    const approveHandler = sessionState.surface.value.approvalActions !== false
+      ? sessionState.surface.value.approvalActions?.builtinHandlers?.approve
+      : undefined;
+
+    if (!approvalBlock || !approveHandler) {
+      throw new Error('Failed to resolve AutoGen approval action wiring.');
+    }
+
+    const context = {
+      title: String(approvalBlock.data.title ?? '等待人工确认'),
+      status: 'pending',
+      ...(typeof approvalBlock.data.message === 'string'
+        ? {
+            message: approvalBlock.data.message
+          }
+        : {}),
+      ...(typeof approvalBlock.data.approvalId === 'string'
+        ? {
+            approvalId: approvalBlock.data.approvalId
+          }
+        : {}),
+      ...(typeof approvalBlock.data.refId === 'string'
+        ? {
+            refId: approvalBlock.data.refId
+          }
+        : {}),
+      block: approvalBlock,
+      role: 'assistant',
+      runtime: sessionState.runtime,
+      snapshot: pausedSnapshot,
+      emitIntent: () => {
+        throw new Error('emitIntent should not be called in this test.');
+      }
+    } as const;
+
+    await approveHandler(context);
+    await nextTick();
+
+    const finalSnapshot = sessionState.runtime.snapshot();
+    const finalApprovalBlock = finalSnapshot.blocks.find((block) => block.id === approvalBlock.id);
+
+    expect(capturedBodies[1]).toMatchObject({
+      message: '已确认，请继续执行。',
+      mode: 'hitl',
+      session_id: 'autogen-session-approval-1',
+      autogen_resume: {
+        content: '已确认，请继续执行。'
+      }
+    });
+    expect(finalApprovalBlock?.data).toMatchObject({
+      status: 'approved'
+    });
+
+    scope.stop();
+  });
+
+  it('requires a reason when rejecting an AutoGen approval', async () => {
+    const scope = effectScope();
+    const prompt = ref('帮我查一下北京天气，并说明工具调用过程。');
+    const capturedBodies: Array<Record<string, unknown>> = [];
+    let requestCount = 0;
+    const sessionState = scope.run(() => useAutoGenChatSession<string>({
+      source: 'http://autogen.test/api/stream',
+      input: prompt,
+      conversationId: 'session:demo:autogen-reject',
+      mode: 'hitl',
+      title: 'AutoGen 助手',
+      transport: {
+        fetch: (async (_source, init) => {
+          requestCount += 1;
+          capturedBodies.push(JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>);
+
+          if (requestCount === 1) {
+            return createAutoGenSseResponse([
+              {
+                type: 'TaskStarted',
+                id: 'task-reject-1',
+                source: 'assistant',
+                session_id: 'autogen-session-reject-1'
+              },
+              {
+                type: 'HandoffMessage',
+                id: 'handoff-reject-1',
+                source: 'assistant',
+                target: 'human',
+                content: '请确认是否继续执行天气查询。',
+                session_id: 'autogen-session-reject-1'
+              },
+              {
+                type: 'TaskResult',
+                id: 'task-result-reject-1',
+                session_id: 'autogen-session-reject-1',
+                stop_reason: 'Handoff to human from assistant detected.',
+                messages: []
+              }
+            ]);
+          }
+
+          return createAutoGenSseResponse([
+            {
+              type: 'TaskStarted',
+              id: 'task-reject-2',
+              source: 'assistant',
+              session_id: 'autogen-session-reject-1'
+            },
+            {
+              type: 'TextMessage',
+              id: 'assistant-msg-reject-2',
+              source: 'assistant',
+              session_id: 'autogen-session-reject-1',
+              content: '好的，我已停止当前任务。'
+            },
+            {
+              type: 'TaskResult',
+              id: 'task-result-reject-2',
+              session_id: 'autogen-session-reject-1',
+              stop_reason: 'Maximum number of turns 1 reached.',
+              messages: []
+            }
+          ]);
+        }) as typeof fetch
+      }
+    }));
+
+    if (!sessionState) {
+      throw new Error('Failed to create AutoGen reject session.');
+    }
+
+    await sessionState.send();
+    await nextTick();
+
+    const pausedSnapshot = sessionState.runtime.snapshot();
+    const approvalBlock = pausedSnapshot.blocks.find((block) => block.type === 'approval');
+    const rejectHandler = sessionState.surface.value.approvalActions !== false
+      ? sessionState.surface.value.approvalActions?.builtinHandlers?.reject
+      : undefined;
+
+    if (!approvalBlock || !rejectHandler) {
+      throw new Error('Failed to resolve AutoGen reject action wiring.');
+    }
+
+    await expect(rejectHandler({
+      title: String(approvalBlock.data.title ?? '等待人工确认'),
+      status: 'pending',
+      ...(typeof approvalBlock.data.message === 'string'
+        ? {
+            message: approvalBlock.data.message
+          }
+        : {}),
+      ...(typeof approvalBlock.data.approvalId === 'string'
+        ? {
+            approvalId: approvalBlock.data.approvalId
+          }
+        : {}),
+      ...(typeof approvalBlock.data.refId === 'string'
+        ? {
+            refId: approvalBlock.data.refId
+          }
+        : {}),
+      block: approvalBlock,
+      role: 'assistant',
+      runtime: sessionState.runtime,
+      snapshot: pausedSnapshot,
+      emitIntent: () => {
+        throw new Error('emitIntent should not be called in this test.');
+      }
+    })).rejects.toThrow('请先填写拒绝原因。');
+
+    await rejectHandler({
+      title: String(approvalBlock.data.title ?? '等待人工确认'),
+      status: 'pending',
+      reason: '用户暂时不需要这次天气查询了。',
+      ...(typeof approvalBlock.data.message === 'string'
+        ? {
+            message: approvalBlock.data.message
+          }
+        : {}),
+      ...(typeof approvalBlock.data.approvalId === 'string'
+        ? {
+            approvalId: approvalBlock.data.approvalId
+          }
+        : {}),
+      ...(typeof approvalBlock.data.refId === 'string'
+        ? {
+            refId: approvalBlock.data.refId
+          }
+        : {}),
+      block: approvalBlock,
+      role: 'assistant',
+      runtime: sessionState.runtime,
+      snapshot: pausedSnapshot,
+      emitIntent: () => {
+        throw new Error('emitIntent should not be called in this test.');
+      }
+    });
+    await nextTick();
+
+    expect(capturedBodies).toHaveLength(2);
+    expect(capturedBodies[1]).toMatchObject({
+      message: '这次不继续执行，原因：用户暂时不需要这次天气查询了。请停止当前任务，并简要确认已收到。',
+      mode: 'hitl',
+      session_id: 'autogen-session-reject-1',
+      autogen_resume: {
+        content: '这次不继续执行，原因：用户暂时不需要这次天气查询了。请停止当前任务，并简要确认已收到。'
+      }
+    });
 
     scope.stop();
   });

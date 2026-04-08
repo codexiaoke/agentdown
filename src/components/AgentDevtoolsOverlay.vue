@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type {
   AgentDevtoolsProtocolTraceEntry,
   AgentDevtoolsRawEventEntry,
@@ -37,23 +37,100 @@ interface Props {
   defaultTab?: AgentDevtoolsTab;
   /** 每个页签最多展示多少条记录。 */
   maxItems?: number;
+  /** 是否记住用户上一次拖拽后的浮层位置。 */
+  rememberPosition?: boolean;
+  /** 记住浮层位置时使用的本地存储 key。 */
+  positionStorageKey?: string;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   title: 'Agent Devtools',
   initiallyOpen: false,
   defaultTab: 'events',
-  maxItems: 8
+  maxItems: 8,
+  rememberPosition: true,
+  positionStorageKey: 'agentdown:overlay:devtools:position'
 });
 
 const open = ref(props.initiallyOpen);
 const activeTab = ref<AgentDevtoolsTab>(props.defaultTab);
 const filterText = ref('');
 const copyState = ref<'idle' | 'copied' | 'failed'>('idle');
-const globalCopyTarget = ref<'snapshot' | 'reproduction' | null>(null);
+const globalCopyTarget = ref<'reproduction' | null>(null);
 const copiedEntryId = ref<string | null>(null);
 const expandedEntryIds = ref<string[]>([]);
+const overlayRef = ref<HTMLElement | null>(null);
+const floatingPosition = ref<{
+  left: number;
+  top: number;
+} | null>(null);
+const dragging = ref(false);
 let copyTimer: number | undefined;
+let dragPointerId: number | null = null;
+let dragStartClientX = 0;
+let dragStartClientY = 0;
+let dragStartLeft = 0;
+let dragStartTop = 0;
+
+/**
+ * `OverlayTooltipState` 描述当前悬浮提示的显示状态。
+ */
+interface OverlayTooltipState {
+  /** 当前 tooltip 是否可见。 */
+  visible: boolean;
+  /** tooltip 当前显示的文案。 */
+  label: string;
+  /** tooltip 的 fixed left 坐标。 */
+  left: number;
+  /** tooltip 的 fixed top 坐标。 */
+  top: number;
+  /** tooltip 当前停靠的位置。 */
+  placement: 'top' | 'bottom';
+}
+
+/**
+ * `OverlayStoredPosition` 描述持久化到本地存储的浮层坐标。
+ */
+interface OverlayStoredPosition {
+  /** 浮层的 left 坐标。 */
+  left: number;
+  /** 浮层的 top 坐标。 */
+  top: number;
+}
+
+const tooltipState = ref<OverlayTooltipState>({
+  visible: false,
+  label: '',
+  left: 0,
+  top: 0,
+  placement: 'top'
+});
+
+watch(open, () => {
+  globalThis.requestAnimationFrame(() => {
+    handleWindowResize();
+  });
+});
+
+/**
+ * 读取当前浮层用于定位的内联样式。
+ *
+ * 初次挂载前继续使用 CSS 默认位置，
+ * 读取到真实布局后再切换成 top / left 固定定位，
+ * 这样拖拽时不会和 `bottom` 锚点互相打架。
+ */
+const overlayStyle = computed(() => {
+  if (!floatingPosition.value) {
+    return undefined;
+  }
+
+  return {
+    left: `${floatingPosition.value.left}px`,
+    top: `${floatingPosition.value.top}px`,
+    right: 'auto',
+    bottom: 'auto'
+  };
+});
 
 /**
  * 读取当前三类日志的总数。
@@ -207,7 +284,22 @@ function resolveTabCount(tab: AgentDevtoolsTab): number {
  * 切换当前展开状态。
  */
 function toggleOpen() {
+  hideTooltip();
   open.value = !open.value;
+}
+
+/**
+ * 读取当前展开按钮的即时文案。
+ */
+function resolveCollapseLabel(): string {
+  return open.value ? '最小化' : '展开';
+}
+
+/**
+ * 读取顶部清空日志按钮的提示文案。
+ */
+function resolveResetLabel(): string {
+  return '清空日志';
 }
 
 /**
@@ -243,36 +335,205 @@ function clearCopyTimer() {
   }
 }
 
-onBeforeUnmount(() => {
-  clearCopyTimer();
-});
+/**
+ * 判断当前是否允许把浮层位置写入本地存储。
+ */
+function shouldRememberPosition(): boolean {
+  return props.rememberPosition && props.positionStorageKey.trim().length > 0;
+}
 
 /**
- * 把当前 devtools 全量状态复制成 JSON。
+ * 从本地存储中读取上一次拖拽保存的浮层位置。
  */
-async function copySnapshot() {
-  try {
-    await navigator.clipboard.writeText(JSON.stringify(props.devtools.exportSnapshot(), null, 2));
-    copyState.value = 'copied';
-    globalCopyTarget.value = 'snapshot';
-    copiedEntryId.value = null;
-  } catch {
-    copyState.value = 'failed';
-    globalCopyTarget.value = 'snapshot';
-    copiedEntryId.value = null;
+function readStoredPosition(): OverlayStoredPosition | null {
+  if (!shouldRememberPosition()) {
+    return null;
   }
 
-  clearCopyTimer();
-  copyTimer = globalThis.setTimeout(() => {
-    copyState.value = 'idle';
-    copyTimer = undefined;
-  }, 3000);
+  try {
+    const rawValue = globalThis.localStorage?.getItem(props.positionStorageKey);
+
+    if (!rawValue) {
+      return null;
+    }
+
+    const parsed = JSON.parse(rawValue) as Partial<OverlayStoredPosition>;
+
+    return typeof parsed.left === 'number' && typeof parsed.top === 'number'
+      ? {
+          left: parsed.left,
+          top: parsed.top
+        }
+      : null;
+  } catch {
+    return null;
+  }
 }
+
+/**
+ * 把当前浮层位置写入本地存储，供下次挂载恢复。
+ */
+function writeStoredPosition(position: OverlayStoredPosition | null) {
+  if (!shouldRememberPosition() || !position) {
+    return;
+  }
+
+  try {
+    globalThis.localStorage?.setItem(props.positionStorageKey, JSON.stringify(position));
+  } catch {
+    // 写入失败时静默跳过，避免打断浮层交互。
+  }
+}
+
+/**
+ * 读取当前浮层应该遵守的最小安全边距。
+ */
+function resolveViewportMargin(): number {
+  return globalThis.innerWidth <= 720 ? 12 : 20;
+}
+
+/**
+ * 把浮层位置限制在可视区域内，避免被拖出屏幕。
+ */
+function clampOverlayPosition(left: number, top: number) {
+  const overlay = overlayRef.value;
+  const margin = resolveViewportMargin();
+  const width = overlay?.offsetWidth ?? 420;
+  const height = overlay?.offsetHeight ?? 320;
+  const maxLeft = Math.max(margin, globalThis.innerWidth - width - margin);
+  const maxTop = Math.max(margin, globalThis.innerHeight - height - margin);
+
+  return {
+    left: Math.min(Math.max(left, margin), maxLeft),
+    top: Math.min(Math.max(top, margin), maxTop)
+  };
+}
+
+/**
+ * 基于当前真实布局初始化一份可拖拽的 top / left 定位。
+ */
+function syncFloatingPositionFromLayout() {
+  const storedPosition = readStoredPosition();
+
+  if (storedPosition) {
+    floatingPosition.value = clampOverlayPosition(storedPosition.left, storedPosition.top);
+    return;
+  }
+
+  const overlay = overlayRef.value;
+
+  if (!overlay) {
+    return;
+  }
+
+  const rect = overlay.getBoundingClientRect();
+  floatingPosition.value = clampOverlayPosition(rect.left, rect.top);
+}
+
+/**
+ * 在窗口尺寸变化后把浮层重新夹回可视区域。
+ */
+function handleWindowResize() {
+  hideTooltip();
+
+  if (!floatingPosition.value) {
+    syncFloatingPositionFromLayout();
+    return;
+  }
+
+  floatingPosition.value = clampOverlayPosition(
+    floatingPosition.value.left,
+    floatingPosition.value.top
+  );
+  writeStoredPosition(floatingPosition.value);
+}
+
+/**
+ * 停止当前拖拽会话，并清理全局监听器。
+ */
+function stopDrag(pointerId?: number) {
+  if (pointerId !== undefined && dragPointerId !== pointerId) {
+    return;
+  }
+
+  dragging.value = false;
+  dragPointerId = null;
+  globalThis.removeEventListener('pointermove', handleWindowPointerMove);
+  globalThis.removeEventListener('pointerup', handleWindowPointerUp);
+  globalThis.removeEventListener('pointercancel', handleWindowPointerUp);
+  document.body.style.userSelect = '';
+
+  writeStoredPosition(floatingPosition.value);
+}
+
+/**
+ * 拖拽过程中实时更新浮层位置。
+ */
+function handleWindowPointerMove(event: PointerEvent) {
+  if (!dragging.value || dragPointerId !== event.pointerId) {
+    return;
+  }
+
+  floatingPosition.value = clampOverlayPosition(
+    dragStartLeft + event.clientX - dragStartClientX,
+    dragStartTop + event.clientY - dragStartClientY
+  );
+}
+
+/**
+ * pointer 抬起或取消时结束拖拽。
+ */
+function handleWindowPointerUp(event: PointerEvent) {
+  stopDrag(event.pointerId);
+}
+
+/**
+ * 从顶部拖拽手柄开始一次新的拖拽会话。
+ */
+function startDrag(event: PointerEvent) {
+  if (event.button !== 0) {
+    return;
+  }
+
+  if (!floatingPosition.value) {
+    syncFloatingPositionFromLayout();
+  }
+
+  if (!floatingPosition.value) {
+    return;
+  }
+
+  dragPointerId = event.pointerId;
+  dragStartClientX = event.clientX;
+  dragStartClientY = event.clientY;
+  dragStartLeft = floatingPosition.value.left;
+  dragStartTop = floatingPosition.value.top;
+  dragging.value = true;
+  document.body.style.userSelect = 'none';
+  globalThis.addEventListener('pointermove', handleWindowPointerMove);
+  globalThis.addEventListener('pointerup', handleWindowPointerUp);
+  globalThis.addEventListener('pointercancel', handleWindowPointerUp);
+}
+
+onMounted(() => {
+  globalThis.requestAnimationFrame(() => {
+    syncFloatingPositionFromLayout();
+  });
+  globalThis.addEventListener('resize', handleWindowResize);
+});
+
+onBeforeUnmount(() => {
+  clearCopyTimer();
+  stopDrag();
+  globalThis.removeEventListener('resize', handleWindowResize);
+});
 
 /**
  * 把当前最小复现包复制成 JSON。
  */
 async function copyReproduction() {
+  hideTooltip();
+
   try {
     await navigator.clipboard.writeText(JSON.stringify(props.devtools.exportReproduction(), null, 2));
     copyState.value = 'copied';
@@ -337,19 +598,6 @@ function resolveDiffSummaryText(entry: AgentDevtoolsSnapshotDiffEntry): string {
 }
 
 /**
- * 读取顶部全量导出按钮的即时文案。
- */
-function resolveSnapshotCopyLabel(): string {
-  if (globalCopyTarget.value !== 'snapshot') {
-    return '复制 JSON';
-  }
-
-  return copyState.value === 'failed'
-    ? '复制失败'
-    : '已复制';
-}
-
-/**
  * 读取顶部最小复现按钮的即时文案。
  */
 function resolveReproductionCopyLabel(): string {
@@ -370,49 +618,215 @@ function formatTime(value: number): string {
     hour12: false
   });
 }
+
+/**
+ * 清空 devtools 日志，并关闭当前 tooltip。
+ */
+function resetDevtools() {
+  hideTooltip();
+  props.devtools.reset();
+}
+
+/**
+ * 隐藏当前悬浮提示。
+ */
+function hideTooltip() {
+  tooltipState.value.visible = false;
+}
+
+/**
+ * 根据按钮位置计算 tooltip 的 fixed 定位。
+ */
+function showTooltip(event: MouseEvent | FocusEvent, label: string) {
+  const target = event.currentTarget;
+
+  if (!(target instanceof HTMLElement)) {
+    return;
+  }
+
+  const rect = target.getBoundingClientRect();
+  const placement: OverlayTooltipState['placement'] = rect.top >= 48 ? 'top' : 'bottom';
+  tooltipState.value = {
+    visible: true,
+    label,
+    left: rect.right,
+    top: placement === 'top'
+      ? rect.top - 8
+      : rect.bottom + 8,
+    placement
+  };
+}
 </script>
 
 <template>
   <aside
+    ref="overlayRef"
     class="agentdown-devtools-overlay"
     :data-open="open ? 'true' : 'false'"
+    :data-dragging="dragging ? 'true' : 'false'"
+    :style="overlayStyle"
   >
     <header class="agentdown-devtools-overlay__header">
-      <button
-        type="button"
-        class="agentdown-devtools-overlay__toggle"
-        @click="toggleOpen"
+      <div
+        class="agentdown-devtools-overlay__header-main"
+        title="拖动面板"
+        @pointerdown.stop.prevent="startDrag"
       >
-        <span>{{ title }}</span>
-        <strong>{{ totalLogCount }}</strong>
-      </button>
+        <div class="agentdown-devtools-overlay__title">
+          <span>{{ title }}</span>
+          <strong>{{ totalLogCount }}</strong>
+        </div>
+      </div>
 
       <div
-        v-if="open"
         class="agentdown-devtools-overlay__actions"
+        :data-open="open ? 'true' : 'false'"
       >
         <button
           type="button"
-          class="agentdown-devtools-overlay__action"
-          @click="props.devtools.reset()"
+          class="agentdown-devtools-overlay__icon-action agentdown-devtools-overlay__icon-action--primary"
+          :aria-label="resolveCollapseLabel()"
+          @mouseenter="showTooltip($event, resolveCollapseLabel())"
+          @mouseleave="hideTooltip"
+          @focus="showTooltip($event, resolveCollapseLabel())"
+          @blur="hideTooltip"
+          @click="toggleOpen"
         >
-          清空
+          <svg
+            v-if="open"
+            class="agentdown-devtools-overlay__icon"
+            viewBox="0 0 20 20"
+            aria-hidden="true"
+          >
+            <rect
+              x="3.5"
+              y="4.5"
+              width="13"
+              height="11"
+              rx="1.8"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+            />
+            <path
+              d="M3.5 7.5h13M7.2 11.3h5.6"
+              fill="none"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.6"
+            />
+          </svg>
+          <svg
+            v-else
+            class="agentdown-devtools-overlay__icon"
+            viewBox="0 0 20 20"
+            aria-hidden="true"
+          >
+            <rect
+              x="3.5"
+              y="4.5"
+              width="13"
+              height="11"
+              rx="1.8"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+            />
+            <path
+              d="M3.5 7.5h13M8 12l4-4M9.4 8h2.6v2.6"
+              fill="none"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.6"
+            />
+          </svg>
         </button>
 
         <button
+          v-if="open"
           type="button"
-          class="agentdown-devtools-overlay__action"
+          class="agentdown-devtools-overlay__icon-action"
+          :aria-label="resolveResetLabel()"
+          @mouseenter="showTooltip($event, resolveResetLabel())"
+          @mouseleave="hideTooltip"
+          @focus="showTooltip($event, resolveResetLabel())"
+          @blur="hideTooltip"
+          @click="resetDevtools"
+        >
+          <svg
+            class="agentdown-devtools-overlay__icon"
+            viewBox="0 0 20 20"
+            aria-hidden="true"
+          >
+            <path
+              d="M7 4.5h6M4.5 6h11M8 4.5l.4-1.1A1 1 0 0 1 9.34 3h1.32a1 1 0 0 1 .94.4L12 4.5M6.5 6l.6 8.1A1.6 1.6 0 0 0 8.7 15.5h2.6a1.6 1.6 0 0 0 1.6-1.4l.6-8.1M8.6 8.5v4.2M11.4 8.5v4.2"
+              fill="none"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.6"
+            />
+          </svg>
+        </button>
+
+        <button
+          v-if="open"
+          type="button"
+          class="agentdown-devtools-overlay__icon-action"
+          :aria-label="resolveReproductionCopyLabel()"
+          @mouseenter="showTooltip($event, resolveReproductionCopyLabel())"
+          @mouseleave="hideTooltip"
+          @focus="showTooltip($event, resolveReproductionCopyLabel())"
+          @blur="hideTooltip"
           @click="copyReproduction().catch(() => {})"
         >
-          {{ resolveReproductionCopyLabel() }}
-        </button>
-
-        <button
-          type="button"
-          class="agentdown-devtools-overlay__action"
-          @click="copySnapshot().catch(() => {})"
-        >
-          {{ resolveSnapshotCopyLabel() }}
+          <svg
+            v-if="globalCopyTarget === 'reproduction' && copyState === 'copied'"
+            class="agentdown-devtools-overlay__icon"
+            viewBox="0 0 20 20"
+            aria-hidden="true"
+          >
+            <path
+              d="M4.5 10.5 8 14l7.5-8"
+              fill="none"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.8"
+            />
+          </svg>
+          <svg
+            v-else-if="globalCopyTarget === 'reproduction' && copyState === 'failed'"
+            class="agentdown-devtools-overlay__icon"
+            viewBox="0 0 20 20"
+            aria-hidden="true"
+          >
+            <path
+              d="M6 6l8 8M14 6l-8 8"
+              fill="none"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.8"
+            />
+          </svg>
+          <svg
+            v-else
+            class="agentdown-devtools-overlay__icon"
+            viewBox="0 0 20 20"
+            aria-hidden="true"
+          >
+            <path
+              d="M7 5.5h6M10 5.5v9M6 9l4-4 4 4M6 14.5h8"
+              fill="none"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.6"
+            />
+          </svg>
         </button>
       </div>
     </header>
@@ -755,6 +1169,20 @@ function formatTime(value: number): string {
       </p>
     </div>
   </aside>
+
+  <Teleport to="body">
+    <div
+      v-if="tooltipState.visible"
+      class="agentdown-devtools-overlay__tooltip"
+      :data-placement="tooltipState.placement"
+      :style="{
+        left: `${tooltipState.left}px`,
+        top: `${tooltipState.top}px`
+      }"
+    >
+      {{ tooltipState.label }}
+    </div>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -763,12 +1191,30 @@ function formatTime(value: number): string {
   left: 20px;
   bottom: 20px;
   z-index: 60;
-  width: min(420px, calc(100vw - 24px));
+  width: min(560px, calc(100vw - 24px));
+  max-height: min(calc(100vh - 24px), 820px);
   border: 1px solid rgba(148, 163, 184, 0.22);
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.96);
   box-shadow: 0 24px 60px rgba(15, 23, 42, 0.16);
   backdrop-filter: blur(14px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.agentdown-devtools-overlay[data-open='true'] {
+  height: min(720px, calc(100vh - 24px));
+}
+
+.agentdown-devtools-overlay[data-open='false'] {
+  width: auto;
+  height: auto;
+  max-width: min(320px, calc(100vw - 24px));
+}
+
+.agentdown-devtools-overlay[data-dragging='true'] {
+  box-shadow: 0 28px 70px rgba(15, 23, 42, 0.22);
 }
 
 .agentdown-devtools-overlay__header {
@@ -777,25 +1223,59 @@ function formatTime(value: number): string {
   justify-content: space-between;
   gap: 12px;
   padding: 12px 12px 10px;
+  flex: 0 0 auto;
 }
 
-.agentdown-devtools-overlay__toggle,
+.agentdown-devtools-overlay__header-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.agentdown-devtools-overlay__title,
 .agentdown-devtools-overlay__action,
+.agentdown-devtools-overlay__icon-action,
 .agentdown-devtools-overlay__tab {
-  border: 0;
-  background: transparent;
   color: inherit;
   font: inherit;
 }
 
-.agentdown-devtools-overlay__toggle {
+.agentdown-devtools-overlay__action,
+.agentdown-devtools-overlay__icon-action,
+.agentdown-devtools-overlay__tab {
+  border: 0;
+  background: transparent;
+}
+
+.agentdown-devtools-overlay__header-main {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  cursor: pointer;
+  min-width: 0;
+  flex: 1 1 auto;
+  cursor: grab;
+  touch-action: none;
 }
 
-.agentdown-devtools-overlay__toggle strong {
+.agentdown-devtools-overlay[data-dragging='true'] .agentdown-devtools-overlay__header-main {
+  cursor: grabbing;
+}
+
+.agentdown-devtools-overlay__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.agentdown-devtools-overlay__title span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agentdown-devtools-overlay__title strong {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -811,6 +1291,13 @@ function formatTime(value: number): string {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.agentdown-devtools-overlay__actions[data-open='false'] {
+  gap: 0;
 }
 
 .agentdown-devtools-overlay__action {
@@ -820,11 +1307,58 @@ function formatTime(value: number): string {
   color: #334155;
   font-size: 12px;
   cursor: pointer;
+  white-space: nowrap;
+}
+
+.agentdown-devtools-overlay__icon-action {
+  padding: 2px;
+  color: #64748b;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.agentdown-devtools-overlay__icon-action:hover {
+  color: #0f172a;
+}
+
+.agentdown-devtools-overlay__icon-action--primary {
+  color: #1d4ed8;
+}
+
+.agentdown-devtools-overlay__icon {
+  display: block;
+  width: 18px;
+  height: 18px;
+}
+
+.agentdown-devtools-overlay__tooltip {
+  position: fixed;
+  transform: translate(-100%, -100%);
+  pointer-events: none;
+  border-radius: 8px;
+  padding: 4px 8px;
+  background: rgba(15, 23, 42, 0.92);
+  color: #f8fafc;
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: nowrap;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.18);
+  z-index: 120;
+}
+
+.agentdown-devtools-overlay__tooltip[data-placement='bottom'] {
+  transform: translate(-100%, 0);
 }
 
 .agentdown-devtools-overlay__panel {
+  flex: 1 1 auto;
   border-top: 1px solid rgba(226, 232, 240, 0.92);
   padding: 12px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .agentdown-devtools-overlay__tabs {
@@ -857,6 +1391,8 @@ function formatTime(value: number): string {
   color: #0f172a;
   font: inherit;
   font-size: 12px;
+  box-sizing: border-box;
+  min-width: 0;
 }
 
 .agentdown-devtools-overlay__list {
@@ -959,7 +1495,8 @@ function formatTime(value: number): string {
   margin: 0;
   border-radius: 12px;
   padding: 10px;
-  overflow-x: auto;
+  max-height: 260px;
+  overflow: auto;
   background: #ffffff;
   color: #0f172a;
   font-size: 11px;
@@ -972,7 +1509,15 @@ function formatTime(value: number): string {
   .agentdown-devtools-overlay {
     left: 12px;
     bottom: 12px;
-    width: min(420px, calc(100vw - 24px));
+    width: min(560px, calc(100vw - 24px));
+  }
+
+  .agentdown-devtools-overlay[data-open='true'] {
+    height: min(680px, calc(100vh - 24px));
+  }
+
+  .agentdown-devtools-overlay[data-open='false'] {
+    max-width: calc(100vw - 24px);
   }
 }
 </style>

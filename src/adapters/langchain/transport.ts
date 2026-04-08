@@ -2,6 +2,15 @@ import type { FetchTransportSource, JsonRequestOptions, JsonSseTransportOptions,
 import type { RuntimeData } from '../../runtime/types';
 import { createFrameworkJsonSseTransport } from '../shared/jsonSseTransportFactory';
 import type { LangChainEvent } from './types';
+import type { LangChainHumanDecision } from './types';
+
+/**
+ * 继续一个已暂停的 LangChain HITL interrupt 时使用的请求体结构。
+ */
+export interface LangChainResumeRequestBody extends RuntimeData {
+  /** 当前 interrupt batch 对应的人工决策列表。 */
+  decisions: LangChainHumanDecision[];
+}
 
 /**
  * LangChain 请求体里最常见的 JSON 结构。
@@ -9,6 +18,12 @@ import type { LangChainEvent } from './types';
 export interface LangChainRequestBody extends RuntimeData {
   /** 用户当前输入的问题。 */
   message?: string;
+  /** 当前要继续沿用的后端 thread / session id。 */
+  session_id?: string;
+  /** LangChain backend 的运行模式，例如 `hitl`。 */
+  mode?: string;
+  /** 使用同一个 `/api/stream/langchain` 继续已暂停 interrupt 的载荷。 */
+  langchain_resume?: LangChainResumeRequestBody;
 }
 
 /**

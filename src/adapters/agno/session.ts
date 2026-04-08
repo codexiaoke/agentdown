@@ -354,7 +354,8 @@ export function ensureToolStarted(
   packet: AgnoEvent,
   context: ProtocolContext,
   commands: RuntimeCommand[],
-  options: AgnoProtocolOptions
+  options: AgnoProtocolOptions,
+  status = 'running'
 ): void {
   if (session.startedToolIds.has(toolId)) {
     return;
@@ -369,6 +370,7 @@ export function ensureToolStarted(
       slot: options.slot ?? 'main',
       ...resolveSessionMessageScope(session),
       renderer: resolveToolRenderer(session.runId, toolId, tool, packet, context, options),
+      status,
       data: buildToolData(packet, tool),
       at: context.now()
     })

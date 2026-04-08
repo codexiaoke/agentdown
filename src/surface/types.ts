@@ -312,6 +312,15 @@ export type RunSurfaceBuiltinApprovalActionKey =
   | 'interrupt';
 
 /**
+ * approval 动作的原因输入模式。
+ *
+ * - `hidden`: 不显示原因输入区
+ * - `required`: 必须填写原因后才能提交
+ * - `optional`: 可以填写备注，但允许空值提交
+ */
+export type RunSurfaceApprovalReasonMode = 'hidden' | 'required' | 'optional';
+
+/**
  * approval 卡片在点击动作时可拿到的完整上下文。
  */
 export interface RunSurfaceApprovalActionContext {
@@ -325,6 +334,8 @@ export interface RunSurfaceApprovalActionContext {
   status: MarkdownApprovalStatus;
   /** 当前 runtime ref。 */
   refId?: string;
+  /** 当前动作填写的原因。 */
+  reason?: string;
   /** 当前 approval 对应的 surface block。 */
   block: SurfaceBlock;
   /** 当前卡片所在消息角色。 */
@@ -353,6 +364,25 @@ export interface RunSurfaceApprovalActionDefinition {
   visible?: boolean | ((context: RunSurfaceApprovalActionContext) => boolean);
   /** 是否禁用当前动作。 */
   disabled?: boolean | ((context: RunSurfaceApprovalActionContext) => boolean);
+  /** 当前动作的原因输入模式。 */
+  reasonMode?:
+    | RunSurfaceApprovalReasonMode
+    | ((context: RunSurfaceApprovalActionContext) => RunSurfaceApprovalReasonMode);
+  /** 当前动作是否要求先填写原因。 */
+  requireReason?: boolean | ((context: RunSurfaceApprovalActionContext) => boolean);
+  /** 原因输入区标题。 */
+  reasonLabel?: string;
+  /** 原因输入框占位文案。 */
+  reasonPlaceholder?: string;
+  /** 原因确认按钮文案。 */
+  reasonSubmitLabel?: string;
+  /** 原因最少需要多少个字符。 */
+  reasonMinLength?: number;
+  /** 自定义原因校验器；返回字符串时会作为错误文案显示。 */
+  validateReason?: (input: {
+    reason: string;
+    context: RunSurfaceApprovalActionContext;
+  }) => string | null | void;
   /** 当前动作点击后的处理函数。 */
   onClick?: (context: RunSurfaceApprovalActionContext) => void | Promise<void>;
 }
@@ -384,6 +414,120 @@ export interface RunSurfaceApprovalActionsOptions {
   >>;
   /** 当前 approval 卡片要展示的动作列表。 */
   actions?: RunSurfaceApprovalActionItem[];
+}
+
+/**
+ * 内置 handoff 动作支持的稳定 key。
+ */
+export type RunSurfaceBuiltinHandoffActionKey = 'submit';
+
+/**
+ * handoff 动作的输入模式。
+ *
+ * - `hidden`: 不显示输入区
+ * - `required`: 必须填写输入内容后才能提交
+ * - `optional`: 可以填写补充内容，但允许空值提交
+ */
+export type RunSurfaceHandoffActionInputMode = 'hidden' | 'required' | 'optional';
+
+/**
+ * handoff 卡片在点击动作时可拿到的完整上下文。
+ */
+export interface RunSurfaceHandoffActionContext {
+  /** 当前卡片标题。 */
+  title: string;
+  /** 当前卡片说明文案。 */
+  message?: string;
+  /** 当前 handoff 唯一标识。 */
+  handoffId?: string;
+  /** 当前 handoff 状态。 */
+  status: string;
+  /** 当前 handoff 目标类型。 */
+  targetType?: string;
+  /** 当前 handoff 接收方。 */
+  assignee?: string;
+  /** 当前 runtime ref。 */
+  refId?: string;
+  /** 当前动作填写的输入内容。 */
+  input?: string;
+  /** 当前 handoff 对应的 surface block。 */
+  block: SurfaceBlock;
+  /** 当前卡片所在消息角色。 */
+  role: RunSurfaceRole;
+  /** 当前运行时实例。 */
+  runtime: AgentRuntime;
+  /** 当前 runtime 的完整快照。 */
+  snapshot: RuntimeSnapshot;
+  /** 向 runtime 主动发出一条结构化 intent。 */
+  emitIntent: (intent: Omit<RuntimeIntent, 'id' | 'at'>) => RuntimeIntent;
+}
+
+/**
+ * 单个 handoff 动作按钮的完整定义结构。
+ */
+export interface RunSurfaceHandoffActionDefinition {
+  /** 当前动作的稳定 key。 */
+  key: string;
+  /** 当前动作的可读标签。 */
+  label?: string;
+  /** 当前动作按钮的提示文案。 */
+  title?: string;
+  /** 自定义图标组件；不传时默认使用文本按钮。 */
+  icon?: Component;
+  /** 是否显示当前动作。 */
+  visible?: boolean | ((context: RunSurfaceHandoffActionContext) => boolean);
+  /** 是否禁用当前动作。 */
+  disabled?: boolean | ((context: RunSurfaceHandoffActionContext) => boolean);
+  /** 当前动作的输入模式。 */
+  inputMode?:
+    | RunSurfaceHandoffActionInputMode
+    | ((context: RunSurfaceHandoffActionContext) => RunSurfaceHandoffActionInputMode);
+  /** 当前动作是否要求先填写输入内容。 */
+  requireInput?: boolean | ((context: RunSurfaceHandoffActionContext) => boolean);
+  /** 输入区标题。 */
+  inputLabel?: string;
+  /** 输入框占位文案。 */
+  inputPlaceholder?: string;
+  /** 输入确认按钮文案。 */
+  inputSubmitLabel?: string;
+  /** 输入最少需要多少个字符。 */
+  inputMinLength?: number;
+  /** 自定义输入校验器；返回字符串时会作为错误文案显示。 */
+  validateInput?: (input: {
+    input: string;
+    context: RunSurfaceHandoffActionContext;
+  }) => string | null | void;
+  /** 当前动作点击后的处理函数。 */
+  onClick?: (context: RunSurfaceHandoffActionContext) => void | Promise<void>;
+}
+
+/**
+ * handoff 内置动作的业务处理器签名。
+ */
+export type RunSurfaceBuiltinHandoffActionHandler = (
+  context: RunSurfaceHandoffActionContext
+) => void | Promise<void>;
+
+/**
+ * handoff 动作条目的声明方式。
+ */
+export type RunSurfaceHandoffActionItem =
+  | RunSurfaceBuiltinHandoffActionKey
+  | RunSurfaceHandoffActionDefinition;
+
+/**
+ * handoff 卡片动作区域的完整配置。
+ */
+export interface RunSurfaceHandoffActionsOptions {
+  /** 是否启用当前 handoff 动作区域。 */
+  enabled?: boolean;
+  /** 覆写内置 handoff 动作的业务行为。 */
+  builtinHandlers?: Partial<Record<
+    RunSurfaceBuiltinHandoffActionKey,
+    RunSurfaceBuiltinHandoffActionHandler
+  >>;
+  /** 当前 handoff 卡片要展示的动作列表。 */
+  actions?: RunSurfaceHandoffActionItem[];
 }
 
 /**
@@ -421,4 +565,6 @@ export interface RunSurfaceOptions {
   messageActions?: RunSurfaceMessageActionsMap;
   /** approval 卡片对应的动作区域配置。 */
   approvalActions?: RunSurfaceApprovalActionsOptions | false;
+  /** handoff 卡片对应的动作区域配置。 */
+  handoffActions?: RunSurfaceHandoffActionsOptions | false;
 }

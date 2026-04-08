@@ -10,6 +10,54 @@ import type {
 } from '../../runtime/types';
 
 /**
+ * Agno tool execution 上可能携带的人机交互字段。
+ */
+export interface AgnoToolExecutionPayload extends AgnoToolPayload {
+  /** 工具是否需要人工确认后再执行。 */
+  requires_confirmation?: boolean;
+  /** 工具是否已经被人工确认。 */
+  confirmed?: boolean | null;
+  /** 人工确认或拒绝时填写的说明。 */
+  confirmation_note?: string | null;
+  /** 工具是否要求用户补充输入。 */
+  requires_user_input?: boolean;
+  /** 结构化用户输入 schema。 */
+  user_input_schema?: unknown[] | null;
+  /** 结构化用户反馈 schema。 */
+  user_feedback_schema?: unknown[] | null;
+  /** 用户输入 / 反馈是否已经回答完毕。 */
+  answered?: boolean | null;
+  /** 是否需要外部系统执行。 */
+  external_execution_required?: boolean;
+  /** 外部执行 requirement 是否要求静默显示。 */
+  external_execution_silent?: boolean | null;
+  /** 审批记录 id。 */
+  approval_id?: string | null;
+  /** 审批模式，例如 `required` / `audit`。 */
+  approval_type?: string | null;
+}
+
+/**
+ * Agno `RunPaused` 事件里 requirement 的常见结构。
+ */
+export interface AgnoRequirementPayload extends RuntimeData {
+  /** requirement 稳定 id。 */
+  id?: string;
+  /** 当前 requirement 关联的工具执行。 */
+  tool_execution?: AgnoToolExecutionPayload;
+  /** 当前 confirmation requirement 的确认结果。 */
+  confirmation?: boolean | null;
+  /** 当前 confirmation requirement 的补充说明。 */
+  confirmation_note?: string | null;
+  /** user_input requirement 的 schema。 */
+  user_input_schema?: unknown[] | null;
+  /** user_feedback requirement 的 schema。 */
+  user_feedback_schema?: unknown[] | null;
+  /** external_execution requirement 的执行结果。 */
+  external_execution_result?: string | null;
+}
+
+/**
  * Agno tool 事件里常见的工具载荷结构。
  */
 export interface AgnoToolPayload extends RuntimeData {
@@ -71,8 +119,14 @@ export interface AgnoEvent extends RuntimeData {
   agent?: string | RuntimeData;
   /** 工具调用载荷。 */
   tool?: AgnoToolPayload;
+  /** `RunPaused` 等事件里批量返回的工具执行列表。 */
+  tools?: AgnoToolExecutionPayload[] | null;
+  /** `RunPaused` 等事件里返回的 requirement 列表。 */
+  requirements?: AgnoRequirementPayload[] | null;
   /** 某些事件会把结果挂在根级别。 */
   result?: unknown;
+  /** 某些实现会把 run 状态挂在事件根级。 */
+  status?: string;
 }
 
 /**

@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, type Component } from 'vue';
 import BuiltinBlocksDemo from './pages/BuiltinBlocksDemo.vue';
+import DevtoolsDemo from './pages/DevtoolsDemo.vue';
+import DevtoolsReplayDemo from './pages/DevtoolsReplayDemo.vue';
+import DraftOverlayDemo from './pages/DraftOverlayDemo.vue';
 import HumanLoopDemo from './pages/HumanLoopDemo.vue';
 import LongDocumentDemo from './pages/LongDocumentDemo.vue';
 import PerformanceLabDemo from './pages/PerformanceLabDemo.vue';
@@ -27,7 +30,7 @@ const routes: DemoRoute[] = [
   {
     path: '/blocks',
     title: '内置块总览',
-    description: '把 text / thought / code / agui / artifact / approval 走一遍。',
+    description: '把 text / thought / code / agui / artifact / approval / attachment / branch / handoff 走一遍。',
     component: BuiltinBlocksDemo
   },
   {
@@ -43,6 +46,24 @@ const routes: DemoRoute[] = [
     component: PerformanceLabDemo
   },
   {
+    path: '/devtools',
+    title: 'Devtools 调试页',
+    description: '本地事件流演示 events / trace / effects / diff 四类日志，不依赖真实后端。',
+    component: DevtoolsDemo
+  },
+  {
+    path: '/devtools-replay',
+    title: 'Replay Debugger',
+    description: '按 reproduction packet 逐步回放 runtime，直接定位当前事件影响了哪些 block。',
+    component: DevtoolsReplayDemo
+  },
+  {
+    path: '/draft-overlay',
+    title: 'Draft Overlay',
+    description: '单独观察代码块和表格从 draft 到 stable 的过程，专门看 RunSurfaceDraftOverlay。',
+    component: DraftOverlayDemo
+  },
+  {
     path: '/sse-weather',
     title: 'Agno 真实 SSE',
     description: '直接请求真实 /api/stream/agno，并展示 useAgnoChatSession()、draft overlay 和 Agent Devtools。',
@@ -51,7 +72,7 @@ const routes: DemoRoute[] = [
   {
     path: '/sse-autogen',
     title: 'AutoGen 真实 SSE',
-    description: '直接请求真实 /api/stream/autogen，并附带 raw event / trace / diff devtools。',
+    description: '直接请求真实 /api/stream/autogen，演示官方 handoff 暂停与人工继续。',
     component: SseAutoGenDemo
   },
   {
@@ -75,7 +96,7 @@ const routes: DemoRoute[] = [
   {
     path: '/human-loop',
     title: 'Human-In-The-Loop',
-    description: '审批卡动作、消息动作和 runtime intent 的完整联动示例。',
+    description: '用户附件、审批动作、branch、handoff 和 runtime intent 的完整联动示例。',
     component: HumanLoopDemo
   },
   {
@@ -93,7 +114,7 @@ const routes: DemoRoute[] = [
   {
     path: '/user-file',
     title: '用户上传文件',
-    description: '演示用户消息也可以是 artifact block，而不只是纯文本。',
+    description: '演示用户消息也可以挂 attachment block，而不只是纯文本。',
     component: UserFileDemo
   }
 ];

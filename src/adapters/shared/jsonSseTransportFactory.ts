@@ -51,6 +51,15 @@ async function resolveFrameworkTransportValue<TSource, TValue>(
 }
 
 /**
+ * 判断当前 message 字段是否值得继续写入请求体。
+ *
+ * 这里会把空字符串视为“未提供”，方便继续执行 / resume 场景临时清空 message。
+ */
+function shouldIncludeFrameworkTransportMessage(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0;
+}
+
+/**
  * 创建一个共享的 JSON SSE transport helper。
  */
 export function createFrameworkJsonSseTransport<
@@ -82,7 +91,9 @@ export function createFrameworkJsonSseTransport<
 
         return {
           ...(resolvedBody ?? {}),
-          ...(resolvedMessage !== undefined ? { message: resolvedMessage } : {})
+          ...(shouldIncludeFrameworkTransportMessage(resolvedMessage)
+            ? { message: resolvedMessage }
+            : {})
         } as TBody;
       }
     }

@@ -154,6 +154,23 @@ export interface MessageArtifactInput extends Omit<MessageBlockInput, 'type' | '
 }
 
 /**
+ * attachment 消息的快捷输入结构。
+ */
+export interface MessageAttachmentInput extends Omit<MessageBlockInput, 'type' | 'renderer' | 'content'> {
+  title: string;
+  attachmentKind: string;
+  attachmentId?: string;
+  label?: string;
+  href?: string;
+  message?: string;
+  refId?: string;
+  mimeType?: string;
+  sizeText?: string;
+  previewSrc?: string;
+  status?: string;
+}
+
+/**
  * 内容替换支持的目标内容类型。
  */
 export type ContentKind = 'text' | 'markdown';
@@ -179,6 +196,33 @@ export interface ApprovalUpdateInput extends Omit<MessageBlockInput, 'type' | 'r
   title: string;
   approvalId?: string;
   status?: string;
+  message?: string;
+  refId?: string;
+}
+
+/**
+ * 更新 branch block 时的输入结构。
+ */
+export interface BranchUpdateInput extends Omit<MessageBlockInput, 'type' | 'renderer' | 'content'> {
+  title: string;
+  branchId?: string;
+  sourceRunId?: string;
+  targetRunId?: string;
+  status?: string;
+  label?: string;
+  message?: string;
+  refId?: string;
+}
+
+/**
+ * 更新 handoff block 时的输入结构。
+ */
+export interface HandoffUpdateInput extends Omit<MessageBlockInput, 'type' | 'renderer' | 'content'> {
+  title: string;
+  handoffId?: string;
+  status?: string;
+  targetType?: string;
+  assignee?: string;
   message?: string;
   refId?: string;
 }
@@ -236,6 +280,9 @@ export type HelperProtocolSemanticEvent =
   | 'tool.finish'
   | 'artifact.upsert'
   | 'approval.update'
+  | 'attachment.upsert'
+  | 'branch.upsert'
+  | 'handoff.upsert'
   | 'node.error'
   | 'event.record';
 
@@ -255,6 +302,9 @@ type HelperProtocolInputByEvent = {
   'tool.finish': ToolUpdateInput;
   'artifact.upsert': MessageArtifactInput;
   'approval.update': ApprovalUpdateInput;
+  'attachment.upsert': MessageAttachmentInput;
+  'branch.upsert': BranchUpdateInput;
+  'handoff.upsert': HandoffUpdateInput;
   'node.error': NodeErrorInput;
   'event.record': RuntimeData;
 };
@@ -491,6 +541,26 @@ function createArtifactData(input: MessageArtifactInput): RuntimeData {
 }
 
 /**
+ * 生成 attachment block 默认 data。
+ */
+function createAttachmentData(input: MessageAttachmentInput): RuntimeData {
+  return {
+    kind: 'attachment',
+    title: input.title,
+    attachmentKind: input.attachmentKind,
+    ...(input.attachmentId ? { attachmentId: input.attachmentId } : {}),
+    ...(input.label ? { label: input.label } : {}),
+    ...(input.href ? { href: input.href } : {}),
+    ...(input.message ? { message: input.message } : {}),
+    ...(input.refId ? { refId: input.refId } : {}),
+    ...(input.mimeType ? { mimeType: input.mimeType } : {}),
+    ...(input.sizeText ? { sizeText: input.sizeText } : {}),
+    ...(input.previewSrc ? { previewSrc: input.previewSrc } : {}),
+    ...(input.status ? { status: input.status } : {})
+  };
+}
+
+/**
  * 快速生成一条 artifact 消息插入命令。
  */
 function createMessageArtifactCommand(
@@ -504,6 +574,27 @@ function createMessageArtifactCommand(
       renderer: 'artifact',
       data: mergeData(
         createArtifactData(input),
+        input.data
+      )
+    },
+    options
+  );
+}
+
+/**
+ * 快速生成一条 attachment 消息插入命令。
+ */
+function createMessageAttachmentCommand(
+  input: MessageAttachmentInput,
+  options: Omit<BlockInsertCommand, 'type' | 'block'> = {}
+): BlockInsertCommand {
+  return createMessageInsertCommand(
+    {
+      ...input,
+      type: 'attachment',
+      renderer: 'attachment',
+      data: mergeData(
+        createAttachmentData(input),
         input.data
       )
     },
@@ -528,6 +619,22 @@ function createArtifactUpsertCommand(input: MessageArtifactInput): BlockPatchCom
 }
 
 /**
+ * 生成 attachment 消息的 upsert patch 命令。
+ */
+function createAttachmentUpsertCommand(input: MessageAttachmentInput): BlockPatchCommand {
+  return createMessagePatchCommand({
+    ...input,
+    type: 'attachment',
+    renderer: 'attachment',
+    state: input.state ?? 'stable',
+    data: mergeData(
+      createAttachmentData(input),
+      input.data
+    )
+  });
+}
+
+/**
  * 生成 approval block 默认 data。
  */
 function createApprovalData(input: ApprovalUpdateInput): RuntimeData {
@@ -536,6 +643,39 @@ function createApprovalData(input: ApprovalUpdateInput): RuntimeData {
     title: input.title,
     ...(input.approvalId ? { approvalId: input.approvalId } : {}),
     ...(input.status ? { status: input.status } : {}),
+    ...(input.message ? { message: input.message } : {}),
+    ...(input.refId ? { refId: input.refId } : {})
+  };
+}
+
+/**
+ * 生成 branch block 默认 data。
+ */
+function createBranchData(input: BranchUpdateInput): RuntimeData {
+  return {
+    kind: 'branch',
+    title: input.title,
+    ...(input.branchId ? { branchId: input.branchId } : {}),
+    ...(input.sourceRunId ? { sourceRunId: input.sourceRunId } : {}),
+    ...(input.targetRunId ? { targetRunId: input.targetRunId } : {}),
+    ...(input.status ? { status: input.status } : {}),
+    ...(input.label ? { label: input.label } : {}),
+    ...(input.message ? { message: input.message } : {}),
+    ...(input.refId ? { refId: input.refId } : {})
+  };
+}
+
+/**
+ * 生成 handoff block 默认 data。
+ */
+function createHandoffData(input: HandoffUpdateInput): RuntimeData {
+  return {
+    kind: 'handoff',
+    title: input.title,
+    ...(input.handoffId ? { handoffId: input.handoffId } : {}),
+    ...(input.status ? { status: input.status } : {}),
+    ...(input.targetType ? { targetType: input.targetType } : {}),
+    ...(input.assignee ? { assignee: input.assignee } : {}),
     ...(input.message ? { message: input.message } : {}),
     ...(input.refId ? { refId: input.refId } : {})
   };
@@ -552,6 +692,38 @@ function createApprovalUpdateCommand(input: ApprovalUpdateInput): BlockPatchComm
     state: input.state ?? 'stable',
     data: mergeData(
       createApprovalData(input),
+      input.data
+    )
+  });
+}
+
+/**
+ * 生成 branch block 的更新命令。
+ */
+function createBranchUpsertCommand(input: BranchUpdateInput): BlockPatchCommand {
+  return createMessagePatchCommand({
+    ...input,
+    type: 'branch',
+    renderer: 'branch',
+    state: input.state ?? 'stable',
+    data: mergeData(
+      createBranchData(input),
+      input.data
+    )
+  });
+}
+
+/**
+ * 生成 handoff block 的更新命令。
+ */
+function createHandoffUpsertCommand(input: HandoffUpdateInput): BlockPatchCommand {
+  return createMessagePatchCommand({
+    ...input,
+    type: 'handoff',
+    renderer: 'handoff',
+    state: input.state ?? 'stable',
+    data: mergeData(
+      createHandoffData(input),
       input.data
     )
   });
@@ -808,6 +980,24 @@ function executeHelperCommand(
     case 'approval.update':
       return cmd.approval.update(
         applyHelperDefaults(input as ApprovalUpdateInput, defaults['approval.update'], {
+          atDefault: context.now()
+        })
+      );
+    case 'attachment.upsert':
+      return cmd.attachment.upsert(
+        applyHelperDefaults(input as MessageAttachmentInput, defaults['attachment.upsert'], {
+          atDefault: context.now()
+        })
+      );
+    case 'branch.upsert':
+      return cmd.branch.upsert(
+        applyHelperDefaults(input as BranchUpdateInput, defaults['branch.upsert'], {
+          atDefault: context.now()
+        })
+      );
+    case 'handoff.upsert':
+      return cmd.handoff.upsert(
+        applyHelperDefaults(input as HandoffUpdateInput, defaults['handoff.upsert'], {
           atDefault: context.now()
         })
       );
@@ -1082,9 +1272,64 @@ export const cmd = {
     ): BlockInsertCommand {
       return createMessageArtifactCommand(input, options);
     },
+    /** 快速创建 attachment 消息。 */
+    attachment(
+      input: MessageAttachmentInput,
+      options: Omit<BlockInsertCommand, 'type' | 'block'> = {}
+    ): BlockInsertCommand {
+      return createMessageAttachmentCommand(input, options);
+    },
+    /** 快速创建 branch 消息。 */
+    branch(
+      input: BranchUpdateInput,
+      options: Omit<BlockInsertCommand, 'type' | 'block'> = {}
+    ): BlockInsertCommand {
+      return createMessageInsertCommand(
+        {
+          ...input,
+          type: 'branch',
+          renderer: 'branch',
+          data: mergeData(
+            createBranchData(input),
+            input.data
+          )
+        },
+        options
+      );
+    },
+    /** 快速创建 handoff 消息。 */
+    handoff(
+      input: HandoffUpdateInput,
+      options: Omit<BlockInsertCommand, 'type' | 'block'> = {}
+    ): BlockInsertCommand {
+      return createMessageInsertCommand(
+        {
+          ...input,
+          type: 'handoff',
+          renderer: 'handoff',
+          data: mergeData(
+            createHandoffData(input),
+            input.data
+          )
+        },
+        options
+      );
+    },
     /** 按 block id 更新 artifact 消息。 */
     artifactUpsert(input: MessageArtifactInput): BlockPatchCommand {
       return createArtifactUpsertCommand(input);
+    },
+    /** 按 block id 更新 attachment 消息。 */
+    attachmentUpsert(input: MessageAttachmentInput): BlockPatchCommand {
+      return createAttachmentUpsertCommand(input);
+    },
+    /** 按 block id 更新 branch 消息。 */
+    branchUpsert(input: BranchUpdateInput): BlockPatchCommand {
+      return createBranchUpsertCommand(input);
+    },
+    /** 按 block id 更新 handoff 消息。 */
+    handoffUpsert(input: HandoffUpdateInput): BlockPatchCommand {
+      return createHandoffUpsertCommand(input);
     }
   },
   artifact: {
@@ -1101,6 +1346,24 @@ export const cmd = {
     /** `upsert` 的语义别名，更贴近审批流事件命名。 */
     update(input: ApprovalUpdateInput): BlockPatchCommand {
       return createApprovalUpdateCommand(input);
+    }
+  },
+  attachment: {
+    /** 独立 attachment helper，便于协议层按语义直接调用。 */
+    upsert(input: MessageAttachmentInput): BlockPatchCommand {
+      return createAttachmentUpsertCommand(input);
+    }
+  },
+  branch: {
+    /** 独立 branch helper，便于协议层按语义直接调用。 */
+    upsert(input: BranchUpdateInput): BlockPatchCommand {
+      return createBranchUpsertCommand(input);
+    }
+  },
+  handoff: {
+    /** 独立 handoff helper，便于协议层按语义直接调用。 */
+    upsert(input: HandoffUpdateInput): BlockPatchCommand {
+      return createHandoffUpsertCommand(input);
     }
   },
   tool: {

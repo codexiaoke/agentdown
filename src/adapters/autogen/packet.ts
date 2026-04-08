@@ -128,11 +128,44 @@ export function extractAssistantMessageId(packet: AutoGenEvent): string | undefi
 }
 
 /**
+ * 读取 AutoGen handoff 事件的稳定 id。
+ */
+export function extractHandoffId(packet: AutoGenEvent): string | undefined {
+  return readString(packet.id);
+}
+
+/**
+ * 读取 AutoGen handoff 的目标对象。
+ */
+export function extractHandoffTarget(packet: AutoGenEvent): string | undefined {
+  return readString(packet.target);
+}
+
+/**
+ * 读取 AutoGen 任务停止原因。
+ */
+export function extractStopReason(packet: AutoGenEvent): string | undefined {
+  return readString(packet.stop_reason);
+}
+
+/**
+ * 判断当前 TaskResult 是否因为 handoff 给 human 而暂停。
+ */
+export function isAutoGenHandoffStop(packet: AutoGenEvent): boolean {
+  const stopReason = extractStopReason(packet);
+
+  return stopReason !== undefined
+    ? stopReason.trim().toLowerCase().startsWith('handoff to human')
+    : false;
+}
+
+/**
  * 读取错误消息。
  */
 export function extractErrorMessage(packet: AutoGenEvent): string {
   const directMessage = readString(packet.message)
-    ?? readString(packet.reason);
+    ?? readString(packet.reason)
+    ?? extractStopReason(packet);
 
   if (directMessage) {
     return directMessage;

@@ -12,7 +12,7 @@ Agentdown 的渲染思路不是“把所有 token 都塞进一个大 HTML 字符
 1. `markdown-it` 负责原始解析。
 2. `parseMarkdown()` 把 token 流压缩成 `MarkdownBlock[]`。
 3. `MarkdownBlockList` 按 block 类型分发到对应组件。
-4. `text` 优先走 pretext，复杂内容回退到 `html / code / mermaid / math / thought / agui / artifact / approval / timeline`。
+4. `text` 优先走 pretext，复杂内容回退到 `html / code / mermaid / math / thought / agui / artifact / approval / attachment / branch / handoff / timeline`。
 
 ## 当前 block 类型
 
@@ -27,6 +27,9 @@ Agentdown 的渲染思路不是“把所有 token 都塞进一个大 HTML 字符
 | `agui` | `:::vue-component` | `AguiComponentWrapper` | 注入运行态组件 |
 | `artifact` | `:::artifact` | `ArtifactBlock` | 读取产物事件或静态 props |
 | `approval` | `:::approval` | `ApprovalBlock` | 展示审批状态与结果 |
+| `attachment` | `:::attachment` | `AttachmentBlock` | 展示用户文件、图片或结构化输入 |
+| `branch` | `:::branch` | `BranchBlock` | 展示运行分支关系 |
+| `handoff` | `:::handoff` | `HandoffBlock` | 展示交接给人工、团队或其他 Agent |
 | `timeline` | `:::timeline` | `TimelineBlock` | 展示节点或全局事件时间线 |
 
 ## 哪些内容会优先走 pretext
@@ -65,7 +68,7 @@ Agentdown 的渲染思路不是“把所有 token 都塞进一个大 HTML 字符
 
 ## Agent-native 内建指令
 
-除了 `:::vue-component`，Agentdown 现在还内置了三种更接近协议层的 block：
+除了 `:::vue-component`，Agentdown 现在还内置了六种更接近协议层的 block：
 
 ### `:::artifact`
 
@@ -81,6 +84,26 @@ Agentdown 的渲染思路不是“把所有 token 都塞进一个大 HTML 字符
 :::approval title="人工确认" status="pending" message="等待负责人确认"
 ```
 
+### `:::attachment`
+
+```md
+:::attachment title="用户上传文件" attachment-id="file:brief" kind="file" label="brief.pdf"
+:::attachment title="现场照片" kind="image" preview-src="https://example.com/photo.jpg"
+```
+
+### `:::branch`
+
+```md
+:::branch title="修订分支" branch-id="branch:revision-2" source-run-id="run:main" target-run-id="run:revision-2"
+```
+
+### `:::handoff`
+
+```md
+:::handoff title="交接人工审核" handoff-id="handoff:review" target-type="human" assignee="审核同学"
+:::handoff title="转交给团队" target-type="team" assignee="法务团队" status="pending"
+```
+
 ### `:::timeline`
 
 ```md
@@ -88,7 +111,7 @@ Agentdown 的渲染思路不是“把所有 token 都塞进一个大 HTML 字符
 :::timeline title="全局事件流" limit=12
 ```
 
-这三类 block 的设计目标是：先让 `approval / artifact / timeline` 从“只有事件 helper”升级成“可以直接写进 markdown 的默认协议块”。
+这几类 block 的设计目标是：让 `artifact / approval / attachment / branch / handoff / timeline` 从“只有事件 helper”升级成“可以直接写进 markdown 的默认协议块”。
 
 ## 复杂 HTML 内容增强
 

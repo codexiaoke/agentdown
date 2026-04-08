@@ -7,6 +7,7 @@ import type {
 } from '../runtime/types';
 import type {
   RunSurfaceApprovalActionsOptions,
+  RunSurfaceHandoffActionsOptions,
   RunSurfaceRole
 } from './types';
 
@@ -27,6 +28,8 @@ export interface RunSurfaceBlockContext {
   snapshot: ComputedRef<RuntimeSnapshot>;
   /** 当前 RunSurface 为 approval 卡片配置的动作区域。 */
   approvalActions: ComputedRef<RunSurfaceApprovalActionsOptions | false | undefined>;
+  /** 当前 RunSurface 为 handoff 卡片配置的动作区域。 */
+  handoffActions: ComputedRef<RunSurfaceHandoffActionsOptions | false | undefined>;
   /** 向 runtime 主动发出一条结构化 intent。 */
   emitIntent: (intent: Omit<RuntimeIntent, 'id' | 'at'>) => RuntimeIntent;
 }

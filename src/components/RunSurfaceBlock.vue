@@ -22,6 +22,7 @@ import type {
   RunSurfaceDraftPlaceholderContext,
   RunSurfaceDraftPlaceholderRegistration,
   RunSurfaceApprovalActionsOptions,
+  RunSurfaceHandoffActionsOptions,
   RunSurfaceMessageShellContext,
   RunSurfaceMessageShellMap,
   RunSurfaceMessageShellRegistration,
@@ -56,6 +57,7 @@ interface Props {
   draftPlaceholder: RunSurfaceDraftPlaceholder;
   messageShells: RunSurfaceMessageShellMap;
   approvalActions: RunSurfaceApprovalActionsOptions | false | undefined;
+  handoffActions: RunSurfaceHandoffActionsOptions | false | undefined;
   lazyMount: boolean;
   lazyMountMargin: string;
   textSlabChars: number;
@@ -77,6 +79,9 @@ const MARKDOWN_KINDS = new Set<MarkdownBlock['kind']>([
   'agui',
   'artifact',
   'approval',
+  'attachment',
+  'branch',
+  'handoff',
   'timeline'
 ]);
 
@@ -99,6 +104,7 @@ provideRunSurfaceBlockContext({
   runtime: props.runtime,
   snapshot: computed(() => props.snapshot),
   approvalActions: computed(() => props.approvalActions),
+  handoffActions: computed(() => props.handoffActions),
   emitIntent
 });
 
@@ -533,6 +539,9 @@ const lazyPlaceholderMinHeight = computed(() => {
   if (
     activeBlock?.kind === 'artifact'
     || activeBlock?.kind === 'approval'
+    || activeBlock?.kind === 'attachment'
+    || activeBlock?.kind === 'branch'
+    || activeBlock?.kind === 'handoff'
     || activeBlock?.kind === 'timeline'
     || activeBlock?.kind === 'thought'
   ) {
@@ -678,6 +687,7 @@ onBeforeUnmount(() => {
   <div
     ref="blockRef"
     class="agentdown-run-surface-block"
+    :data-block-id="block.id"
     :data-renderer="block.renderer"
     :data-state="block.state"
     :data-draft-mode="draftModeAttribute"

@@ -17,6 +17,9 @@ const variant = computed(() => {
   if (
     props.blockKind === 'artifact'
     || props.blockKind === 'approval'
+    || props.blockKind === 'attachment'
+    || props.blockKind === 'branch'
+    || props.blockKind === 'handoff'
     || props.blockKind === 'agui'
     || props.blockKind === 'code'
     || props.blockKind === 'mermaid'
@@ -34,6 +37,7 @@ const variant = computed(() => {
   <div
     class="agentdown-run-surface-assistant-shell"
     :data-variant="variant"
+    :data-block-kind="blockKind ?? undefined"
   >
     <slot />
   </div>
@@ -52,6 +56,10 @@ const variant = computed(() => {
 
 .agentdown-run-surface-assistant-shell[data-variant='panel'] {
   max-width: min(100%, 560px);
+}
+
+.agentdown-run-surface-assistant-shell[data-variant='panel'][data-block-kind='approval'] {
+  max-width: min(100%, 680px);
 }
 
 .agentdown-run-surface-assistant-shell[data-variant='draft'] :deep(.agentdown-run-surface-draft) {

@@ -110,6 +110,28 @@ curl -N \
   }'
 ```
 
+如果你想快速确认“真实 LangChain 后端 + DeepSeek + 天气工具 + SSE”整条链是否已经接通，可以直接跑：
+
+```bash
+npm run backend:smoke:langchain
+```
+
+它会自动校验这些关键点：
+
+- 收到根 `on_chain_start`
+- 收到 `on_tool_start`
+- 收到 `on_tool_end`
+- 收到根 `on_chain_end`
+- 收到真实 assistant 流式文本
+
+也可以覆写目标地址和 prompt：
+
+```bash
+uv run --project backend python backend/scripts/smoke_langchain.py \
+  --base-url http://127.0.0.1:8000 \
+  --prompt "帮我查一下北京天气，并说明工具调用过程。"
+```
+
 ### AutoGen
 
 ```bash

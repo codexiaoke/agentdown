@@ -1,6 +1,7 @@
 import type { RuntimeData } from '../../runtime/types';
 import type {
   LangChainEvent,
+  LangChainInterruptPayload,
   LangChainToolPayload
 } from './types';
 
@@ -20,6 +21,15 @@ function readRecord(value: unknown): RuntimeData | undefined {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? value as RuntimeData
     : undefined;
+}
+
+/**
+ * 从未知值中读取对象数组。
+ */
+function readRecordArray(value: unknown): RuntimeData[] {
+  return Array.isArray(value)
+    ? value.map((item) => readRecord(item)).filter((item): item is RuntimeData => item !== undefined)
+    : [];
 }
 
 /**
@@ -58,6 +68,59 @@ function normalizeToolContent(value: unknown): unknown {
 
   const parsed = tryParseJsonString(trimmed);
   return parsed !== trimmed ? parsed : value;
+}
+
+/**
+ * 从 LangChain 字符串化的 tool output 里提取某个字段。
+ */
+function readNamedStringField(value: string, field: string): string | undefined {
+  const pattern = new RegExp(`${field}='([\\s\\S]*?)'(?=\\s+[a-zA-Z_]+='|$)`);
+  const matched = value.match(pattern);
+  return matched?.[1];
+}
+
+/**
+ * 把 LangChain `on_tool_end` 里常见的字符串输出恢复成对象。
+ */
+function parseToolOutputString(value: string): RuntimeData | undefined {
+  const content = readNamedStringField(value, 'content');
+  const name = readNamedStringField(value, 'name');
+  const toolCallId = readNamedStringField(value, 'tool_call_id');
+
+  if (content === undefined && name === undefined && toolCallId === undefined) {
+    return undefined;
+  }
+
+  const parsed: RuntimeData = {};
+
+  if (content !== undefined) {
+    parsed.content = normalizeToolContent(content);
+  }
+
+  if (name !== undefined) {
+    parsed.name = name;
+  }
+
+  if (toolCallId !== undefined) {
+    parsed.tool_call_id = toolCallId;
+  }
+
+  return parsed;
+}
+
+/**
+ * 统一读取 `data.output` 里的工具输出结构。
+ */
+function extractToolOutputRecord(value: unknown): RuntimeData | undefined {
+  const record = readRecord(value);
+
+  if (record) {
+    return record;
+  }
+
+  return typeof value === 'string'
+    ? parseToolOutputString(value)
+    : undefined;
 }
 
 /**
@@ -129,6 +192,15 @@ export function extractContent(packet: LangChainEvent): string | undefined {
 }
 
 /**
+ * 读取 LangChain root `on_chain_stream` 里携带的 interrupt 列表。
+ */
+export function extractInterrupts(packet: LangChainEvent): LangChainInterruptPayload[] {
+  const data = readRecord(packet.data);
+  const chunk = readRecord(data?.chunk);
+  return readRecordArray(chunk?.__interrupt__) as LangChainInterruptPayload[];
+}
+
+/**
  * 从 LangChain tool 事件中构造一个统一的工具载荷。
  */
 export function extractTool(packet: LangChainEvent): LangChainToolPayload | undefined {
@@ -143,7 +215,7 @@ export function extractTool(packet: LangChainEvent): LangChainToolPayload | unde
   }
 
   const data = readRecord(packet.data);
-  const output = readRecord(data?.output);
+  const output = extractToolOutputRecord(data?.output);
   const id = readString(packet.run_id);
   const name = readString(packet.name) ?? readString(output?.name);
   const result = normalizeToolContent(output?.content);

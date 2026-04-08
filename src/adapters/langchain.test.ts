@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { effectScope, nextTick, ref, type Component } from 'vue';
 import { createMarkdownAssembler } from '../runtime/assemblers';
 import { createBridge } from '../runtime/createBridge';
+import type { RunSurfaceApprovalActionContext } from '../surface/types';
 import {
   createLangChainAdapter,
   createLangChainChatIds,
@@ -90,10 +91,7 @@ describe('createLangChainProtocol', () => {
         parent_ids: ['run-1'],
         name: 'lookup_weather',
         data: {
-          output: {
-            tool_call_id: 'call-weather-1',
-            content: '{"city":"北京","condition":"晴","tempC":26}'
-          }
+          output: 'content=\'{"city":"北京","condition":"晴","tempC":26}\' name=\'lookup_weather\' tool_call_id=\'call-weather-1\''
         }
       },
       {
@@ -142,6 +140,82 @@ describe('createLangChainProtocol', () => {
       type: 'text',
       content: '根据查询结果，北京今日晴。'
     });
+  });
+
+  it('maps a LangChain HITL interrupt into approval blocks and marks the run as paused', () => {
+    const bridge = createLangChainTestBridge();
+
+    bridge.push([
+      {
+        event: 'on_chain_start',
+        run_id: 'run-hitl-1',
+        name: 'LangGraph',
+        metadata: {
+          thread_id: 'thread-hitl-1'
+        }
+      },
+      {
+        event: 'on_chain_stream',
+        run_id: 'run-hitl-1',
+        name: 'LangGraph',
+        metadata: {
+          thread_id: 'thread-hitl-1'
+        },
+        data: {
+          chunk: {
+            __interrupt__: [
+              {
+                id: 'interrupt-hitl-1',
+                value: {
+                  action_requests: [
+                    {
+                      name: 'lookup_weather',
+                      args: {
+                        city: '北京'
+                      },
+                      description: '请确认是否执行天气查询工具。'
+                    }
+                  ],
+                  review_configs: [
+                    {
+                      action_name: 'lookup_weather',
+                      allowed_decisions: ['approve', 'edit', 'reject']
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        event: 'on_chain_end',
+        run_id: 'run-hitl-1',
+        name: 'LangGraph',
+        metadata: {
+          thread_id: 'thread-hitl-1'
+        }
+      }
+    ]);
+    bridge.flush('langchain-hitl');
+
+    const snapshot = bridge.runtime.snapshot();
+    const runNode = snapshot.nodes.find((node) => node.id === 'run-hitl-1');
+    const approvalBlock = snapshot.blocks.find((block) => block.type === 'approval');
+    const textBlocks = snapshot.blocks.filter((block) => block.type === 'text');
+
+    expect(runNode?.status).toBe('paused');
+    expect(approvalBlock?.data).toMatchObject({
+      interruptId: 'interrupt-hitl-1',
+      interruptIndex: 0,
+      interruptCount: 1,
+      toolName: 'lookup_weather',
+      toolArgs: {
+        city: '北京'
+      },
+      allowedDecisions: ['approve', 'edit', 'reject']
+    });
+    expect(textBlocks).toHaveLength(0);
   });
 
   it('creates a ready-to-use LangChain adapter by composing tools, events and surface renderers', async () => {
@@ -374,6 +448,224 @@ describe('useLangChainChatSession', () => {
     await nextTick();
 
     expect(sessionState.sessionId.value).toBe('langchain-session-1');
+
+    scope.stop();
+  });
+
+  it('continues a paused LangChain interrupt through the same SSE endpoint on approval', async () => {
+    const scope = effectScope();
+    const prompt = ref('帮我查一下北京天气');
+    const capturedBodies: Array<Record<string, unknown>> = [];
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = typeof init?.body === 'string'
+        ? JSON.parse(init.body) as Record<string, unknown>
+        : {};
+
+      capturedBodies.push(body);
+
+      if (capturedBodies.length === 1) {
+        return createLangChainSseResponse([
+          {
+            event: 'on_chain_start',
+            run_id: 'run-hitl-langchain-1',
+            name: 'LangGraph',
+            metadata: {
+              thread_id: 'langchain-thread-1'
+            }
+          },
+          {
+            event: 'on_chain_stream',
+            run_id: 'run-hitl-langchain-1',
+            name: 'LangGraph',
+            metadata: {
+              thread_id: 'langchain-thread-1'
+            },
+            data: {
+              chunk: {
+                __interrupt__: [
+                  {
+                    id: 'interrupt-langchain-1',
+                    value: {
+                      action_requests: [
+                        {
+                          name: 'lookup_weather',
+                          args: {
+                            city: '北京'
+                          },
+                          description: '请确认是否执行天气查询工具。'
+                        }
+                      ],
+                      review_configs: [
+                        {
+                          action_name: 'lookup_weather',
+                          allowed_decisions: ['approve', 'edit', 'reject']
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            event: 'on_chain_end',
+            run_id: 'run-hitl-langchain-1',
+            name: 'LangGraph',
+            metadata: {
+              thread_id: 'langchain-thread-1'
+            }
+          }
+        ]);
+      }
+
+      return createLangChainSseResponse([
+        {
+          event: 'on_chain_start',
+          run_id: 'run-hitl-langchain-2',
+          name: 'LangGraph',
+          metadata: {
+            thread_id: 'langchain-thread-1'
+          }
+        },
+        {
+          event: 'on_tool_start',
+          run_id: 'tool-hitl-langchain-1',
+          parent_ids: ['run-hitl-langchain-2'],
+          name: 'lookup_weather',
+          metadata: {
+            thread_id: 'langchain-thread-1'
+          },
+          data: {
+            input: {
+              city: '北京'
+            }
+          }
+        },
+        {
+          event: 'on_tool_end',
+          run_id: 'tool-hitl-langchain-1',
+          parent_ids: ['run-hitl-langchain-2'],
+          name: 'lookup_weather',
+          metadata: {
+            thread_id: 'langchain-thread-1'
+          },
+          data: {
+            output: 'content=\'{"city":"北京","condition":"晴","tempC":26}\' name=\'lookup_weather\' tool_call_id=\'call-weather-hitl-1\''
+          }
+        },
+        {
+          event: 'on_chat_model_stream',
+          run_id: 'stream-hitl-langchain-1',
+          parent_ids: ['run-hitl-langchain-2'],
+          metadata: {
+            thread_id: 'langchain-thread-1'
+          },
+          data: {
+            chunk: {
+              content: '根据查询结果，北京今天晴。'
+            }
+          }
+        },
+        {
+          event: 'on_chain_end',
+          run_id: 'run-hitl-langchain-2',
+          name: 'LangGraph',
+          metadata: {
+            thread_id: 'langchain-thread-1'
+          }
+        }
+      ]);
+    });
+    const sessionState = scope.run(() => useLangChainChatSession<string>({
+      source: 'http://langchain.test/api/stream',
+      input: prompt,
+      conversationId: 'session:demo:langchain-hitl',
+      mode: 'hitl',
+      transport: {
+        fetch: fetchMock as typeof fetch
+      }
+    }));
+
+    if (!sessionState) {
+      throw new Error('Failed to create LangChain HITL session.');
+    }
+
+    await sessionState.send();
+    await nextTick();
+
+    const pausedSnapshot = sessionState.runtime.snapshot();
+    const approvalBlock = pausedSnapshot.blocks.find((block) => block.type === 'approval');
+    const approvalHandler = sessionState.surface.value.approvalActions !== false
+      ? sessionState.surface.value.approvalActions?.builtinHandlers?.approve
+      : undefined;
+
+    expect(sessionState.sessionId.value).toBe('langchain-thread-1');
+    expect(capturedBodies[0]).toEqual({
+      message: '帮我查一下北京天气',
+      mode: 'hitl'
+    });
+
+    if (!approvalBlock || !approvalHandler) {
+      throw new Error('Failed to resolve LangChain approval action wiring.');
+    }
+
+    const context: RunSurfaceApprovalActionContext = {
+      title: String(approvalBlock.data.title ?? '工具调用确认'),
+      status: 'pending',
+      ...(typeof approvalBlock.data.message === 'string'
+        ? {
+            message: approvalBlock.data.message
+          }
+        : {}),
+      ...(typeof approvalBlock.data.approvalId === 'string'
+        ? {
+            approvalId: approvalBlock.data.approvalId
+          }
+        : {}),
+      ...(typeof approvalBlock.data.refId === 'string'
+        ? {
+            refId: approvalBlock.data.refId
+          }
+        : {}),
+      block: approvalBlock,
+      role: 'assistant',
+      runtime: sessionState.runtime,
+      snapshot: pausedSnapshot,
+      emitIntent: () => {
+        throw new Error('emitIntent should not be called in this test.');
+      }
+    };
+
+    await approvalHandler(context);
+    await nextTick();
+
+    const finalSnapshot = sessionState.runtime.snapshot();
+    const finalApprovalBlock = finalSnapshot.blocks.find((block) => block.id === approvalBlock.id);
+    const finalToolNode = finalSnapshot.nodes.find((node) => node.id === 'tool-hitl-langchain-1');
+    const resumedTextBlock = finalSnapshot.blocks.find((block) => (
+      block.type === 'text' && block.content === '根据查询结果，北京今天晴。'
+    ));
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(capturedBodies[1]).toEqual({
+      session_id: 'langchain-thread-1',
+      mode: 'hitl',
+      langchain_resume: {
+        decisions: [
+          {
+            type: 'approve'
+          }
+        ]
+      }
+    });
+    expect(finalApprovalBlock?.data.status).toBe('approved');
+    expect(finalToolNode?.status).toBe('done');
+    expect(finalToolNode?.data.result).toEqual({
+      city: '北京',
+      condition: '晴',
+      tempC: 26
+    });
+    expect(resumedTextBlock?.messageId).toBe(sessionState.chatIds.value?.assistantMessageId);
 
     scope.stop();
   });

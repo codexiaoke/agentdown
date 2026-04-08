@@ -17,6 +17,7 @@ import { resolveBlockMessageScope } from '../runtime/chatSemantics';
 import type {
   RunSurfaceDraftPlaceholder,
   RunSurfaceApprovalActionsOptions,
+  RunSurfaceHandoffActionsOptions,
   RunSurfaceMessageActionsMap,
   RunSurfaceMessageShellContext,
   RunSurfaceMessageShellMap,
@@ -42,6 +43,7 @@ interface Props {
   messageShells?: RunSurfaceMessageShellMap;
   messageActions?: RunSurfaceMessageActionsMap;
   approvalActions?: RunSurfaceApprovalActionsOptions | false;
+  handoffActions?: RunSurfaceHandoffActionsOptions | false;
 }
 
 /**
@@ -84,7 +86,8 @@ const props = withDefaults(defineProps<Props>(), {
   messageActions: () => ({}),
   approvalActions: () => ({
     enabled: true
-  })
+  }),
+  handoffActions: false
 });
 
 const containerRef = ref<HTMLElement | null>(null);
@@ -166,6 +169,20 @@ const resolvedApprovalActions = computed<RunSurfaceApprovalActionsOptions | fals
   return {
     enabled: true,
     ...(props.approvalActions ?? {})
+  };
+});
+
+/**
+ * 统一收敛 handoff 动作区域配置。
+ */
+const resolvedHandoffActions = computed<RunSurfaceHandoffActionsOptions | false>(() => {
+  if (props.handoffActions === false) {
+    return false;
+  }
+
+  return {
+    enabled: true,
+    ...(props.handoffActions ?? {})
   };
 });
 
@@ -431,6 +448,9 @@ function hasMarkdownBlockVisibleContent(block: MarkdownBlock): boolean {
     case 'agui':
     case 'artifact':
     case 'approval':
+    case 'attachment':
+    case 'branch':
+    case 'handoff':
     case 'timeline':
       return true;
     default:
@@ -523,6 +543,7 @@ onBeforeUnmount(() => {
             :draft-placeholder="resolvedDraftPlaceholder"
             :message-shells="resolvedMessageShells"
             :approval-actions="resolvedApprovalActions"
+            :handoff-actions="resolvedHandoffActions"
             :lazy-mount="resolvedPerformance.lazyMount"
             :lazy-mount-margin="resolvedPerformance.lazyMountMargin"
             :text-slab-chars="resolvedPerformance.textSlabChars"

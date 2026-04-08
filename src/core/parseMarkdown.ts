@@ -8,13 +8,17 @@ import {
 import type {
   AguiComponentMap,
   MarkdownAguiBlock,
+  MarkdownAttachmentBlock,
+  MarkdownAttachmentKind,
   MarkdownApprovalBlock,
   MarkdownApprovalStatus,
   MarkdownArtifactBlock,
   MarkdownArtifactKind,
+  MarkdownBranchBlock,
   MarkdownBlock,
   MarkdownCodeBlock,
   MarkdownEnginePlugin,
+  MarkdownHandoffBlock,
   MarkdownHeadingTag,
   MarkdownHtmlBlock,
   MarkdownMathBlock,
@@ -82,6 +86,14 @@ function normalizeApprovalStatus(value: unknown): MarkdownApprovalStatus | undef
 
 function normalizeArtifactKind(value: unknown): MarkdownArtifactKind | undefined {
   if (value === 'file' || value === 'diff' || value === 'report' || value === 'image' || value === 'json' || value === 'table') {
+    return value;
+  }
+
+  return undefined;
+}
+
+function normalizeAttachmentKind(value: unknown): MarkdownAttachmentKind | undefined {
+  if (value === 'file' || value === 'image' || value === 'audio' || value === 'video' || value === 'json' || value === 'input') {
     return value;
   }
 
@@ -315,6 +327,84 @@ function parseTokens(
         ...(message ? { message } : {}),
         ...(approvalId ? { approvalId } : {}),
         ...(status ? { status } : {})
+      };
+      blocks.push(block);
+      continue;
+    }
+
+    if (token.type === 'agent_attachment_directive') {
+      const meta = (token.meta as Record<string, unknown> | undefined) ?? {};
+      const refId = readStringMeta(meta, 'ref', 'nodeId');
+      const message = readStringMeta(meta, 'message', 'description');
+      const attachmentId = readStringMeta(meta, 'attachmentId', 'attachment-id', 'id');
+      const label = readStringMeta(meta, 'label', 'name', 'filename', 'file-name');
+      const href = readStringMeta(meta, 'href', 'url');
+      const mimeType = readStringMeta(meta, 'mimeType', 'mime-type');
+      const sizeText = readStringMeta(meta, 'sizeText', 'size-text');
+      const previewSrc = readStringMeta(meta, 'previewSrc', 'preview-src', 'preview');
+      const status = readStringMeta(meta, 'status');
+      const block: MarkdownAttachmentBlock = {
+        id: createBlockId('attachment', index),
+        kind: 'attachment',
+        title: readStringMeta(meta, 'title') ?? label ?? 'Attachment',
+        attachmentKind: normalizeAttachmentKind(readMetaValue(meta, 'attachmentKind', 'attachment-kind', 'kind')) ?? 'file',
+        ...(refId ? { refId } : {}),
+        ...(message ? { message } : {}),
+        ...(attachmentId ? { attachmentId } : {}),
+        ...(label ? { label } : {}),
+        ...(href ? { href } : {}),
+        ...(mimeType ? { mimeType } : {}),
+        ...(sizeText ? { sizeText } : {}),
+        ...(previewSrc ? { previewSrc } : {}),
+        ...(status ? { status } : {})
+      };
+      blocks.push(block);
+      continue;
+    }
+
+    if (token.type === 'agent_branch_directive') {
+      const meta = (token.meta as Record<string, unknown> | undefined) ?? {};
+      const refId = readStringMeta(meta, 'ref', 'nodeId');
+      const message = readStringMeta(meta, 'message', 'description');
+      const branchId = readStringMeta(meta, 'branchId', 'branch-id', 'id');
+      const sourceRunId = readStringMeta(meta, 'sourceRunId', 'source-run-id', 'fromRunId', 'from-run-id');
+      const targetRunId = readStringMeta(meta, 'targetRunId', 'target-run-id', 'runId', 'run-id');
+      const status = readStringMeta(meta, 'status');
+      const label = readStringMeta(meta, 'label');
+      const block: MarkdownBranchBlock = {
+        id: createBlockId('branch', index),
+        kind: 'branch',
+        title: readStringMeta(meta, 'title') ?? label ?? 'Branch',
+        ...(refId ? { refId } : {}),
+        ...(message ? { message } : {}),
+        ...(branchId ? { branchId } : {}),
+        ...(sourceRunId ? { sourceRunId } : {}),
+        ...(targetRunId ? { targetRunId } : {}),
+        ...(status ? { status } : {}),
+        ...(label ? { label } : {})
+      };
+      blocks.push(block);
+      continue;
+    }
+
+    if (token.type === 'agent_handoff_directive') {
+      const meta = (token.meta as Record<string, unknown> | undefined) ?? {};
+      const refId = readStringMeta(meta, 'ref', 'nodeId');
+      const message = readStringMeta(meta, 'message', 'description');
+      const handoffId = readStringMeta(meta, 'handoffId', 'handoff-id', 'id');
+      const status = readStringMeta(meta, 'status');
+      const targetType = readStringMeta(meta, 'targetType', 'target-type');
+      const assignee = readStringMeta(meta, 'assignee', 'target', 'owner');
+      const block: MarkdownHandoffBlock = {
+        id: createBlockId('handoff', index),
+        kind: 'handoff',
+        title: readStringMeta(meta, 'title') ?? 'Handoff',
+        ...(refId ? { refId } : {}),
+        ...(message ? { message } : {}),
+        ...(handoffId ? { handoffId } : {}),
+        ...(status ? { status } : {}),
+        ...(targetType ? { targetType } : {}),
+        ...(assignee ? { assignee } : {})
       };
       blocks.push(block);
       continue;

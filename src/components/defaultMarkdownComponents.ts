@@ -1,7 +1,10 @@
 import ApprovalBlock from './ApprovalBlock.vue';
+import AttachmentBlock from './AttachmentBlock.vue';
 import ArtifactBlock from './ArtifactBlock.vue';
 import AguiComponentWrapper from './AguiComponentWrapper.vue';
+import BranchBlock from './BranchBlock.vue';
 import CodeBlock from './CodeBlock.vue';
+import HandoffBlock from './HandoffBlock.vue';
 import HtmlBlock from './HtmlBlock.vue';
 import MathBlock from './MathBlock.vue';
 import MermaidBlock from './MermaidBlock.vue';
@@ -21,5 +24,8 @@ export const defaultMarkdownBuiltinComponents: MarkdownBuiltinComponents = {
   agui: AguiComponentWrapper,
   artifact: ArtifactBlock,
   approval: ApprovalBlock,
+  attachment: AttachmentBlock,
+  branch: BranchBlock,
+  handoff: HandoffBlock,
   timeline: TimelineBlock
 };

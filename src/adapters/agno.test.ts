@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { effectScope, nextTick, ref, type Component } from 'vue';
 import { createMarkdownAssembler } from '../runtime/assemblers';
 import { createBridge } from '../runtime/createBridge';
+import type { RunSurfaceApprovalActionContext } from '../surface/types';
 import {
   createAgnoAdapter,
   createAgnoChatIds,
@@ -295,6 +296,77 @@ describe('createAgnoProtocol', () => {
       type: 'text',
       nodeId: 'run-4',
       content: '根据查询结果，北京今天（2026年4月5日）的天气情况如下：'
+    });
+  });
+
+  it('maps RunPaused requirements into pending tool and approval blocks', () => {
+    const bridge = createAgnoTestBridge();
+
+    bridge.push([
+      {
+        event: 'RunStarted',
+        run_id: 'run-pause-1',
+        session_id: 'session-pause-1',
+        agent_name: '审批助手'
+      },
+      {
+        event: 'RunContent',
+        run_id: 'run-pause-1',
+        content: '我准备调用天气工具。'
+      },
+      {
+        event: 'RunPaused',
+        run_id: 'run-pause-1',
+        content: '等待人工确认后继续执行。',
+        tools: [
+          {
+            tool_call_id: 'tool-pause-1',
+            tool_name: 'lookup_weather',
+            tool_args: {
+              city: '北京'
+            },
+            requires_confirmation: true
+          }
+        ],
+        requirements: [
+          {
+            id: 'requirement-pause-1',
+            tool_execution: {
+              tool_call_id: 'tool-pause-1',
+              tool_name: 'lookup_weather',
+              tool_args: {
+                city: '北京'
+              },
+              requires_confirmation: true
+            }
+          }
+        ]
+      }
+    ]);
+    bridge.flush('agno-run-paused');
+
+    const snapshot = bridge.runtime.snapshot();
+    const runNode = snapshot.nodes.find((node) => node.id === 'run-pause-1');
+    const toolNode = snapshot.nodes.find((node) => node.id === 'tool-pause-1');
+    const toolBlock = snapshot.blocks.find((block) => block.nodeId === 'tool-pause-1');
+    const approvalBlock = snapshot.blocks.find((block) => block.type === 'approval');
+
+    expect(runNode?.status).toBe('blocked');
+    expect(runNode?.message).toBe('等待人工确认后继续执行。');
+    expect(toolNode?.status).toBe('pending');
+    expect(toolBlock).toMatchObject({
+      type: 'tool',
+      renderer: 'tool.weather'
+    });
+    expect(approvalBlock).toMatchObject({
+      id: 'block:approval:requirement-pause-1',
+      type: 'approval'
+    });
+    expect(approvalBlock?.data).toMatchObject({
+      runId: 'run-pause-1',
+      requirementId: 'requirement-pause-1',
+      toolId: 'tool-pause-1',
+      status: 'pending'
     });
   });
 
@@ -597,6 +669,331 @@ describe('useAgnoChatSession', () => {
 
     expect(requestCount).toBe(3);
     expect(sessionState.lastInput.value).toBe('继续处理这封邮件');
+
+    scope.stop();
+  });
+
+  it('continues a paused Agno requirement through the same SSE endpoint on approval', async () => {
+    const scope = effectScope();
+    const prompt = ref('帮我查一下北京天气');
+    const capturedBodies: Array<Record<string, unknown>> = [];
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = typeof init?.body === 'string'
+        ? JSON.parse(init.body) as Record<string, unknown>
+        : {};
+
+      capturedBodies.push(body);
+
+      if (capturedBodies.length === 1) {
+        return createAgnoSseResponse([
+          {
+            event: 'RunStarted',
+            run_id: 'run-hitl-approve-1',
+            session_id: 'backend-session-hitl-1'
+          },
+          {
+            event: 'RunPaused',
+            run_id: 'run-hitl-approve-1',
+            session_id: 'backend-session-hitl-1',
+            content: '等待人工确认后继续执行。',
+            tools: [
+              {
+                tool_call_id: 'tool-hitl-1',
+                tool_name: 'lookup_weather',
+                tool_args: {
+                  city: '北京'
+                },
+                requires_confirmation: true
+              }
+            ],
+            requirements: [
+              {
+                id: 'requirement-hitl-1',
+                tool_execution: {
+                  tool_call_id: 'tool-hitl-1',
+                  tool_name: 'lookup_weather',
+                  tool_args: {
+                    city: '北京'
+                  },
+                  requires_confirmation: true
+                }
+              }
+            ]
+          }
+        ]);
+      }
+
+      return createAgnoSseResponse([
+        {
+          event: 'RunContinued',
+          run_id: 'run-hitl-approve-1',
+          session_id: 'backend-session-hitl-1'
+        },
+        {
+          event: 'ToolCallStarted',
+          run_id: 'run-hitl-approve-1',
+          tool: {
+            tool_call_id: 'tool-hitl-1',
+            tool_name: 'lookup_weather',
+            tool_args: {
+              city: '北京'
+            }
+          }
+        },
+        {
+          event: 'ToolCallCompleted',
+          run_id: 'run-hitl-approve-1',
+          tool: {
+            tool_call_id: 'tool-hitl-1',
+            tool_name: 'lookup_weather',
+            result: {
+              city: '北京',
+              condition: '阴天',
+              tempC: 18.5
+            }
+          }
+        },
+        {
+          event: 'RunContent',
+          run_id: 'run-hitl-approve-1',
+          content: '根据查询结果，北京今天是阴天。'
+        },
+        {
+          event: 'RunContentCompleted',
+          run_id: 'run-hitl-approve-1'
+        },
+        {
+          event: 'RunCompleted',
+          run_id: 'run-hitl-approve-1'
+        }
+      ]);
+    });
+    const sessionState = scope.run(() => useAgnoChatSession<string>({
+      source: 'http://agno.test/api/stream/agno',
+      input: prompt,
+      conversationId: 'session:demo:agno-hitl-approve',
+      mode: 'hitl',
+      transport: {
+        fetch: fetchMock as typeof fetch
+      }
+    }));
+
+    if (!sessionState) {
+      throw new Error('Failed to create Agno approval session.');
+    }
+
+    await sessionState.send();
+    await nextTick();
+
+    const pausedSnapshot = sessionState.runtime.snapshot();
+    const approvalBlock = pausedSnapshot.blocks.find((block) => block.type === 'approval');
+    const approvalHandler = sessionState.surface.value.approvalActions !== false
+      ? sessionState.surface.value.approvalActions?.builtinHandlers?.approve
+      : undefined;
+
+    expect(approvalBlock?.data).toMatchObject({
+      runId: 'run-hitl-approve-1',
+      requirementId: 'requirement-hitl-1'
+    });
+    expect(capturedBodies[0]).toEqual({
+      message: '帮我查一下北京天气',
+      mode: 'hitl'
+    });
+
+    if (!approvalBlock || !approvalHandler) {
+      throw new Error('Failed to resolve approval action wiring.');
+    }
+
+    const context: RunSurfaceApprovalActionContext = {
+      title: String(approvalBlock.data.title ?? '等待人工确认'),
+      status: 'pending',
+      ...(typeof approvalBlock.data.message === 'string'
+        ? {
+            message: approvalBlock.data.message
+          }
+        : {}),
+      ...(typeof approvalBlock.data.approvalId === 'string'
+        ? {
+            approvalId: approvalBlock.data.approvalId
+          }
+        : {}),
+      ...(typeof approvalBlock.data.refId === 'string'
+        ? {
+            refId: approvalBlock.data.refId
+          }
+        : {}),
+      block: approvalBlock,
+      role: 'assistant',
+      runtime: sessionState.runtime,
+      snapshot: pausedSnapshot,
+      emitIntent: () => {
+        throw new Error('emitIntent should not be called in this test.');
+      }
+    };
+
+    await approvalHandler(context);
+    await nextTick();
+
+    const finalSnapshot = sessionState.runtime.snapshot();
+    const finalApprovalBlock = finalSnapshot.blocks.find((block) => block.id === approvalBlock.id);
+    const finalToolNode = finalSnapshot.nodes.find((node) => node.id === 'tool-hitl-1');
+    const resumedTextBlock = finalSnapshot.blocks.find((block) => (
+      block.type === 'text' && block.content === '根据查询结果，北京今天是阴天。'
+    ));
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(capturedBodies[1]).toEqual({
+      session_id: 'backend-session-hitl-1',
+      mode: 'hitl',
+      agno_resume: {
+        run_id: 'run-hitl-approve-1',
+        requirement_id: 'requirement-hitl-1',
+        action: 'approve'
+      }
+    });
+    expect(finalApprovalBlock?.data.status).toBe('approved');
+    expect(finalToolNode?.status).toBe('done');
+    expect(resumedTextBlock?.messageId).toBe(sessionState.chatIds.value?.assistantMessageId);
+    expect(finalSnapshot.blocks.some((block) => block.messageId === sessionState.chatIds.value?.userMessageId)).toBe(true);
+
+    scope.stop();
+  });
+
+  it('marks the paused tool as rejected when a requirement is rejected', async () => {
+    const scope = effectScope();
+    const prompt = ref('帮我查一下北京天气');
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = typeof init?.body === 'string'
+        ? JSON.parse(init.body) as Record<string, unknown>
+        : {};
+
+      if (!('agno_resume' in body)) {
+        return createAgnoSseResponse([
+          {
+            event: 'RunStarted',
+            run_id: 'run-hitl-reject-1',
+            session_id: 'backend-session-hitl-reject-1'
+          },
+          {
+            event: 'RunPaused',
+            run_id: 'run-hitl-reject-1',
+            session_id: 'backend-session-hitl-reject-1',
+            content: '等待人工确认后继续执行。',
+            tools: [
+              {
+                tool_call_id: 'tool-hitl-reject-1',
+                tool_name: 'lookup_weather',
+                tool_args: {
+                  city: '北京'
+                },
+                requires_confirmation: true
+              }
+            ],
+            requirements: [
+              {
+                id: 'requirement-hitl-reject-1',
+                tool_execution: {
+                  tool_call_id: 'tool-hitl-reject-1',
+                  tool_name: 'lookup_weather',
+                  tool_args: {
+                    city: '北京'
+                  },
+                  requires_confirmation: true
+                }
+              }
+            ]
+          }
+        ]);
+      }
+
+      return createAgnoSseResponse([
+        {
+          event: 'RunContinued',
+          run_id: 'run-hitl-reject-1',
+          session_id: 'backend-session-hitl-reject-1'
+        },
+        {
+          event: 'RunContent',
+          run_id: 'run-hitl-reject-1',
+          content: '这次天气查询没有执行，因为工具调用被拒绝了。'
+        },
+        {
+          event: 'RunContentCompleted',
+          run_id: 'run-hitl-reject-1'
+        },
+        {
+          event: 'RunCompleted',
+          run_id: 'run-hitl-reject-1'
+        }
+      ]);
+    });
+    const sessionState = scope.run(() => useAgnoChatSession<string>({
+      source: 'http://agno.test/api/stream/agno',
+      input: prompt,
+      conversationId: 'session:demo:agno-hitl-reject',
+      mode: 'hitl',
+      transport: {
+        fetch: fetchMock as typeof fetch
+      }
+    }));
+
+    if (!sessionState) {
+      throw new Error('Failed to create Agno reject session.');
+    }
+
+    await sessionState.send();
+    await nextTick();
+
+    const pausedSnapshot = sessionState.runtime.snapshot();
+    const approvalBlock = pausedSnapshot.blocks.find((block) => block.type === 'approval');
+    const rejectHandler = sessionState.surface.value.approvalActions !== false
+      ? sessionState.surface.value.approvalActions?.builtinHandlers?.reject
+      : undefined;
+
+    if (!approvalBlock || !rejectHandler) {
+      throw new Error('Failed to resolve reject action wiring.');
+    }
+
+    const context: RunSurfaceApprovalActionContext = {
+      title: String(approvalBlock.data.title ?? '等待人工确认'),
+      status: 'pending',
+      ...(typeof approvalBlock.data.message === 'string'
+        ? {
+            message: approvalBlock.data.message
+          }
+        : {}),
+      ...(typeof approvalBlock.data.approvalId === 'string'
+        ? {
+            approvalId: approvalBlock.data.approvalId
+          }
+        : {}),
+      ...(typeof approvalBlock.data.refId === 'string'
+        ? {
+            refId: approvalBlock.data.refId
+          }
+        : {}),
+      block: approvalBlock,
+      role: 'assistant',
+      runtime: sessionState.runtime,
+      snapshot: pausedSnapshot,
+      emitIntent: () => {
+        throw new Error('emitIntent should not be called in this test.');
+      }
+    };
+
+    await rejectHandler(context);
+    await nextTick();
+
+    const finalSnapshot = sessionState.runtime.snapshot();
+    const finalToolNode = finalSnapshot.nodes.find((node) => node.id === 'tool-hitl-reject-1');
+    const finalToolBlock = finalSnapshot.blocks.find((block) => block.nodeId === 'tool-hitl-reject-1');
+    const finalApprovalBlock = finalSnapshot.blocks.find((block) => block.id === approvalBlock.id);
+
+    expect(finalToolNode?.status).toBe('rejected');
+    expect(finalToolNode?.message).toBe('已拒绝执行');
+    expect(finalToolBlock?.data.status).toBe('rejected');
+    expect(finalToolBlock?.data.message).toBe('已拒绝执行');
+    expect(finalApprovalBlock?.data.status).toBe('rejected');
 
     scope.stop();
   });

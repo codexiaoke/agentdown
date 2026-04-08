@@ -1,11 +1,9 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
 import {
-  AgentDevtoolsOverlay,
   defineAgnoEventActions,
   defineAgnoToolComponents,
   RunSurface,
-  RunSurfaceDraftOverlay,
   useAgnoChatSession
 } from '../../index';
 import MessageLoadingBubble from '../components/MessageLoadingBubble.vue';
@@ -49,16 +47,13 @@ const {
   busy,
   statusLabel,
   transportError,
-  sessionId: backendSessionId,
-  devtools
+  sessionId: backendSessionId
 } = useAgnoChatSession<string>({
   source: endpoint,
   input: prompt,
   conversationId: DEMO_CONVERSATION_ID,
+  mode: 'hitl',
   title: 'Agno 助手',
-  devtools: {
-    maxEntries: 120
-  },
   tools: defineAgnoToolComponents({
     lookup_weather: {
       match: 'lookup_weather',
@@ -102,7 +97,7 @@ onMounted(() => {
   <section class="demo-page">
     <header class="demo-page__header">
       <h1>Agno 真实 SSE</h1>
-      <p>启动 FastAPI backend 后，这个页面会直接请求真实 `/api/stream/agno`，并使用专用的 `useAgnoChatSession()` 接入。这里的 `RunStarted / RunCompleted` 仍然通过 `eventActions` 走副作用通道，而不是强行渲染成 block。</p>
+      <p>启动 FastAPI backend 后，这个页面会直接请求真实 `/api/stream/agno`，并以 `mode=hitl` 跑 Agno 的暂停确认流程。点击 approval 卡片里的“批准 / 拒绝”后，前端仍然继续走同一个 `/api/stream/agno` SSE 入口，而不是切到第二套接口。</p>
     </header>
 
     <form
@@ -159,21 +154,6 @@ onMounted(() => {
     <RunSurface
       :runtime="runtime"
       v-bind="surface"
-    />
-
-    <AgentDevtoolsOverlay
-      :devtools="devtools"
-      title="Agno Devtools"
-      :initially-open="true"
-      default-tab="effects"
-      :max-items="6"
-    />
-
-    <RunSurfaceDraftOverlay
-      :runtime="runtime"
-      title="Agno Draft Devtools"
-      :initially-open="true"
-      :max-items="5"
     />
   </section>
 </template>
