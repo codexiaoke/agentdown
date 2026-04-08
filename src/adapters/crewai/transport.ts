@@ -10,6 +10,8 @@ import type { CrewAIEvent } from './types';
 export interface CrewAIRequestBody extends RuntimeData {
   /** 用户当前输入的问题。 */
   message?: string;
+  /** 当前会话真正绑定的后端 sessionId。 */
+  session_id?: string;
 }
 
 /**

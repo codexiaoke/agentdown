@@ -161,6 +161,122 @@ describe('createCrewAIProtocol', () => {
     });
   });
 
+  it('handles actual CrewAI-style string chunk types and incremental tool-call arguments', () => {
+    const bridge = createCrewAITestBridge();
+
+    bridge.push([
+      {
+        event: 'Chunk',
+        type: 'Chunk',
+        session_id: 'crewai-session-real-1',
+        agent_id: 'agent-real-1',
+        agent_role: 'Weather Researcher',
+        chunk_type: 'text',
+        content: '我来帮您查询北京的天气。'
+      },
+      {
+        event: 'Chunk',
+        type: 'Chunk',
+        session_id: 'crewai-session-real-1',
+        agent_id: 'agent-real-1',
+        agent_role: 'Weather Researcher',
+        chunk_type: 'tool_call',
+        content: '',
+        tool_call: {
+          tool_id: 'call-weather-real-1',
+          tool_name: 'lookup_weather',
+          arguments: '',
+          index: 0
+        }
+      },
+      {
+        event: 'Chunk',
+        type: 'Chunk',
+        session_id: 'crewai-session-real-1',
+        agent_id: 'agent-real-1',
+        agent_role: 'Weather Researcher',
+        chunk_type: 'tool_call',
+        content: '{',
+        tool_call: {
+          tool_id: 'call-weather-real-1',
+          tool_name: 'lookup_weather',
+          arguments: '{',
+          index: 0
+        }
+      },
+      {
+        event: 'Chunk',
+        type: 'Chunk',
+        session_id: 'crewai-session-real-1',
+        agent_id: 'agent-real-1',
+        agent_role: 'Weather Researcher',
+        chunk_type: 'tool_call',
+        content: '"city": "北京"}',
+        tool_call: {
+          tool_id: 'call-weather-real-1',
+          tool_name: 'lookup_weather',
+          arguments: '{"city": "北京"}',
+          index: 0
+        }
+      },
+      {
+        event: 'CrewOutput',
+        type: 'CrewOutput',
+        session_id: 'crewai-session-real-1',
+        raw: '北京当前天气：晴，温度9.6°C。',
+        tasks_output: [
+          {
+            agent: 'Weather Researcher',
+            messages: [
+              {
+                role: 'assistant',
+                content: '',
+                tool_calls: [
+                  {
+                    id: 'call-weather-real-1',
+                    type: 'function',
+                    function: {
+                      name: 'lookup_weather',
+                      arguments: '{"city": "北京"}'
+                    }
+                  }
+                ]
+              },
+              {
+                role: 'tool',
+                name: 'lookup_weather',
+                tool_call_id: 'call-weather-real-1',
+                content: '{"city":"北京","condition":"晴","tempC":9.6}'
+              },
+              {
+                role: 'assistant',
+                content: '北京当前天气：晴，温度9.6°C。'
+              }
+            ]
+          }
+        ]
+      }
+    ]);
+    bridge.flush('crewai-real-like');
+
+    const snapshot = bridge.runtime.snapshot();
+    const toolNode = snapshot.nodes.find((node) => node.id === 'call-weather-real-1');
+    const toolBlock = snapshot.blocks.find((block) => block.nodeId === 'call-weather-real-1');
+    const assistantText = snapshot.blocks.find((block) => block.type === 'text');
+
+    expect(toolNode?.status).toBe('done');
+    expect(toolNode?.data.input).toEqual({
+      city: '北京'
+    });
+    expect(toolNode?.data.result).toEqual({
+      city: '北京',
+      condition: '晴',
+      tempC: 9.6
+    });
+    expect(toolBlock?.renderer).toBe('tool.weather');
+    expect(assistantText?.content).toContain('我来帮您查询北京的天气。');
+  });
+
   it('creates a synthetic tool card and final answer when only CrewOutput is observed', () => {
     const bridge = createCrewAITestBridge();
 
@@ -382,14 +498,16 @@ describe('useCrewAIChatSession', () => {
     const scope = effectScope();
     const prompt = ref('帮我查一下北京天气，并说明工具调用过程。');
     let requestCount = 0;
+    const capturedBodies: Array<Record<string, unknown>> = [];
     const sessionState = scope.run(() => useCrewAIChatSession<string>({
       source: 'http://crewai.test/api/stream',
       input: prompt,
       conversationId: 'session:demo:crewai-chat',
       title: 'CrewAI 助手',
       transport: {
-        fetch: (async () => {
+        fetch: (async (_source, init) => {
           requestCount += 1;
+          capturedBodies.push(JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>);
 
           return createCrewAISseResponse([
             {
@@ -435,6 +553,9 @@ describe('useCrewAIChatSession', () => {
 
     expect(sessionState.sessionId.value).toBe('crewai-session-1');
     expect(sessionState.busy.value).toBe(false);
+    expect(capturedBodies[0]).toEqual({
+      message: '帮我查一下北京天气，并说明工具调用过程。'
+    });
     expect(userBlock?.content).toBe('帮我查一下北京天气，并说明工具调用过程。');
     expect(assistantBlock?.content).toBe('我来为你查询天气');
     expect(resolvedAssistantActions?.actions?.some((action) => {
@@ -458,6 +579,10 @@ describe('useCrewAIChatSession', () => {
     await nextTick();
 
     expect(sessionState.sessionId.value).toBe('crewai-session-1');
+    expect(capturedBodies[1]).toEqual({
+      message: '再查一遍',
+      session_id: 'crewai-session-1'
+    });
 
     scope.stop();
   });

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from typing import Any
+from uuid import uuid4
 
 from app.live_weather import lookup_live_weather
 from app.providers.base import (
@@ -17,6 +18,16 @@ from app.providers.base import (
 
 async def stream_crewai_events(context: ProviderContext) -> AsyncIterator[dict[str, Any]]:
     """Run a real CrewAI crew and forward raw streaming chunks over SSE."""
+
+    session_id = context.request.session_id or f"crewai-session-{uuid4()}"
+
+    def attach_session_id(payload: dict[str, Any]) -> dict[str, Any]:
+        """Ensure every emitted CrewAI packet carries a stable session id."""
+
+        return {
+            "session_id": session_id,
+            **payload,
+        }
 
     try:
         from crewai import Agent, Crew, LLM, Process, Task
@@ -67,12 +78,12 @@ async def stream_crewai_events(context: ProviderContext) -> AsyncIterator[dict[s
             payload = serialize_payload(chunk)
 
             if isinstance(payload, dict):
-                yield payload
+                yield attach_session_id(payload)
                 continue
 
-            yield {
+            yield attach_session_id({
                 "content": payload,
-            }
+            })
 
         result = getattr(streaming, "result", None)
 
@@ -81,14 +92,14 @@ async def stream_crewai_events(context: ProviderContext) -> AsyncIterator[dict[s
 
             if isinstance(payload, dict):
                 payload.setdefault("type", result.__class__.__name__)
-                yield payload
+                yield attach_session_id(payload)
             else:
-                yield {
+                yield attach_session_id({
                     "type": result.__class__.__name__,
                     "content": payload,
-                }
+                })
     except Exception as error:
-        yield {
+        yield attach_session_id({
             "type": "ErrorEvent",
             "message": str(error),
-        }
+        })

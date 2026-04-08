@@ -1,4 +1,4 @@
-import type { MaybeRefOrGetter } from 'vue';
+import { shallowRef, watch, type MaybeRefOrGetter } from 'vue';
 import type { FetchTransportSource } from '../../runtime/transports';
 import type { BridgeHooks, RuntimeData } from '../../runtime/types';
 import type { EventActionRegistryResult } from '../../runtime/eventActions';
@@ -101,6 +101,24 @@ export interface UseCrewAIChatSessionResult<
 > extends FrameworkChatSessionResult<CrewAIEvent, TSource, CrewAIChatIds> {}
 
 /**
+ * 读取一个 transport 可解析配置项的当前值。
+ */
+async function resolveCrewAITransportValue<TSource, TValue>(
+  source: TSource,
+  value: ((source: TSource) => Promise<TValue> | TValue) | TValue | undefined
+): Promise<TValue | undefined> {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value === 'function') {
+    return (value as (source: TSource) => Promise<TValue> | TValue)(source);
+  }
+
+  return value;
+}
+
+/**
  * 为一轮新请求生成默认聊天语义 id。
  */
 export function createCrewAIChatIds(input: {
@@ -154,7 +172,8 @@ export function useCrewAIChatSession<
 >(
   options: UseCrewAIChatSessionOptions<TSource>
 ): UseCrewAIChatSessionResult<TSource> {
-  return useFrameworkChatSession<
+  const backendSessionIdForTransport = shallowRef('');
+  const sessionState = useFrameworkChatSession<
     CrewAIEvent,
     TSource,
     CrewAIChatIds,
@@ -163,9 +182,38 @@ export function useCrewAIChatSession<
     CrewAISseTransportOptions<TSource>
   >({
     frameworkName: 'CrewAI',
-    options,
+    options: {
+      ...options,
+      transport: {
+        ...(options.transport ?? {}),
+        body: async (source: TSource) => {
+          const resolvedBody = await resolveCrewAITransportValue(source, options.transport?.body);
+
+          return {
+            ...(resolvedBody ?? {}),
+            ...(backendSessionIdForTransport.value
+              ? {
+                  session_id: backendSessionIdForTransport.value
+                }
+              : {})
+          };
+        }
+      }
+    },
     createAdapter: createCrewAIAdapter,
     createTransport: createCrewAISseTransport,
     resolveSessionId: resolveDefaultCrewAISessionId
   }) as UseCrewAIChatSessionResult<TSource>;
+
+  watch(
+    () => sessionState.sessionId.value,
+    (nextSessionId) => {
+      backendSessionIdForTransport.value = nextSessionId;
+    },
+    {
+      immediate: true
+    }
+  );
+
+  return sessionState;
 }

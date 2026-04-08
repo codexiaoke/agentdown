@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from dataclasses import asdict, is_dataclass
+from enum import Enum
 import json
 from typing import Any
 
@@ -99,6 +100,9 @@ def serialize_payload(value: Any) -> Any:
 
     if value is None or isinstance(value, (str, int, float, bool)):
         return value
+
+    if isinstance(value, Enum):
+        return serialize_payload(value.value)
 
     if is_dataclass(value):
         return serialize_payload(asdict(value))
