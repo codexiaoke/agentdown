@@ -5,6 +5,11 @@
  * 1. `createCrewAIProtocol()` / `defineCrewAIPreset()` 这类底层接入入口
  * 2. `createCrewAIAdapter()` / `createCrewAISseTransport()` 这类 starter helper
  * 3. `useCrewAIChatSession()` 这类更贴近聊天产品的高阶入口
+ *
+ * 当前默认主打：
+ * - 官方 SSE chunk 文本流
+ * - 工具调用展示
+ * - 最终 `CrewOutput` 收尾
  */
 
 export { createCrewAIAdapter } from './adapter';

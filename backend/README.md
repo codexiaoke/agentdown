@@ -33,6 +33,15 @@
 
 - `parseCrewAISseMessage()`
 
+## 框架能力矩阵
+
+| 框架 | 真实流式文本 | 工具调用 | 内置暂停继续 | 备注 |
+| --- | --- | --- | --- | --- |
+| Agno | 支持 | 支持 | 支持 | 更适合做 requirement / approval 类场景 |
+| LangChain | 支持 | 支持 | 支持 | 更适合做 interrupt / approval 类场景 |
+| AutoGen | 支持 | 支持 | 支持 | 当前主打官方 handoff 人机交互 |
+| CrewAI | 支持 | 支持 | 不默认提供 | 当前 endpoint 主打官方 SSE chunk 与 `CrewOutput`，不默认暴露操作级审批 |
+
 ## 环境准备
 
 先复制环境变量模板：
@@ -152,6 +161,12 @@ curl -N \
   -d '{
     "message": "帮我查一下北京天气，并说明工具调用过程。"
   }'
+```
+
+如果你想快速确认“真实 CrewAI 后端 + DeepSeek + 天气工具 + SSE”整条链是否已经接通，可以直接跑：
+
+```bash
+npm run backend:smoke:crewai
 ```
 
 ## 推荐前端联调路径

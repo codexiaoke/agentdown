@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
 import {
-  AgentDevtoolsOverlay,
   defineCrewAIToolComponents,
   RunSurface,
   useCrewAIChatSession
@@ -46,16 +45,12 @@ const {
   busy,
   statusLabel,
   transportError,
-  sessionId: backendSessionId,
-  devtools
+  sessionId: backendSessionId
 } = useCrewAIChatSession<string>({
   source: endpoint,
   input: prompt,
   conversationId: DEMO_CONVERSATION_ID,
   title: 'CrewAI 助手',
-  devtools: {
-    maxEntries: 120
-  },
   tools: defineCrewAIToolComponents({
     lookup_weather: {
       match: 'lookup_weather',
@@ -83,7 +78,7 @@ onMounted(() => {
   <section class="demo-page">
     <header class="demo-page__header">
       <h1>CrewAI 真实 SSE</h1>
-      <p>启动 FastAPI backend 后，这个页面会直接请求真实 `/api/stream/crewai`，并使用专用的 `useCrewAIChatSession()` 把官方流式 chunk 和最终 `CrewOutput` 渲染成聊天内容和工具组件。</p>
+      <p>启动 FastAPI backend 后，这个页面会直接请求真实 `/api/stream/crewai`，展示 CrewAI 官方 SSE chunk、真实工具调用和最终 `CrewOutput`。当前 demo 不默认演示审批，因为 CrewAI 更适合先作为真实流式输出适配层来接入。</p>
     </header>
 
     <form
@@ -117,6 +112,10 @@ onMounted(() => {
         后端 sessionId：<code>{{ backendSessionId }}</code>
       </p>
 
+      <p class="demo-form__hint">
+        当前 demo 会自动复用后端返回的 <code>sessionId</code>，方便连续追踪同一个真实 CrewAI 会话的文本流和工具调用。
+      </p>
+
       <button
         type="submit"
         class="demo-page__replay"
@@ -136,13 +135,6 @@ onMounted(() => {
     <RunSurface
       :runtime="runtime"
       v-bind="surface"
-    />
-
-    <AgentDevtoolsOverlay
-      :devtools="devtools"
-      title="CrewAI Devtools"
-      default-tab="events"
-      :max-items="6"
     />
   </section>
 </template>
@@ -209,6 +201,13 @@ onMounted(() => {
   margin: 12px 0 0;
   color: #475569;
   font-size: 13px;
+  line-height: 1.7;
+}
+
+.demo-form__hint {
+  margin: 10px 0 0;
+  color: #64748b;
+  font-size: 12px;
   line-height: 1.7;
 }
 

@@ -84,7 +84,7 @@ const routes: DemoRoute[] = [
   {
     path: '/sse-crewai',
     title: 'CrewAI 真实 SSE',
-    description: '直接请求真实 /api/stream/crewai，并附带 raw event / trace / diff devtools。',
+    description: '直接请求真实 /api/stream/crewai，演示官方 SSE chunk、工具调用和最终 CrewOutput 渲染。',
     component: SseCrewAIDemo
   },
   {

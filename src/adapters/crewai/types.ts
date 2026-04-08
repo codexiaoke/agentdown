@@ -96,6 +96,10 @@ export interface CrewAIEvent extends RuntimeData {
   event?: string;
   /** 后端对象本身的类型字段，例如 `CrewOutput` / `ErrorEvent`。 */
   type?: string;
+  /** 某些自定义 CrewAI backend 会附带 review / flow 相关 id。 */
+  flow_id?: string;
+  /** 当前 review 或最终结果对应的原始 run id。 */
+  run_id?: string;
   /** 某些后端会额外补充 session_id。 */
   session_id?: string;
   /** 兼容 camelCase 写法。 */
@@ -116,10 +120,28 @@ export interface CrewAIEvent extends RuntimeData {
   task_name?: string;
   /** 当前 task id。 */
   task_id?: string;
+  /** 某些自定义 review 事件里会带上的方法名。 */
+  method_name?: string;
+  /** review 或结束事件携带的 run 标题。 */
+  run_title?: string;
   /** `CrewOutput.raw` 最终文本。 */
   raw?: string;
   /** `CrewOutput.tasks_output`。 */
   tasks_output?: CrewAITaskOutput[];
+  /** 某些 review 事件里展示给用户的输出内容。 */
+  output?: unknown;
+  /** 某些 review 事件里带上的人类反馈内容。 */
+  feedback?: string;
+  /** review / finish 返回的结构化结果。 */
+  result?: unknown;
+  /** review / finish 当前的业务状态。 */
+  status?: string;
+  /** review 事件上的完整上下文。 */
+  context?: RuntimeData | null;
+  /** review 事件上的序列化状态。 */
+  state?: RuntimeData | null;
+  /** review 事件上的 metadata。 */
+  metadata?: RuntimeData | null;
   /** 错误消息。 */
   message?: string;
   /** 错误原因。 */

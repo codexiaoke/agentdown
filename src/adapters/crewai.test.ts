@@ -333,6 +333,64 @@ describe('createCrewAIProtocol', () => {
     });
   });
 
+  it('ignores CrewAI review events by default and keeps the standard stream result stable', () => {
+    const bridge = createCrewAITestBridge();
+
+    bridge.push([
+      {
+        event: 'Chunk',
+        type: 'Chunk',
+        session_id: 'crewai-session-hitl-1',
+        agent_id: 'agent-hitl-1',
+        agent_role: 'Weather Researcher',
+        chunk_type: 'text',
+        content: '我已经完成天气查询。'
+      },
+      {
+        event: 'CrewOutput',
+        type: 'CrewOutput',
+        session_id: 'crewai-session-hitl-1',
+        raw: '北京当前天气：阴天，温度18°C。',
+        tasks_output: [
+          {
+            agent: 'Weather Researcher',
+            messages: [
+              {
+                role: 'assistant',
+                content: '北京当前天气：阴天，温度18°C。'
+              }
+            ]
+          }
+        ]
+      },
+      {
+        event: 'flow_paused',
+        type: 'flow_paused',
+        session_id: 'crewai-session-hitl-1',
+        flow_id: 'crewai-session-hitl-1',
+        run_id: 'agent-hitl-1',
+        run_title: 'Weather Researcher',
+        method_name: 'run_crewai',
+        message: '请确认是否接受刚刚生成的 CrewAI 最终回答。',
+        output: '北京当前天气：阴天，温度18°C。',
+        state: {
+          id: 'crewai-session-hitl-1',
+          run_id: 'agent-hitl-1',
+          run_title: 'Weather Researcher',
+          final_output: '北京当前天气：阴天，温度18°C。'
+        }
+      }
+    ]);
+    bridge.flush('crewai-hitl-pause');
+
+    const snapshot = bridge.runtime.snapshot();
+    const approvalBlock = snapshot.blocks.find((block) => block.type === 'approval');
+    const textBlocks = snapshot.blocks.filter((block) => block.type === 'text');
+
+    expect(approvalBlock).toBeUndefined();
+    expect(textBlocks.at(-1)?.content).toBe('北京当前天气：阴天，温度18°C。');
+  });
+
   it('creates a ready-to-use CrewAI adapter by composing tools, events and surface renderers', async () => {
     const WeatherToolCard = {} as Component;
     const WeatherEventCard = {} as Component;
@@ -586,4 +644,5 @@ describe('useCrewAIChatSession', () => {
 
     scope.stop();
   });
+
 });

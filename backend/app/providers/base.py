@@ -46,7 +46,7 @@ def create_provider_descriptors() -> list[ProviderDescriptor]:
             id="crewai",
             path="/api/stream/crewai",
             label="CrewAI",
-            note="基于 DeepSeek 的真实 CrewAI 流式执行。",
+            note="基于 DeepSeek 的真实 CrewAI 流式执行，当前主打官方 SSE chunk 与工具调用展示，不默认提供操作级审批。",
         ),
     ]
 

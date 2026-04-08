@@ -18,7 +18,8 @@ import {
   isCrewOutputEvent,
   isErrorEvent,
   isTextChunk,
-  isToolCallChunk
+  isToolCallChunk,
+  normalizeCrewAIEventName
 } from './packet';
 import { resolveToolRenderer } from './resolvers';
 import {
@@ -150,6 +151,10 @@ function mergePendingToolData(
  * - 普通 `text` chunk 映射 assistant markdown 增量
  * - `tool_call` chunk 映射工具开始
  * - 最终 `CrewOutput` 负责补齐工具结果和最终答案
+ *
+ * 说明：
+ * - CrewAI 默认协议当前不把 review / Flow feedback 事件映射成 approval
+ * - 如果业务侧真的需要消费这些原始事件，请通过 `recordEvents` 或附加协议自己处理
  */
 export function createCrewAIProtocol(
   options: CrewAIProtocolOptions = {}
@@ -163,6 +168,18 @@ export function createCrewAIProtocol(
 
       if (options.recordEvents) {
         commands.push(cmd.event.record(packet));
+      }
+
+      // CrewAI 默认只主打真实流式输出和工具展示，
+      // 不把 review / Flow feedback 事件自动提升成审批 UI。
+      const normalizedEventName = normalizeCrewAIEventName(packet);
+
+      if (
+        normalizedEventName === 'flow_paused'
+        || normalizedEventName === 'human_feedback_received'
+        || normalizedEventName === 'flow_finished'
+      ) {
+        return commands;
       }
 
       const explicitRunId = extractExplicitRunId(packet);

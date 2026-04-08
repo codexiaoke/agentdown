@@ -1,4 +1,4 @@
-import { shallowRef, watch, type MaybeRefOrGetter } from 'vue';
+import { shallowRef, toValue, watch, type MaybeRefOrGetter } from 'vue';
 import type { FetchTransportSource } from '../../runtime/transports';
 import type { BridgeHooks, RuntimeData } from '../../runtime/types';
 import type { EventActionRegistryResult } from '../../runtime/eventActions';
@@ -65,6 +65,8 @@ export interface UseCrewAIChatSessionOptions<
   input?: MaybeRefOrGetter<string | undefined>;
   /** 当前整段聊天所属的 conversationId。 */
   conversationId: MaybeRefOrGetter<string>;
+  /** 透传给自定义 backend 的模式字段。 */
+  mode?: MaybeRefOrGetter<string | undefined>;
   /** CrewAI adapter 的 run 标题简写。 */
   title?: CrewAIAdapterOptions<TSource>['title'];
   /** 传给 `createCrewAIProtocol()` 的额外协议配置。 */
@@ -119,16 +121,6 @@ async function resolveCrewAITransportValue<TSource, TValue>(
 }
 
 /**
- * 为一轮新请求生成默认聊天语义 id。
- */
-export function createCrewAIChatIds(input: {
-  conversationId: string;
-  at: number;
-}): CrewAIChatIds {
-  return createFrameworkChatIds(input);
-}
-
-/**
  * 从未知值中读取普通对象。
  */
 function readCrewAIRecord(value: unknown): RuntimeData | undefined {
@@ -165,7 +157,22 @@ function resolveDefaultCrewAISessionId(event: CrewAIEvent): string | undefined {
 }
 
 /**
+ * 为一轮新请求生成默认聊天语义 id。
+ */
+export function createCrewAIChatIds(input: {
+  conversationId: string;
+  at: number;
+}): CrewAIChatIds {
+  return createFrameworkChatIds(input);
+}
+
+/**
  * 创建一个更短的 CrewAI 聊天接入入口。
+ *
+ * 说明：
+ * - 默认只负责真实 CrewAI SSE 文本流与工具调用展示
+ * - 不再默认内置 CrewAI review / approval 恢复逻辑
+ * - 如果业务侧自己的 CrewAI backend 额外用了 `mode`，这里仍会透传
  */
 export function useCrewAIChatSession<
   TSource = FetchTransportSource
@@ -188,12 +195,18 @@ export function useCrewAIChatSession<
         ...(options.transport ?? {}),
         body: async (source: TSource) => {
           const resolvedBody = await resolveCrewAITransportValue(source, options.transport?.body);
+          const mode = toValue(options.mode);
 
           return {
             ...(resolvedBody ?? {}),
             ...(backendSessionIdForTransport.value
               ? {
                   session_id: backendSessionIdForTransport.value
+                }
+              : {}),
+            ...(mode
+              ? {
+                  mode
                 }
               : {})
           };

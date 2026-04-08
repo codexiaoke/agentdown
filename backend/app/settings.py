@@ -118,7 +118,6 @@ def load_settings() -> BackendSettings:
     redis_url = os.getenv("AGENTDOWN_REDIS_URL")
     agno_paused_run_store = os.getenv("AGENTDOWN_AGNO_PAUSED_RUN_STORE")
     autogen_paused_run_store = os.getenv("AGENTDOWN_AUTOGEN_PAUSED_RUN_STORE")
-
     if not agno_paused_run_store and redis_url:
         agno_paused_run_store = "redis"
 

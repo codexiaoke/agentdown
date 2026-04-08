@@ -191,6 +191,43 @@ export function isCrewOutputEvent(packet: CrewAIEvent): boolean {
 }
 
 /**
+ * 判断当前事件是否是 CrewAI Flow 暂停等待人工反馈。
+ */
+export function isFlowPausedEvent(packet: CrewAIEvent): boolean {
+  return normalizeCrewAIEventName(packet) === 'flow_paused';
+}
+
+/**
+ * 判断当前事件是否是 CrewAI Flow 完成。
+ */
+export function isFlowFinishedEvent(packet: CrewAIEvent): boolean {
+  return normalizeCrewAIEventName(packet) === 'flow_finished';
+}
+
+/**
+ * 读取 CrewAI Flow 暂停对应的稳定 flow id。
+ */
+export function extractFlowId(packet: CrewAIEvent): string | undefined {
+  return readString(packet.flow_id)
+    ?? readString(packet.session_id)
+    ?? readString(packet.sessionId);
+}
+
+/**
+ * 读取 CrewAI Flow 暂停对应的提示文案。
+ */
+export function extractFlowPauseMessage(packet: CrewAIEvent): string | undefined {
+  return readString(packet.message);
+}
+
+/**
+ * 读取 CrewAI Flow review 当前展示给用户的输出内容。
+ */
+export function extractFlowOutput(packet: CrewAIEvent): unknown {
+  return packet.output;
+}
+
+/**
  * 判断当前事件是否是错误事件。
  */
 export function isErrorEvent(packet: CrewAIEvent): boolean {
@@ -204,8 +241,16 @@ export function isErrorEvent(packet: CrewAIEvent): boolean {
  * 没有时交给 protocol 用活动中的 run id 或本地生成 id 兜底。
  */
 export function extractExplicitRunId(packet: CrewAIEvent): string | undefined {
-  return readString(packet.agent_id)
+  return readString(packet.run_id)
+    ?? readString(packet.agent_id)
     ?? readString(packet.task_id);
+}
+
+/**
+ * 读取 Flow finish / pause 附带的 run 标题。
+ */
+export function extractFlowRunTitle(packet: CrewAIEvent): string | undefined {
+  return readString(packet.run_title);
 }
 
 /**

@@ -23,6 +23,15 @@ description: 使用内置 Agno、LangChain、AutoGen、CrewAI 适配层，直接
 | AutoGen | `useAutoGenChatSession()` / `createAutoGenAdapter()` / `createAutoGenProtocol()` | `defineAutoGenToolComponents()` / `defineAutoGenEventComponents()` |
 | CrewAI | `useCrewAIChatSession()` / `createCrewAIAdapter()` / `createCrewAIProtocol()` | `defineCrewAIToolComponents()` / `defineCrewAIEventComponents()` / `parseCrewAISseMessage()` |
 
+## 能力矩阵
+
+| 框架 | 流式文本 | 工具卡片 | 内置操作审批 | 默认推荐定位 |
+| --- | --- | --- | --- | --- |
+| Agno | 支持 | 支持 | 支持 | 真实 Agent 聊天 + approval |
+| LangChain | 支持 | 支持 | 支持 | LangGraph interrupt / review |
+| AutoGen | 支持 | 支持 | 支持 | handoff / 人机接力 |
+| CrewAI | 支持 | 支持 | 不默认提供 | 真实 SSE chunk + `CrewOutput` 渲染 |
+
 ## 这些适配器默认帮你做了什么
 
 - 建立 run 节点
@@ -232,6 +241,14 @@ createSseTransport<CrewAIEvent, string>({
   }
 })
 ```
+
+当前内置 CrewAI 适配层默认只处理两件事：
+
+- 官方流式文本 chunk
+- 工具调用与最终 `CrewOutput`
+
+它不默认把 CrewAI review / Flow feedback 事件提升成 approval UI。  
+如果你的业务后端自己扩展了这类事件，可以继续用 `recordEvents`、`defineCrewAIEventComponents()` 或自定义附加 protocol 处理。
 
 ## LangChain 真实联调建议
 

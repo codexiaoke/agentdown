@@ -65,7 +65,7 @@ raw packet / SSE -> protocol -> bridge -> assembler -> runtime -> Agent UI
 | Agno | `useAgnoChatSession()` / `createAgnoAdapter()` | 聊天页面优先用 `useAgnoChatSession()`，更底层场景再往 adapter / protocol 走 |
 | LangChain | `useLangChainChatSession()` / `createLangChainAdapter()` | 想直接消费 `astream_events()`，并快速接到聊天界面 |
 | AutoGen | `useAutoGenChatSession()` / `createAutoGenAdapter()` | 想消费官方 `run_stream()` 事件，并快速接到聊天界面 |
-| CrewAI | `useCrewAIChatSession()` / `createCrewAIAdapter()` | 想消费官方 SSE chunk 和最终 `CrewOutput` |
+| CrewAI | `useCrewAIChatSession()` / `createCrewAIAdapter()` | 想消费官方 SSE chunk 和最终 `CrewOutput`，并优先把真实文本流和工具卡片接起来 |
 
 它们都遵循同一个原则：
 

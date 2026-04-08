@@ -58,12 +58,12 @@ Agentdown is built for:
 
 ## Official Adapter Status
 
-| Framework | Entry points | Notes |
-| --- | --- | --- |
-| Agno | `createAgnoProtocol()` / `defineAgnoPreset()` | consumes official Agno SSE events |
-| LangChain | `createLangChainProtocol()` / `defineLangChainPreset()` | consumes `astream_events()`-style packets |
-| AutoGen | `createAutoGenProtocol()` / `defineAutoGenPreset()` | consumes official `run_stream()` packets |
-| CrewAI | `createCrewAIProtocol()` / `defineCrewAIPreset()` | consumes official SSE chunks with `parseCrewAISseMessage()` |
+| Framework | Entry points | Streaming text | Tool cards | Built-in operation approval | Notes |
+| --- | --- | --- | --- | --- | --- |
+| Agno | `createAgnoProtocol()` / `defineAgnoPreset()` | Yes | Yes | Yes | consumes official Agno SSE events |
+| LangChain | `createLangChainProtocol()` / `defineLangChainPreset()` | Yes | Yes | Yes | consumes `astream_events()`-style packets |
+| AutoGen | `createAutoGenProtocol()` / `defineAutoGenPreset()` | Yes | Yes | Yes | consumes official `run_stream()` packets |
+| CrewAI | `createCrewAIProtocol()` / `defineCrewAIPreset()` | Yes | Yes | Not by default | consumes official SSE chunks with `parseCrewAISseMessage()` and currently focuses on streaming output plus tool rendering |
 
 ## Install
 

@@ -60,12 +60,12 @@ raw packet / SSE -> protocol -> bridge -> assembler -> runtime -> Agent UI
 
 ## 官方框架适配状态
 
-| 框架 | 入口 | 说明 |
+| 框架 | 推荐入口 | 流式文本 | 工具卡片 | 内置操作审批 | 说明 |
 | --- | --- | --- |
-| Agno | `useAgnoChatSession()` / `createAgnoAdapter()` | 聊天页面优先用 `useAgnoChatSession()` |
-| LangChain | `useLangChainChatSession()` / `createLangChainAdapter()` | 直接消费 `astream_events()` 风格事件 |
-| AutoGen | `useAutoGenChatSession()` / `createAutoGenAdapter()` | 直接消费官方 `run_stream()` 事件 |
-| CrewAI | `useCrewAIChatSession()` / `createCrewAIAdapter()` | 直接消费官方 SSE chunk，附带 `parseCrewAISseMessage()` |
+| Agno | `useAgnoChatSession()` / `createAgnoAdapter()` | 支持 | 支持 | 支持 | 聊天页面优先用 `useAgnoChatSession()` |
+| LangChain | `useLangChainChatSession()` / `createLangChainAdapter()` | 支持 | 支持 | 支持 | 直接消费 `astream_events()` 风格事件 |
+| AutoGen | `useAutoGenChatSession()` / `createAutoGenAdapter()` | 支持 | 支持 | 支持 | 直接消费官方 `run_stream()` 事件 |
+| CrewAI | `useCrewAIChatSession()` / `createCrewAIAdapter()` | 支持 | 支持 | 不默认提供 | 直接消费官方 SSE chunk，附带 `parseCrewAISseMessage()`，当前主打真实流式输出与工具展示 |
 
 所有适配器都保持一个原则：
 
@@ -75,6 +75,11 @@ raw packet / SSE -> protocol -> bridge -> assembler -> runtime -> Agent UI
 
 如果你是在接内置四个框架，优先用各自专用的 `use*ChatSession()`。
 `useAgentChat()` 更适合你继续封装“自定义 framework driver”或项目内部统一抽象层。
+
+更完整的能力说明见：
+
+- [官方框架适配](https://codexiaoke.github.io/agentdown/guide/framework-adapters)
+- [框架能力矩阵](https://codexiaoke.github.io/agentdown/guide/framework-capability-matrix)
 
 ## 安装
 

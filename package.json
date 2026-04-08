@@ -57,6 +57,7 @@
     "backend:dev": "uv run --project backend uvicorn app.main:app --app-dir backend --reload --port 8000",
     "backend:check": "uv run --project backend python -m compileall backend/app",
     "backend:smoke:langchain": "uv run --project backend python backend/scripts/smoke_langchain.py",
+    "backend:smoke:crewai": "uv run --project backend python backend/scripts/smoke_crewai.py",
     "pack:check": "npm pack --dry-run",
     "prepublishOnly": "npm run build",
     "test": "vitest run",
