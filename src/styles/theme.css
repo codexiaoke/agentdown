@@ -276,6 +276,10 @@
 }
 
 .agentdown-html-block pre {
+  width: fit-content;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   overflow: auto;
   border: 1px solid var(--agentdown-border-soft);
   border-radius: 14px;
@@ -347,6 +351,10 @@
 }
 
 .agentdown-html-table-wrap {
+  width: fit-content;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   overflow: auto;
   margin: 1rem 0;
   border: 1px solid var(--agentdown-border-color);
@@ -681,6 +689,10 @@
 
 .agentdown-code-block {
   position: relative;
+  width: fit-content;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   overflow: hidden;
   margin: 0;
   border: 1px solid rgba(15, 23, 42, 0.045);
@@ -691,33 +703,44 @@
 .agentdown-code-toolbar {
   position: absolute;
   top: 0.6rem;
-  left: 0.7rem;
-  right: 0.5rem;
+  right: 0.7rem;
   z-index: 1;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
+  justify-content: flex-end;
+  width: fit-content;
+  max-width: calc(100% - 1.4rem);
+  gap: 0;
   pointer-events: none;
 }
 
 .agentdown-code-language {
   display: inline-flex;
   align-items: center;
+  order: 2;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
   color: var(--agentdown-muted-color);
   font-size: 0.62rem;
   font-weight: 500;
   letter-spacing: 0.03em;
+  text-overflow: ellipsis;
   text-transform: lowercase;
+  white-space: nowrap;
 }
 
 .agentdown-copy-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.5rem;
+  order: 1;
+  width: 0;
+  min-width: 0;
   height: 1.5rem;
-  border: 1px solid rgba(15, 23, 42, 0.04);
+  margin-right: 0;
+  overflow: hidden;
+  border: 0 solid rgba(15, 23, 42, 0.04);
   border-radius: 999px;
   padding: 0;
   background: rgba(255, 255, 255, 0.88);
@@ -729,6 +752,8 @@
   pointer-events: none;
   transform: translateY(-2px);
   transition:
+    width 180ms ease,
+    margin-right 180ms ease,
     opacity 160ms ease,
     transform 160ms ease,
     background-color 180ms ease,
@@ -738,6 +763,9 @@
 
 .agentdown-code-block:hover .agentdown-copy-button,
 .agentdown-code-block:focus-within .agentdown-copy-button {
+  width: 1.5rem;
+  margin-right: 0.35rem;
+  border-width: 1px;
   opacity: 1;
   pointer-events: auto;
   transform: translateY(0);

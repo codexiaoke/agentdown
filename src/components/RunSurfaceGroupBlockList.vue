@@ -544,6 +544,14 @@ onBeforeUnmount(() => {
 .agentdown-run-surface-group-block-list,
 .agentdown-run-surface-group-block-list__virtualized,
 .agentdown-run-surface-group-block-list__slot {
+  width: 100%;
+  box-sizing: border-box;
   min-width: 0;
+}
+
+.agentdown-run-surface-group-block-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 </style>

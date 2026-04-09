@@ -553,6 +553,7 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 18px;
+  min-width: 0;
 }
 
 .agentdown-run-surface-load-more {
@@ -608,6 +609,7 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  width: 100%;
   min-width: 0;
 }
 

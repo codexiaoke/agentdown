@@ -40,6 +40,7 @@ import { resolveToolRenderer } from './resolvers';
 import type {
   AgnoEvent,
   AgnoRequirementPayload,
+  AgnoToolExecutionPayload,
   AgnoPresetOptions,
   AgnoProtocolOptions
 } from './types';
@@ -56,6 +57,18 @@ function createRequirementApprovalBlockId(requirementId: string): string {
  */
 function createAgnoRunErrorBlockId(runId: string): string {
   return `block:error:${runId}`;
+}
+
+/**
+ * 把单个待确认 tool 包装成 requirement 兼容结构。
+ *
+ * 某些 Agno 版本的 `RunPaused` 只返回 `tools`，不返回 `requirements`，
+ * 前端这里要兜底补成 approval block，避免真实暂停时 UI 没有任何确认入口。
+ */
+function createSyntheticConfirmationRequirement(tool: AgnoToolExecutionPayload): AgnoRequirementPayload {
+  return {
+    tool_execution: tool
+  };
 }
 
 /**
@@ -246,18 +259,30 @@ export function createAgnoProtocol(options: AgnoProtocolOptions = {}): RuntimePr
         case 'run_paused': {
           // Agno 真正的人机交互入口：run 进入 paused，并暴露 active requirements。
           ensureRunStarted(state, session, packet, context, commands, options);
-          closeCurrentStream(session, commands);
+          const pausedContent = extractContent(packet);
+
+          if (pausedContent && !session.segmentHasContent) {
+            commands.push(...createStreamOpenCommands(session, options));
+            commands.push(cmd.content.append(session.streamId, pausedContent));
+            session.segmentHasContent = true;
+          }
+
+          closeCurrentStream(session, commands, {
+            advanceSegment: true
+          });
 
           commands.push(
             cmd.node.patch(session.runId, {
               status: 'blocked',
-              message: extractContent(packet) ?? '等待人工确认后继续执行。',
+              message: pausedContent ?? '等待人工确认后继续执行。',
               updatedAt: context.now(),
               data: {
                 rawEvent: packet
               }
             })
           );
+
+          const mappedRequirementIds = new Set<string>();
 
           for (const tool of extractTools(packet)) {
             const pendingTool = ensurePendingTool(session, tool);
@@ -276,7 +301,32 @@ export function createAgnoProtocol(options: AgnoProtocolOptions = {}): RuntimePr
           }
 
           for (const requirement of extractRequirements(packet)) {
+            const requirementId = extractRequirementId(requirement);
+
+            if (requirementId) {
+              mappedRequirementIds.add(requirementId);
+            }
+
             appendPausedRequirementCommands(session, packet, requirement, context, commands, options);
+          }
+
+          for (const tool of extractTools(packet)) {
+            const syntheticRequirement = createSyntheticConfirmationRequirement(tool);
+            const syntheticRequirementId = extractRequirementId(syntheticRequirement);
+
+            if (!syntheticRequirementId || mappedRequirementIds.has(syntheticRequirementId)) {
+              continue;
+            }
+
+            mappedRequirementIds.add(syntheticRequirementId);
+            appendPausedRequirementCommands(
+              session,
+              packet,
+              syntheticRequirement,
+              context,
+              commands,
+              options
+            );
           }
           break;
         }

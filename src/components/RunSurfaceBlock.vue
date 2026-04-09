@@ -527,6 +527,12 @@ const lazyPlaceholderMinHeight = computed(() => {
  * 当前 block 是否应该启用接近视口后再挂载。
  */
 const shouldLazyMount = computed(() => {
+  const activeKind = draftPreviewBlock.value?.kind ?? markdownBlock.value?.kind;
+
+  if (activeKind === 'approval' || activeKind === 'handoff') {
+    return false;
+  }
+
   return props.lazyMount && isHeavyBlock.value;
 });
 
@@ -822,6 +828,8 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .agentdown-run-surface-block {
+  width: 100%;
+  box-sizing: border-box;
   min-width: 0;
 }
 
@@ -829,7 +837,22 @@ onBeforeUnmount(() => {
 .agentdown-run-surface-draft,
 .agentdown-run-surface-unknown,
 .agentdown-run-surface-shell {
+  width: 100%;
+  box-sizing: border-box;
   min-width: 0;
+}
+
+.agentdown-run-surface-shell {
+  display: flex;
+}
+
+.agentdown-run-surface-shell[data-role='assistant'],
+.agentdown-run-surface-shell[data-role='system'] {
+  justify-content: flex-start;
+}
+
+.agentdown-run-surface-shell[data-role='user'] {
+  justify-content: flex-end;
 }
 
 .agentdown-run-surface-markdown {

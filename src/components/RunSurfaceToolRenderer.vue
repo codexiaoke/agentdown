@@ -76,7 +76,10 @@ const statusTone = computed(() => {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  width: min(100%, 520px);
+  width: fit-content;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   padding: 6px 0;
 }
 

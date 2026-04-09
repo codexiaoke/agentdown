@@ -15,6 +15,8 @@ import type {
   BridgeError,
   BridgeHooks,
   RuntimeData,
+  RuntimeSnapshot,
+  SurfaceBlock,
   SurfaceBlockState,
   TransportAdapter
 } from '../../runtime/types';
@@ -300,6 +302,8 @@ export interface FrameworkChatSessionResult<
   surface: ComputedRef<RunSurfaceOptions>;
   /** 当前是否仍在消费 SSE。 */
   busy: ComputedRef<boolean>;
+  /** 当前是否正在等待人工确认 / 审批继续。 */
+  awaitingHumanInput: ComputedRef<boolean>;
   /** 适合直接展示在 demo 里的简短状态文本。 */
   statusLabel: ComputedRef<string>;
   /** 适合页面提示用的 transport 错误文本。 */
@@ -797,6 +801,59 @@ function resolveFrameworkChatErrorMessage(
 }
 
 /**
+ * 从未知值中安全读取普通对象。
+ */
+function readFrameworkChatRecord(value: unknown): RuntimeData | undefined {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? value as RuntimeData
+    : undefined;
+}
+
+/**
+ * 从未知值中安全读取非空字符串。
+ */
+function readFrameworkChatString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0
+    ? value
+    : undefined;
+}
+
+/**
+ * 判断当前 block 是否属于仍在等待人工确认的 approval。
+ */
+function isFrameworkPendingApprovalBlock(
+  block: SurfaceBlock,
+  conversationId: string | null
+): boolean {
+  if (block.type !== 'approval') {
+    return false;
+  }
+
+  if (
+    conversationId
+    && block.conversationId
+    && block.conversationId !== conversationId
+  ) {
+    return false;
+  }
+
+  const data = readFrameworkChatRecord(block.data);
+  const status = readFrameworkChatString(data?.status);
+
+  return status === 'pending';
+}
+
+/**
+ * 判断当前聊天是否已经进入“等待人工确认”的人机交互阶段。
+ */
+function hasFrameworkPendingHumanInput(
+  snapshot: RuntimeSnapshot,
+  conversationId: string | null
+): boolean {
+  return snapshot.blocks.some((block) => isFrameworkPendingApprovalBlock(block, conversationId));
+}
+
+/**
  * 在当前 assistant 消息尾部写入一个默认错误 block。
  */
 function upsertFrameworkAssistantErrorBlock<TRawPacket, TSource, TChatIds extends FrameworkChatIds>(
@@ -942,10 +999,15 @@ function resolveFrameworkChatAssistantActions(
  */
 function resolveFrameworkStatusLabel(
   phase: UseAdapterSessionResult['status']['value']['phase'],
-  reconnecting: boolean
+  reconnecting: boolean,
+  awaitingHumanInput: boolean
 ): string {
   if (reconnecting) {
     return '重连中';
+  }
+
+  if (awaitingHumanInput) {
+    return '等待人工确认';
   }
 
   switch (phase) {
@@ -1078,9 +1140,18 @@ export function useFrameworkChatSession<
   const busy = computed(() => {
     return sessionState.status.value.phase === 'consuming' || sessionState.reconnecting.value;
   });
+  const awaitingHumanInput = computed(() => {
+    const activeConversationId = chatIds.value?.conversationId ?? toValue(config.options.conversationId);
+
+    return hasFrameworkPendingHumanInput(
+      sessionState.runtimeState.snapshot.value,
+      activeConversationId ?? null
+    );
+  });
   const statusLabel = computed(() => resolveFrameworkStatusLabel(
     sessionState.status.value.phase,
-    sessionState.reconnecting.value
+    sessionState.reconnecting.value,
+    awaitingHumanInput.value
   ));
   const transportError = computed(() => {
     if (!sessionState.error.value) {
@@ -1246,6 +1317,7 @@ export function useFrameworkChatSession<
     ...sessionState,
     surface,
     busy,
+    awaitingHumanInput,
     statusLabel,
     transportError,
     sessionId,

@@ -585,6 +585,8 @@ describe('useAutoGenChatSession', () => {
     expect(pausedApprovalBlock?.data).toMatchObject({
       status: 'pending'
     });
+    expect(sessionState.awaitingHumanInput.value).toBe(true);
+    expect(sessionState.statusLabel.value).toBe('等待人工确认');
 
     await sessionState.resolveHandoff({
       content: '已确认，请继续调用天气工具并返回结果。'

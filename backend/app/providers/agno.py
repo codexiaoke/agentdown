@@ -68,12 +68,57 @@ def resolve_agno_requirement_ids(run_output: Any) -> list[str]:
     requirement_ids: list[str] = []
 
     for requirement in getattr(run_output, "requirements", None) or []:
-        requirement_id = getattr(requirement, "id", None)
+        requirement_id = resolve_agno_requirement_identifier(requirement)
 
         if isinstance(requirement_id, str) and requirement_id:
             requirement_ids.append(requirement_id)
 
     return requirement_ids
+
+
+def resolve_agno_requirement_identifier(requirement: Any) -> str | None:
+    """Return the best available identifier for a paused Agno requirement."""
+
+    requirement_id = getattr(requirement, "id", None)
+
+    if isinstance(requirement_id, str) and requirement_id:
+        return requirement_id
+
+    tool_execution = getattr(requirement, "tool_execution", None)
+    approval_id = getattr(tool_execution, "approval_id", None)
+
+    if isinstance(approval_id, str) and approval_id:
+        return approval_id
+
+    tool_call_id = getattr(tool_execution, "tool_call_id", None)
+
+    if isinstance(tool_call_id, str) and tool_call_id:
+        return tool_call_id
+
+    return None
+
+
+def iter_agno_requirement_identifiers(requirement: Any) -> tuple[str, ...]:
+    """Return every identifier alias that can point at the same Agno requirement."""
+
+    identifiers: list[str] = []
+    requirement_id = getattr(requirement, "id", None)
+
+    if isinstance(requirement_id, str) and requirement_id:
+        identifiers.append(requirement_id)
+
+    tool_execution = getattr(requirement, "tool_execution", None)
+    approval_id = getattr(tool_execution, "approval_id", None)
+
+    if isinstance(approval_id, str) and approval_id and approval_id not in identifiers:
+        identifiers.append(approval_id)
+
+    tool_call_id = getattr(tool_execution, "tool_call_id", None)
+
+    if isinstance(tool_call_id, str) and tool_call_id and tool_call_id not in identifiers:
+        identifiers.append(tool_call_id)
+
+    return tuple(identifiers)
 
 
 def create_agno_paused_run_record(
@@ -115,9 +160,7 @@ def resolve_agno_requirement(run_output: Any, requirement_id: str) -> Any | None
     """Return the matching Agno requirement object from a paused run output."""
 
     for requirement in getattr(run_output, "requirements", None) or []:
-        current_requirement_id = getattr(requirement, "id", None)
-
-        if current_requirement_id == requirement_id:
+        if requirement_id in iter_agno_requirement_identifiers(requirement):
             return requirement
 
     return None

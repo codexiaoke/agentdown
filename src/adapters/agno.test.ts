@@ -401,6 +401,106 @@ describe('createAgnoProtocol', () => {
     });
   });
 
+  it('maps RunPaused requirements even when Agno omits requirement id', () => {
+    const bridge = createAgnoTestBridge();
+
+    bridge.push([
+      {
+        event: 'RunStarted',
+        run_id: 'run-pause-fallback-1',
+        session_id: 'session-pause-fallback-1',
+        agent_name: '审批助手'
+      },
+      {
+        event: 'RunPaused',
+        run_id: 'run-pause-fallback-1',
+        content: '等待人工确认后继续执行。',
+        tools: [
+          {
+            tool_call_id: 'call-pause-fallback-1',
+            tool_name: 'lookup_weather',
+            tool_args: {
+              city: '北京'
+            },
+            requires_confirmation: true
+          }
+        ],
+        requirements: [
+          {
+            tool_execution: {
+              tool_call_id: 'call-pause-fallback-1',
+              tool_name: 'lookup_weather',
+              tool_args: {
+                city: '北京'
+              },
+              requires_confirmation: true
+            }
+          }
+        ]
+      }
+    ]);
+    bridge.flush('agno-run-paused-fallback');
+
+    const snapshot = bridge.runtime.snapshot();
+    const approvalBlock = snapshot.blocks.find((block) => block.type === 'approval');
+
+    expect(approvalBlock).toMatchObject({
+      id: 'block:approval:call-pause-fallback-1',
+      type: 'approval'
+    });
+    expect(approvalBlock?.data).toMatchObject({
+      requirementId: 'call-pause-fallback-1',
+      approvalId: 'call-pause-fallback-1',
+      status: 'pending'
+    });
+  });
+
+  it('creates an approval block from pending tools when RunPaused omits requirements entirely', () => {
+    const bridge = createAgnoTestBridge();
+
+    bridge.push([
+      {
+        event: 'RunStarted',
+        run_id: 'run-pause-tools-only-1',
+        session_id: 'session-pause-tools-only-1',
+        agent_name: '审批助手'
+      },
+      {
+        event: 'RunPaused',
+        run_id: 'run-pause-tools-only-1',
+        content: '我来帮您查询北京今天的天气情况。',
+        tools: [
+          {
+            tool_call_id: 'call-pause-tools-only-1',
+            tool_name: 'lookup_weather',
+            tool_args: {
+              city: '北京'
+            },
+            requires_confirmation: true
+          }
+        ]
+      }
+    ]);
+    bridge.flush('agno-run-paused-tools-only');
+
+    const snapshot = bridge.runtime.snapshot();
+    const approvalBlock = snapshot.blocks.find((block) => block.type === 'approval');
+    const pausedTextBlock = snapshot.blocks.find((block) => (
+      block.type === 'text' && block.content === '我来帮您查询北京今天的天气情况。'
+    ));
+
+    expect(approvalBlock).toMatchObject({
+      id: 'block:approval:call-pause-tools-only-1',
+      type: 'approval'
+    });
+    expect(approvalBlock?.data).toMatchObject({
+      requirementId: 'call-pause-tools-only-1',
+      approvalId: 'call-pause-tools-only-1',
+      status: 'pending'
+    });
+    expect(pausedTextBlock?.messageId).toBeDefined();
+  });
+
   it('creates a ready-to-use Agno adapter by composing tools, events and surface renderers', async () => {
     const WeatherToolCard = {} as Component;
     const WeatherEventCard = {} as Component;
@@ -960,6 +1060,8 @@ describe('useAgnoChatSession', () => {
       runId: 'run-hitl-approve-1',
       requirementId: 'requirement-hitl-1'
     });
+    expect(sessionState.awaitingHumanInput.value).toBe(true);
+    expect(sessionState.statusLabel.value).toBe('等待人工确认');
     expect(capturedBodies[0]).toEqual({
       message: '帮我查一下北京天气',
       mode: 'hitl'
@@ -1020,6 +1122,145 @@ describe('useAgnoChatSession', () => {
     expect(finalToolNode?.status).toBe('done');
     expect(resumedTextBlock?.messageId).toBe(sessionState.chatIds.value?.assistantMessageId);
     expect(finalSnapshot.blocks.some((block) => block.messageId === sessionState.chatIds.value?.userMessageId)).toBe(true);
+
+    scope.stop();
+  });
+
+  it('continues a paused Agno requirement when RunPaused omits requirement id', async () => {
+    const scope = effectScope();
+    const prompt = ref('帮我查一下北京天气');
+    const capturedBodies: Array<Record<string, unknown>> = [];
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = typeof init?.body === 'string'
+        ? JSON.parse(init.body) as Record<string, unknown>
+        : {};
+
+      capturedBodies.push(body);
+
+      if (capturedBodies.length === 1) {
+        return createAgnoSseResponse([
+          {
+            event: 'RunStarted',
+            run_id: 'run-hitl-fallback-1',
+            session_id: 'backend-session-hitl-fallback-1'
+          },
+          {
+            event: 'RunPaused',
+            run_id: 'run-hitl-fallback-1',
+            session_id: 'backend-session-hitl-fallback-1',
+            content: '我来帮您查询北京今天的天气情况。',
+            tools: [
+              {
+                tool_call_id: 'call-hitl-fallback-1',
+                tool_name: 'lookup_weather',
+                tool_args: {
+                  city: '北京'
+                },
+                requires_confirmation: true
+              }
+            ],
+            requirements: [
+              {
+                tool_execution: {
+                  tool_call_id: 'call-hitl-fallback-1',
+                  tool_name: 'lookup_weather',
+                  tool_args: {
+                    city: '北京'
+                  },
+                  requires_confirmation: true
+                }
+              }
+            ]
+          }
+        ]);
+      }
+
+      return createAgnoSseResponse([
+        {
+          event: 'RunContinued',
+          run_id: 'run-hitl-fallback-1',
+          session_id: 'backend-session-hitl-fallback-1'
+        },
+        {
+          event: 'RunCompleted',
+          run_id: 'run-hitl-fallback-1'
+        }
+      ]);
+    });
+    const sessionState = scope.run(() => useAgnoChatSession<string>({
+      source: 'http://agno.test/api/stream/agno',
+      input: prompt,
+      conversationId: 'session:demo:agno-hitl-fallback',
+      mode: 'hitl',
+      transport: {
+        fetch: fetchMock as typeof fetch
+      }
+    }));
+
+    if (!sessionState) {
+      throw new Error('Failed to create Agno fallback approval session.');
+    }
+
+    await sessionState.send();
+    await nextTick();
+
+    const pausedSnapshot = sessionState.runtime.snapshot();
+    const approvalBlock = pausedSnapshot.blocks.find((block) => block.type === 'approval');
+    const pausedTextBlock = pausedSnapshot.blocks.find((block) => (
+      block.type === 'text' && block.content === '我来帮您查询北京今天的天气情况。'
+    ));
+    const approvalHandler = sessionState.surface.value.approvalActions !== false
+      ? sessionState.surface.value.approvalActions?.builtinHandlers?.approve
+      : undefined;
+
+    expect(sessionState.awaitingHumanInput.value).toBe(true);
+    expect(sessionState.statusLabel.value).toBe('等待人工确认');
+    expect(pausedTextBlock?.messageId).toBe(sessionState.chatIds.value?.assistantMessageId);
+
+    if (!approvalBlock || !approvalHandler) {
+      throw new Error('Failed to resolve Agno fallback approval wiring.');
+    }
+
+    const context: RunSurfaceApprovalActionContext = {
+      title: String(approvalBlock.data.title ?? '等待人工确认'),
+      status: 'pending',
+      ...(typeof approvalBlock.data.message === 'string'
+        ? {
+            message: approvalBlock.data.message
+          }
+        : {}),
+      ...(typeof approvalBlock.data.approvalId === 'string'
+        ? {
+            approvalId: approvalBlock.data.approvalId
+          }
+        : {}),
+      ...(typeof approvalBlock.data.refId === 'string'
+        ? {
+            refId: approvalBlock.data.refId
+          }
+        : {}),
+      block: approvalBlock,
+      role: 'assistant',
+      runtime: sessionState.runtime,
+      snapshot: pausedSnapshot,
+      emitIntent: () => {
+        throw new Error('emitIntent should not be called in this test.');
+      }
+    };
+
+    await approvalHandler(context);
+    await nextTick();
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(capturedBodies[1]).toEqual({
+      session_id: 'backend-session-hitl-fallback-1',
+      mode: 'hitl',
+      agno_resume: {
+        run_id: 'run-hitl-fallback-1',
+        requirement_id: 'call-hitl-fallback-1',
+        action: 'approve'
+      }
+    });
 
     scope.stop();
   });

@@ -38,6 +38,10 @@ defineProps<Props>();
   display: flex;
   flex-direction: column;
   gap: 0.72rem;
+  width: fit-content;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   border-radius: calc(var(--agentdown-radius) + 2px);
   padding: 0.95rem 1rem;
   background:

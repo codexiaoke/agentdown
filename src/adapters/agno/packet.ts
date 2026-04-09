@@ -189,7 +189,16 @@ export function extractRequirementId(requirement: AgnoRequirementPayload | undef
     return undefined;
   }
 
-  return readString(requirement.id);
+  const explicitRequirementId = readString(requirement.id);
+
+  if (explicitRequirementId) {
+    return explicitRequirementId;
+  }
+
+  const tool = extractRequirementTool(requirement);
+
+  return readString(tool?.approval_id)
+    ?? extractToolRawId(tool);
 }
 
 /**

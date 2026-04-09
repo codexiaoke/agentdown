@@ -512,6 +512,10 @@ async function submitPrimaryInputAction() {
   display: flex;
   flex-direction: column;
   gap: 0.9rem;
+  width: fit-content;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   border: 1px solid var(--agentdown-border-color);
   border-radius: calc(var(--agentdown-radius) + 2px);
   padding: 1rem 1.05rem;
@@ -538,11 +542,13 @@ async function submitPrimaryInputAction() {
   display: flex;
   flex-direction: column;
   gap: 0.22rem;
+  min-width: 0;
 }
 
 .agentdown-handoff-copy strong {
   font-size: 1rem;
   letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
 }
 
 .agentdown-handoff-eyebrow {

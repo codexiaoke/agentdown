@@ -45,6 +45,8 @@ const variant = computed(() => {
 <style scoped>
 .agentdown-run-surface-user-bubble {
   display: block;
+  max-width: 100%;
+  box-sizing: border-box;
   min-width: 0;
 }
 
@@ -58,7 +60,8 @@ const variant = computed(() => {
 }
 
 .agentdown-run-surface-user-bubble[data-variant='bare'] {
-  max-width: min(100%, 560px);
+  width: 100%;
+  max-width: 100%;
 }
 
 .agentdown-run-surface-user-bubble :deep(.agentdown-run-surface-markdown),

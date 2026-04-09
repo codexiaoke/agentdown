@@ -633,6 +633,8 @@ describe('useLangChainChatSession', () => {
       : undefined;
 
     expect(sessionState.sessionId.value).toBe('langchain-thread-1');
+    expect(sessionState.awaitingHumanInput.value).toBe(true);
+    expect(sessionState.statusLabel.value).toBe('等待人工确认');
     expect(capturedBodies[0]).toEqual({
       message: '帮我查一下北京天气',
       mode: 'hitl'

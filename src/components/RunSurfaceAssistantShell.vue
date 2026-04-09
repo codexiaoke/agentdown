@@ -46,6 +46,8 @@ const variant = computed(() => {
 <style scoped>
 .agentdown-run-surface-assistant-shell {
   display: block;
+  width: 100%;
+  box-sizing: border-box;
   min-width: 0;
 }
 
@@ -55,11 +57,7 @@ const variant = computed(() => {
 }
 
 .agentdown-run-surface-assistant-shell[data-variant='panel'] {
-  max-width: min(100%, 560px);
-}
-
-.agentdown-run-surface-assistant-shell[data-variant='panel'][data-block-kind='approval'] {
-  max-width: min(100%, 680px);
+  max-width: 100%;
 }
 
 .agentdown-run-surface-assistant-shell[data-variant='draft'] :deep(.agentdown-run-surface-draft) {
