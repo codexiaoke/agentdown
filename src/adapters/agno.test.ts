@@ -1265,6 +1265,162 @@ describe('useAgnoChatSession', () => {
     scope.stop();
   });
 
+  it('allows a custom Agno HITL handler to extend the resume payload and run side effects', async () => {
+    const scope = effectScope();
+    const prompt = ref('帮我查一下北京天气');
+    const capturedBodies: Array<Record<string, unknown>> = [];
+    const sideEffects: string[] = [];
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = typeof init?.body === 'string'
+        ? JSON.parse(init.body) as Record<string, unknown>
+        : {};
+
+      capturedBodies.push(body);
+
+      if (capturedBodies.length === 1) {
+        return createAgnoSseResponse([
+          {
+            event: 'RunStarted',
+            run_id: 'run-hitl-custom-1',
+            session_id: 'backend-session-hitl-custom-1'
+          },
+          {
+            event: 'RunPaused',
+            run_id: 'run-hitl-custom-1',
+            session_id: 'backend-session-hitl-custom-1',
+            content: '等待人工确认后继续执行。',
+            tools: [
+              {
+                tool_call_id: 'tool-hitl-custom-1',
+                tool_name: 'lookup_weather',
+                tool_args: {
+                  city: '北京'
+                },
+                requires_confirmation: true
+              }
+            ],
+            requirements: [
+              {
+                id: 'requirement-hitl-custom-1',
+                tool_execution: {
+                  tool_call_id: 'tool-hitl-custom-1',
+                  tool_name: 'lookup_weather',
+                  tool_args: {
+                    city: '北京'
+                  },
+                  requires_confirmation: true
+                }
+              }
+            ]
+          }
+        ]);
+      }
+
+      return createAgnoSseResponse([
+        {
+          event: 'RunContinued',
+          run_id: 'run-hitl-custom-1',
+          session_id: 'backend-session-hitl-custom-1'
+        },
+        {
+          event: 'RunCompleted',
+          run_id: 'run-hitl-custom-1'
+        }
+      ]);
+    });
+    const sessionState = scope.run(() => useAgnoChatSession<string>({
+      source: 'http://agno.test/api/stream/agno',
+      input: prompt,
+      conversationId: 'session:demo:agno-hitl-custom',
+      mode: 'hitl',
+      hitl: {
+        handlers: {
+          approve: async (context) => {
+            sideEffects.push(`before:${context.actionKey}`);
+            expect(context.defaultRequest).toEqual({
+              run_id: 'run-hitl-custom-1',
+              requirement_id: 'requirement-hitl-custom-1',
+              action: 'approve'
+            });
+
+            await context.submit({
+              ...context.defaultRequest,
+              note: '请把天气摘要放在最前面。'
+            });
+            sideEffects.push('after:approve');
+          }
+        }
+      },
+      transport: {
+        fetch: fetchMock as typeof fetch
+      }
+    }));
+
+    if (!sessionState) {
+      throw new Error('Failed to create Agno custom HITL session.');
+    }
+
+    await sessionState.send();
+    await nextTick();
+
+    const pausedSnapshot = sessionState.runtime.snapshot();
+    const approvalBlock = pausedSnapshot.blocks.find((block) => block.type === 'approval');
+    const approvalHandler = sessionState.surface.value.approvalActions !== false
+      ? sessionState.surface.value.approvalActions?.builtinHandlers?.approve
+      : undefined;
+
+    if (!approvalBlock || !approvalHandler) {
+      throw new Error('Failed to resolve Agno custom HITL approval wiring.');
+    }
+
+    const context: RunSurfaceApprovalActionContext = {
+      title: String(approvalBlock.data.title ?? '等待人工确认'),
+      status: 'pending',
+      ...(typeof approvalBlock.data.message === 'string'
+        ? {
+            message: approvalBlock.data.message
+          }
+        : {}),
+      ...(typeof approvalBlock.data.approvalId === 'string'
+        ? {
+            approvalId: approvalBlock.data.approvalId
+          }
+        : {}),
+      ...(typeof approvalBlock.data.refId === 'string'
+        ? {
+            refId: approvalBlock.data.refId
+          }
+        : {}),
+      block: approvalBlock,
+      role: 'assistant',
+      runtime: sessionState.runtime,
+      snapshot: pausedSnapshot,
+      emitIntent: () => {
+        throw new Error('emitIntent should not be called in this test.');
+      }
+    };
+
+    await approvalHandler(context);
+    await nextTick();
+
+    expect(sideEffects).toEqual([
+      'before:approve',
+      'after:approve'
+    ]);
+    expect(capturedBodies[1]).toEqual({
+      session_id: 'backend-session-hitl-custom-1',
+      mode: 'hitl',
+      agno_resume: {
+        run_id: 'run-hitl-custom-1',
+        requirement_id: 'requirement-hitl-custom-1',
+        action: 'approve',
+        note: '请把天气摘要放在最前面。'
+      }
+    });
+
+    scope.stop();
+  });
+
   it('marks the paused tool as rejected when a requirement is rejected', async () => {
     const scope = effectScope();
     const prompt = ref('帮我查一下北京天气');

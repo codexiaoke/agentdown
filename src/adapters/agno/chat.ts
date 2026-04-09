@@ -72,6 +72,56 @@ export interface AgnoChatReconnectOptions<TSource = FetchTransportSource>
 export interface AgnoChatAssistantActionsOptions extends FrameworkChatAssistantActionsOptions {}
 
 /**
+ * Agno chat helper 内置 HITL 动作支持的稳定 key。
+ */
+export type AgnoChatHitlActionKey = Extract<
+  RunSurfaceBuiltinApprovalActionKey,
+  'approve' | 'reject'
+>;
+
+/**
+ * Agno approval 动作对外暴露的可扩展上下文。
+ *
+ * 这层专门给使用 `useAgnoChatSession()` 的业务方做自定义：
+ * - 想在 approve / reject 前后插日志、埋点、弹窗
+ * - 想改默认的 resume payload
+ * - 想完全接管这次 requirement 的继续逻辑
+ */
+export interface AgnoChatHitlActionContext<TSource = FetchTransportSource>
+  extends RunSurfaceApprovalActionContext {
+  /** 当前触发的 HITL 动作 key。 */
+  actionKey: AgnoChatHitlActionKey;
+  /** 当前动作默认会发送给后端的 resume payload。 */
+  defaultRequest: AgnoResumeRequestBody;
+  /** 直接继续当前 requirement，可完全自定义 payload。 */
+  resolveRequirement: (
+    input: AgnoResumeRequestBody,
+    source?: TSource
+  ) => Promise<void>;
+  /**
+   * 使用默认的乐观 UI 更新继续当前 requirement。
+   *
+   * - 不传 `input` 时直接使用 `defaultRequest`
+   * - 传入 `input` 时会带着你的自定义字段继续请求
+   */
+  submit: (
+    input?: AgnoResumeRequestBody,
+    source?: TSource
+  ) => Promise<void>;
+}
+
+/**
+ * Agno chat helper 对 HITL 审批逻辑的扩展配置。
+ */
+export interface AgnoChatHitlOptions<TSource = FetchTransportSource> {
+  /** 覆写默认 approve / reject 逻辑。 */
+  handlers?: Partial<Record<
+    AgnoChatHitlActionKey,
+    (context: AgnoChatHitlActionContext<TSource>) => void | Promise<void>
+  >>;
+}
+
+/**
  * `useAgnoChatSession()` 的输入配置。
  *
  * 这个 helper 的目标是把最常见的 Agno 聊天接入压缩成一层：
@@ -114,6 +164,8 @@ export interface UseAgnoChatSessionOptions<
   eventActions?: EventActionRegistryResult<AgnoEvent> | undefined;
   /** 是否启用当前聊天会话的内置 devtools。 */
   devtools?: false | FrameworkChatDevtoolsOptions<AgnoEvent>;
+  /** Agno requirement / approval 这层 HITL 的自定义逻辑。 */
+  hitl?: AgnoChatHitlOptions<TSource>;
   /** 是否抓取后端 sessionId；默认开启。 */
   sessionId?: boolean | AgnoChatSessionIdOptions;
   /** 是否在真正连接前预插一条用户消息；默认开启。 */
@@ -467,42 +519,73 @@ export function useAgnoChatSession<
     }
   }
 
+  /**
+   * 基于当前 approval 动作构造一份可自定义的 HITL 上下文。
+   */
+  function createAgnoHitlActionContext(
+    context: RunSurfaceApprovalActionContext,
+    actionKey: AgnoChatHitlActionKey
+  ): AgnoChatHitlActionContext<TSource> {
+    const target = resolveAgnoRequirementTarget(context.block, context.approvalId, context.refId);
+    const action = resolveAgnoRequirementAction(actionKey);
+
+    if (!target || !action) {
+      throw new Error('Agno requirement target is missing on the current approval block.');
+    }
+
+    const defaultRequest: AgnoResumeRequestBody = {
+      ...target,
+      action,
+      ...(actionKey === 'reject' && context.reason
+        ? {
+            note: context.reason
+          }
+        : {})
+    };
+
+    return {
+      ...context,
+      actionKey,
+      defaultRequest,
+      resolveRequirement,
+      submit: async (input = defaultRequest, source?: TSource) => {
+        patchAgnoApprovalBlock(
+          context,
+          actionKey === 'reject'
+            ? 'reject'
+            : 'approve'
+        );
+        await resolveRequirement(input, source);
+      }
+    };
+  }
+
   const surface = computed(() => {
     const baseSurface = sessionState.surface.value;
+    const hitlHandlers = options.hitl?.handlers;
 
     return resolveAgnoChatApprovalActions(baseSurface, {
       approve: async (context) => {
-        const target = resolveAgnoRequirementTarget(context.block, context.approvalId, context.refId);
-        const action = resolveAgnoRequirementAction('approve');
+        const hitlContext = createAgnoHitlActionContext(context, 'approve');
+        const customHandler = hitlHandlers?.approve;
 
-        if (!target || !action) {
-          throw new Error('Agno requirement target is missing on the current approval block.');
+        if (customHandler) {
+          await customHandler(hitlContext);
+          return;
         }
 
-        patchAgnoApprovalBlock(context, 'approve');
-        await resolveRequirement({
-          ...target,
-          action
-        });
+        await hitlContext.submit();
       },
       reject: async (context) => {
-        const target = resolveAgnoRequirementTarget(context.block, context.approvalId, context.refId);
-        const action = resolveAgnoRequirementAction('reject');
+        const hitlContext = createAgnoHitlActionContext(context, 'reject');
+        const customHandler = hitlHandlers?.reject;
 
-        if (!target || !action) {
-          throw new Error('Agno requirement target is missing on the current approval block.');
+        if (customHandler) {
+          await customHandler(hitlContext);
+          return;
         }
 
-        patchAgnoApprovalBlock(context, 'reject');
-        await resolveRequirement({
-          ...target,
-          action,
-          ...(context.reason
-            ? {
-                note: context.reason
-              }
-            : {})
-        });
+        await hitlContext.submit();
       }
     });
   });

@@ -704,4 +704,183 @@ describe('useLangChainChatSession', () => {
 
     scope.stop();
   });
+
+  it('allows a custom LangChain HITL handler to extend the decision payload and run side effects', async () => {
+    const scope = effectScope();
+    const prompt = ref('帮我查一下北京天气');
+    const capturedBodies: Array<Record<string, unknown>> = [];
+    const sideEffects: string[] = [];
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = typeof init?.body === 'string'
+        ? JSON.parse(init.body) as Record<string, unknown>
+        : {};
+
+      capturedBodies.push(body);
+
+      if (capturedBodies.length === 1) {
+        return createLangChainSseResponse([
+          {
+            event: 'on_chain_start',
+            run_id: 'run-hitl-langchain-custom-1',
+            name: 'LangGraph',
+            metadata: {
+              thread_id: 'langchain-thread-custom-1'
+            }
+          },
+          {
+            event: 'on_chain_stream',
+            run_id: 'run-hitl-langchain-custom-1',
+            name: 'LangGraph',
+            metadata: {
+              thread_id: 'langchain-thread-custom-1'
+            },
+            data: {
+              chunk: {
+                __interrupt__: [
+                  {
+                    id: 'interrupt-langchain-custom-1',
+                    value: {
+                      action_requests: [
+                        {
+                          name: 'lookup_weather',
+                          args: {
+                            city: '北京'
+                          },
+                          description: '请确认是否执行天气查询工具。'
+                        }
+                      ],
+                      review_configs: [
+                        {
+                          action_name: 'lookup_weather',
+                          allowed_decisions: ['approve', 'edit', 'reject']
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            event: 'on_chain_end',
+            run_id: 'run-hitl-langchain-custom-1',
+            name: 'LangGraph',
+            metadata: {
+              thread_id: 'langchain-thread-custom-1'
+            }
+          }
+        ]);
+      }
+
+      return createLangChainSseResponse([
+        {
+          event: 'on_chain_start',
+          run_id: 'run-hitl-langchain-custom-2',
+          name: 'LangGraph',
+          metadata: {
+            thread_id: 'langchain-thread-custom-1'
+          }
+        },
+        {
+          event: 'on_chain_end',
+          run_id: 'run-hitl-langchain-custom-2',
+          name: 'LangGraph',
+          metadata: {
+            thread_id: 'langchain-thread-custom-1'
+          }
+        }
+      ]);
+    });
+    const sessionState = scope.run(() => useLangChainChatSession<string>({
+      source: 'http://langchain.test/api/stream',
+      input: prompt,
+      conversationId: 'session:demo:langchain-hitl-custom',
+      mode: 'hitl',
+      hitl: {
+        handlers: {
+          approve: async (context) => {
+            sideEffects.push(`before:${context.actionKey}:${context.target.interruptId}`);
+            expect(context.defaultDecision).toEqual({
+              type: 'approve'
+            });
+
+            await context.submitDecision({
+              ...context.defaultDecision,
+              message: '用户已确认，并要求补充工具调用过程。'
+            });
+            sideEffects.push('after:approve');
+          }
+        }
+      },
+      transport: {
+        fetch: fetchMock as typeof fetch
+      }
+    }));
+
+    if (!sessionState) {
+      throw new Error('Failed to create LangChain custom HITL session.');
+    }
+
+    await sessionState.send();
+    await nextTick();
+
+    const pausedSnapshot = sessionState.runtime.snapshot();
+    const approvalBlock = pausedSnapshot.blocks.find((block) => block.type === 'approval');
+    const approvalHandler = sessionState.surface.value.approvalActions !== false
+      ? sessionState.surface.value.approvalActions?.builtinHandlers?.approve
+      : undefined;
+
+    if (!approvalBlock || !approvalHandler) {
+      throw new Error('Failed to resolve LangChain custom HITL approval wiring.');
+    }
+
+    const context: RunSurfaceApprovalActionContext = {
+      title: String(approvalBlock.data.title ?? '工具调用确认'),
+      status: 'pending',
+      ...(typeof approvalBlock.data.message === 'string'
+        ? {
+            message: approvalBlock.data.message
+          }
+        : {}),
+      ...(typeof approvalBlock.data.approvalId === 'string'
+        ? {
+            approvalId: approvalBlock.data.approvalId
+          }
+        : {}),
+      ...(typeof approvalBlock.data.refId === 'string'
+        ? {
+            refId: approvalBlock.data.refId
+          }
+        : {}),
+      block: approvalBlock,
+      role: 'assistant',
+      runtime: sessionState.runtime,
+      snapshot: pausedSnapshot,
+      emitIntent: () => {
+        throw new Error('emitIntent should not be called in this test.');
+      }
+    };
+
+    await approvalHandler(context);
+    await nextTick();
+
+    expect(sideEffects).toEqual([
+      'before:approve:interrupt-langchain-custom-1',
+      'after:approve'
+    ]);
+    expect(capturedBodies[1]).toEqual({
+      session_id: 'langchain-thread-custom-1',
+      mode: 'hitl',
+      langchain_resume: {
+        decisions: [
+          {
+            type: 'approve',
+            message: '用户已确认，并要求补充工具调用过程。'
+          }
+        ]
+      }
+    });
+
+    scope.stop();
+  });
 });

@@ -16,6 +16,9 @@ export { defineLangChainEventComponents } from './eventComponents';
 export { defineLangChainToolComponents } from './toolComponents';
 export type {
   LangChainChatAssistantActionsOptions,
+  LangChainChatHitlActionContext,
+  LangChainChatHitlActionKey,
+  LangChainChatHitlOptions,
   LangChainChatIdFactory,
   LangChainChatIds,
   LangChainChatReconnectOptions,

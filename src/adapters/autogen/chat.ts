@@ -72,6 +72,65 @@ export interface AutoGenChatReconnectOptions<TSource = FetchTransportSource>
 export interface AutoGenChatAssistantActionsOptions extends FrameworkChatAssistantActionsOptions {}
 
 /**
+ * AutoGen chat helper 内置 HITL 动作支持的稳定 key。
+ */
+export type AutoGenChatHitlActionKey = Extract<
+  RunSurfaceBuiltinApprovalActionKey,
+  'approve' | 'reject'
+>;
+
+/**
+ * AutoGen 继续 human handoff 时允许传入的扩展输入。
+ */
+export interface AutoGenChatHandoffResolutionInput extends AutoGenResumeRequestBody {
+  /** 当前要继续的 handoff block id，仅前端本地用于精确更新卡片状态。 */
+  blockId?: string;
+  /** 当前继续动作对应的本地审批决策。 */
+  decision?: 'approve' | 'reject';
+}
+
+/**
+ * AutoGen approval 动作对外暴露的可扩展上下文。
+ *
+ * 这层主要给业务方做两类扩展：
+ * - 改默认继续内容，例如把“已确认，请继续执行”换成业务自己的提示词
+ * - 在真正 resume 前后插入日志、校验、弹窗或额外 side effect
+ */
+export interface AutoGenChatHitlActionContext<TSource = FetchTransportSource>
+  extends RunSurfaceApprovalActionContext {
+  /** 当前触发的 HITL 动作 key。 */
+  actionKey: AutoGenChatHitlActionKey;
+  /** 当前动作默认会发送给后端的 handoff 恢复输入。 */
+  defaultRequest: AutoGenChatHandoffResolutionInput;
+  /** 直接继续当前 human handoff，可完全自定义 payload。 */
+  resolveHandoff: (
+    input: AutoGenChatHandoffResolutionInput,
+    source?: TSource
+  ) => Promise<void>;
+  /**
+   * 使用默认的本地状态更新继续当前 handoff。
+   *
+   * - 不传 `input` 时直接使用 `defaultRequest`
+   * - 传入 `input` 时会带着你的自定义内容继续请求
+   */
+  submit: (
+    input?: AutoGenChatHandoffResolutionInput,
+    source?: TSource
+  ) => Promise<void>;
+}
+
+/**
+ * AutoGen chat helper 对 HITL handoff 流程的扩展配置。
+ */
+export interface AutoGenChatHitlOptions<TSource = FetchTransportSource> {
+  /** 覆写默认的 approve / reject 逻辑。 */
+  handlers?: Partial<Record<
+    AutoGenChatHitlActionKey,
+    (context: AutoGenChatHitlActionContext<TSource>) => void | Promise<void>
+  >>;
+}
+
+/**
  * `useAutoGenChatSession()` 的输入配置。
  */
 export interface UseAutoGenChatSessionOptions<
@@ -105,6 +164,8 @@ export interface UseAutoGenChatSessionOptions<
   eventActions?: EventActionRegistryResult<AutoGenEvent> | undefined;
   /** 是否启用当前聊天会话的内置 devtools。 */
   devtools?: false | FrameworkChatDevtoolsOptions<AutoGenEvent>;
+  /** AutoGen approval / handoff 这层 HITL 的自定义逻辑。 */
+  hitl?: AutoGenChatHitlOptions<TSource>;
   /** 是否抓取后端 sessionId。 */
   sessionId?: boolean | AutoGenChatSessionIdOptions;
   /** 是否在真正连接前预插一条用户消息；默认开启。 */
@@ -123,12 +184,7 @@ export interface UseAutoGenChatSessionResult<
 > extends FrameworkChatSessionResult<AutoGenEvent, TSource, AutoGenChatIds> {
   /** 手动继续一个已暂停的 AutoGen human handoff。 */
   resolveHandoff: (
-    input: AutoGenResumeRequestBody & {
-      /** 当前要继续的 handoff block id，仅前端本地用于精确更新卡片状态。 */
-      blockId?: string;
-      /** 当前继续动作对应的本地审批决策。 */
-      decision?: 'approve' | 'reject';
-    },
+    input: AutoGenChatHandoffResolutionInput,
     source?: TSource
   ) => Promise<void>;
 }
@@ -567,10 +623,7 @@ export function useAutoGenChatSession<
    * 继续一个已暂停的 AutoGen human handoff，并复用同一个 `/api/stream/autogen` SSE 入口。
    */
   async function resolveHandoff(
-    input: AutoGenResumeRequestBody & {
-      blockId?: string;
-      decision?: 'approve' | 'reject';
-    },
+    input: AutoGenChatHandoffResolutionInput,
     source?: TSource
   ) {
     const content = input.content.trim();
@@ -638,23 +691,56 @@ export function useAutoGenChatSession<
     }
   }
 
+  /**
+   * 基于当前 approval 动作构造一份可自定义的 AutoGen HITL 上下文。
+   */
+  function createAutoGenHitlActionContext(
+    context: RunSurfaceApprovalActionContext,
+    actionKey: AutoGenChatHitlActionKey
+  ): AutoGenChatHitlActionContext<TSource> {
+    const defaultRequest: AutoGenChatHandoffResolutionInput = {
+      content: resolveAutoGenApprovalReply(actionKey, context.reason),
+      decision: actionKey,
+      blockId: context.block.id
+    };
+
+    return {
+      ...context,
+      actionKey,
+      defaultRequest,
+      resolveHandoff,
+      submit: async (input = defaultRequest, source?: TSource) => {
+        await resolveHandoff(input, source);
+      }
+    };
+  }
+
   const surface = computed(() => {
     const baseSurface = sessionState.surface.value;
+    const hitlHandlers = options.hitl?.handlers;
 
     return resolveAutoGenChatApprovalActions(baseSurface, {
       approve: async (context) => {
-        await resolveHandoff({
-          content: resolveAutoGenApprovalReply('approve'),
-          decision: 'approve',
-          blockId: context.block.id
-        });
+        const hitlContext = createAutoGenHitlActionContext(context, 'approve');
+        const customHandler = hitlHandlers?.approve;
+
+        if (customHandler) {
+          await customHandler(hitlContext);
+          return;
+        }
+
+        await hitlContext.submit();
       },
       reject: async (context) => {
-        await resolveHandoff({
-          content: resolveAutoGenApprovalReply('reject', context.reason),
-          decision: 'reject',
-          blockId: context.block.id
-        });
+        const hitlContext = createAutoGenHitlActionContext(context, 'reject');
+        const customHandler = hitlHandlers?.reject;
+
+        if (customHandler) {
+          await customHandler(hitlContext);
+          return;
+        }
+
+        await hitlContext.submit();
       }
     });
   });

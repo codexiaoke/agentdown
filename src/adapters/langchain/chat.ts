@@ -73,6 +73,56 @@ export interface LangChainChatReconnectOptions<TSource = FetchTransportSource>
 export interface LangChainChatAssistantActionsOptions extends FrameworkChatAssistantActionsOptions {}
 
 /**
+ * LangChain chat helper 内置 HITL 动作支持的稳定 key。
+ */
+export type LangChainChatHitlActionKey = Extract<
+  RunSurfaceBuiltinApprovalActionKey,
+  'approve' | 'changes_requested' | 'reject'
+>;
+
+/**
+ * LangChain interrupt 动作对外暴露的可扩展上下文。
+ *
+ * 这层会把默认决策、batch 合并逻辑和 resume 能力一起暴露给业务方，
+ * 这样用户既可以只改一条 decision，也可以完全接管后续恢复流程。
+ */
+export interface LangChainChatHitlActionContext<TSource = FetchTransportSource>
+  extends RunSurfaceApprovalActionContext {
+  /** 当前触发的 HITL 动作 key。 */
+  actionKey: LangChainChatHitlActionKey;
+  /** 当前 approval block 对应的 interrupt 元数据。 */
+  target: LangChainInterruptTarget;
+  /** 当前动作默认会提交给 LangChain 的单条 human decision。 */
+  defaultDecision: LangChainHumanDecision;
+  /** 直接继续 LangChain interrupt，可完全自定义 resume payload。 */
+  resolveInterrupt: (
+    input: LangChainResumeRequestBody,
+    source?: TSource
+  ) => Promise<void>;
+  /**
+   * 把一条 decision 提交回默认的 LangChain batch 收敛流程。
+   *
+   * - 不传 `decision` 时直接使用 `defaultDecision`
+   * - 传入自定义 decision 时，仍然沿用内置的多审批项合并与 resume 逻辑
+   */
+  submitDecision: (
+    decision?: LangChainHumanDecision,
+    source?: TSource
+  ) => Promise<void>;
+}
+
+/**
+ * LangChain chat helper 对 HITL interrupt 流程的扩展配置。
+ */
+export interface LangChainChatHitlOptions<TSource = FetchTransportSource> {
+  /** 覆写默认的 approve / changes_requested / reject 逻辑。 */
+  handlers?: Partial<Record<
+    LangChainChatHitlActionKey,
+    (context: LangChainChatHitlActionContext<TSource>) => void | Promise<void>
+  >>;
+}
+
+/**
  * `useLangChainChatSession()` 的输入配置。
  */
 export interface UseLangChainChatSessionOptions<
@@ -106,6 +156,8 @@ export interface UseLangChainChatSessionOptions<
   eventActions?: EventActionRegistryResult<LangChainEvent> | undefined;
   /** 是否启用当前聊天会话的内置 devtools。 */
   devtools?: false | FrameworkChatDevtoolsOptions<LangChainEvent>;
+  /** LangChain interrupt / approval 这层 HITL 的自定义逻辑。 */
+  hitl?: LangChainChatHitlOptions<TSource>;
   /** 是否抓取后端 sessionId。 */
   sessionId?: boolean | LangChainChatSessionIdOptions;
   /** 是否在真正连接前预插一条用户消息；默认开启。 */
@@ -383,6 +435,30 @@ function resolveLangChainHumanDecision(
 }
 
 /**
+ * 把一条 LangChain human decision 重新映射回前端本地的 approval 状态语义。
+ */
+function resolveLangChainDecisionActionKey(
+  decision: LangChainHumanDecision,
+  fallbackActionKey: LangChainChatHitlActionKey
+): LangChainChatHitlActionKey {
+  if (decision.type === 'approve') {
+    return 'approve';
+  }
+
+  if (decision.type === 'edit') {
+    return 'changes_requested';
+  }
+
+  if (decision.type === 'reject') {
+    return fallbackActionKey === 'changes_requested'
+      ? 'changes_requested'
+      : 'reject';
+  }
+
+  return fallbackActionKey;
+}
+
+/**
  * 先在 runtime 里乐观更新 approval block，让用户立刻看到当前决策已记录。
  */
 function patchLangChainApprovalBlock(
@@ -625,21 +701,18 @@ export function useLangChainChatSession<
   /**
    * 记录某个审批项的决策；只有当同一个 interrupt batch 的决策收齐后才真正 resume。
    */
-  async function handleLangChainApprovalAction(
+  async function submitLangChainDecision(
     context: RunSurfaceApprovalActionContext,
-    actionKey: RunSurfaceBuiltinApprovalActionKey
+    actionKey: LangChainChatHitlActionKey,
+    decision: LangChainHumanDecision,
+    source?: TSource
   ) {
     const target = resolveLangChainInterruptTarget(context.block, context.approvalId, context.refId);
 
     if (!target) {
       throw new Error('LangChain interrupt target is missing on the current approval block.');
     }
-
-    const decision = resolveLangChainHumanDecision(actionKey, context, target);
-
-    if (!decision) {
-      throw new Error(`LangChain decision "${actionKey}" is not supported by the current interrupt.`);
-    }
+    const resolvedActionKey = resolveLangChainDecisionActionKey(decision, actionKey);
 
     let decisionsByIndex = pendingInterruptDecisions.get(target.interruptId);
 
@@ -658,8 +731,8 @@ export function useLangChainChatSession<
       if (!current) {
         patchLangChainApprovalBlock(
           context,
-          actionKey,
-          resolveLangChainApprovalMessage(actionKey, true)
+          resolvedActionKey,
+          resolveLangChainApprovalMessage(resolvedActionKey, true)
         );
         return;
       }
@@ -669,28 +742,84 @@ export function useLangChainChatSession<
 
     patchLangChainApprovalBlock(
       context,
-      actionKey,
-      resolveLangChainApprovalMessage(actionKey, false)
+      resolvedActionKey,
+      resolveLangChainApprovalMessage(resolvedActionKey, false)
     );
 
     await resolveInterrupt({
       decisions: orderedDecisions
-    });
+    }, source);
     pendingInterruptDecisions.delete(target.interruptId);
+  }
+
+  /**
+   * 基于当前 approval 动作构造一份可自定义的 LangChain HITL 上下文。
+   */
+  function createLangChainHitlActionContext(
+    context: RunSurfaceApprovalActionContext,
+    actionKey: LangChainChatHitlActionKey
+  ): LangChainChatHitlActionContext<TSource> {
+    const target = resolveLangChainInterruptTarget(context.block, context.approvalId, context.refId);
+
+    if (!target) {
+      throw new Error('LangChain interrupt target is missing on the current approval block.');
+    }
+
+    const defaultDecision = resolveLangChainHumanDecision(actionKey, context, target);
+
+    if (!defaultDecision) {
+      throw new Error(`LangChain decision "${actionKey}" is not supported by the current interrupt.`);
+    }
+
+    return {
+      ...context,
+      actionKey,
+      target,
+      defaultDecision,
+      resolveInterrupt,
+      submitDecision: async (decision = defaultDecision, source?: TSource) => {
+        await submitLangChainDecision(context, actionKey, decision, source);
+      }
+    };
   }
 
   const surface = computed(() => {
     const baseSurface = sessionState.surface.value;
+    const hitlHandlers = options.hitl?.handlers;
 
     return resolveLangChainChatApprovalActions(baseSurface, {
       approve: async (context) => {
-        await handleLangChainApprovalAction(context, 'approve');
+        const hitlContext = createLangChainHitlActionContext(context, 'approve');
+        const customHandler = hitlHandlers?.approve;
+
+        if (customHandler) {
+          await customHandler(hitlContext);
+          return;
+        }
+
+        await hitlContext.submitDecision();
       },
       changes_requested: async (context) => {
-        await handleLangChainApprovalAction(context, 'changes_requested');
+        const hitlContext = createLangChainHitlActionContext(context, 'changes_requested');
+        const customHandler = hitlHandlers?.changes_requested;
+
+        if (customHandler) {
+          await customHandler(hitlContext);
+          return;
+        }
+
+        await hitlContext.submitDecision();
       },
       reject: async (context) => {
-        await handleLangChainApprovalAction(context, 'reject');
+        const hitlContext = createLangChainHitlActionContext(context, 'reject');
+        const customHandler = hitlHandlers?.reject;
+
+        if (customHandler) {
+          await customHandler(hitlContext);
+          return;
+        }
+
+        await hitlContext.submitDecision();
       }
     });
   });

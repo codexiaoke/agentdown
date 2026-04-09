@@ -15,6 +15,9 @@ export { defineAgnoEventComponents } from './eventComponents';
 export { defineAgnoToolComponents } from './toolComponents';
 export type {
   AgnoChatAssistantActionsOptions,
+  AgnoChatHitlActionContext,
+  AgnoChatHitlActionKey,
+  AgnoChatHitlOptions,
   AgnoChatIdFactory,
   AgnoChatIds,
   AgnoChatReconnectOptions,

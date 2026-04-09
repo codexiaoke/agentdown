@@ -16,6 +16,10 @@ export { defineAutoGenEventComponents } from './eventComponents';
 export { defineAutoGenToolComponents } from './toolComponents';
 export type {
   AutoGenChatAssistantActionsOptions,
+  AutoGenChatHandoffResolutionInput,
+  AutoGenChatHitlActionContext,
+  AutoGenChatHitlActionKey,
+  AutoGenChatHitlOptions,
   AutoGenChatIdFactory,
   AutoGenChatIds,
   AutoGenChatReconnectOptions,
