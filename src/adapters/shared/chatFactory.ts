@@ -1,5 +1,9 @@
 import { computed, shallowRef, toValue, type ComputedRef, type MaybeRefOrGetter, type ShallowRef } from 'vue';
-import { useAdapterSession, type UseAdapterSessionResult } from '../../composables/useAdapterSession';
+import {
+  useAdapterSession,
+  type UseAdapterSessionReconnectOptions,
+  type UseAdapterSessionResult
+} from '../../composables/useAdapterSession';
 import {
   useAgentDevtools,
   type UseAgentDevtoolsOptions,
@@ -7,7 +11,13 @@ import {
 } from '../../composables/useAgentDevtools';
 import type { AgentdownAdapter, AgentdownAdapterSessionOptions } from '../../runtime/defineAdapter';
 import { cmd } from '../../runtime/defineProtocol';
-import type { BridgeHooks, TransportAdapter } from '../../runtime/types';
+import type {
+  BridgeError,
+  BridgeHooks,
+  RuntimeData,
+  SurfaceBlockState,
+  TransportAdapter
+} from '../../runtime/types';
 import type { EventActionRegistryResult } from '../../runtime/eventActions';
 import type { RunSurfaceMessageActionItem, RunSurfaceMessageActionsRoleOptions, RunSurfaceOptions } from '../../surface/types';
 import type { FrameworkAdapterOptionsLike, FrameworkAdapterProtocolOptionsLike, FrameworkEventRegistryLike, FrameworkToolRegistryLike } from './adapterFactory';
@@ -42,6 +52,136 @@ export interface FrameworkChatUserMessageOptions {
   /** 用户消息写入到哪个 slot。默认 `main`。 */
   slot?: string;
 }
+
+/**
+ * 共享 chat helper 对自动重连行为的配置。
+ */
+export interface FrameworkChatReconnectOptions<
+  TRawPacket = unknown,
+  TSource = unknown
+> extends UseAdapterSessionReconnectOptions<TRawPacket, TSource> {}
+
+/**
+ * 结构化用户消息里的纯文本 block。
+ */
+export interface FrameworkChatUserTextBlockInput {
+  /** block 类型，固定为 text。 */
+  kind: 'text';
+  /** 可选的稳定 block id。 */
+  id?: string;
+  /** 当前文本内容。 */
+  text: string;
+  /** 可选 slot；不传时沿用 userMessage 默认 slot。 */
+  slot?: string;
+}
+
+/**
+ * 结构化用户消息里的附件 block。
+ */
+export interface FrameworkChatUserAttachmentBlockInput {
+  /** block 类型，固定为 attachment。 */
+  kind: 'attachment';
+  /** 可选的稳定 block id。 */
+  id?: string;
+  /** 可选 slot；不传时沿用 userMessage 默认 slot。 */
+  slot?: string;
+  /** 当前附件标题。 */
+  title: string;
+  /** 附件类型。 */
+  attachmentKind: string;
+  /** 附件唯一标识。 */
+  attachmentId?: string;
+  /** 附件标签或文件名。 */
+  label?: string;
+  /** 附件链接。 */
+  href?: string;
+  /** 附件说明。 */
+  message?: string;
+  /** 附件 MIME 类型。 */
+  mimeType?: string;
+  /** 已格式化大小。 */
+  sizeText?: string;
+  /** 预览图地址。 */
+  previewSrc?: string;
+  /** 业务状态文案。 */
+  status?: string;
+  /** 额外透传给 block 的数据。 */
+  data?: RuntimeData;
+}
+
+/**
+ * 结构化用户消息里的 artifact block。
+ */
+export interface FrameworkChatUserArtifactBlockInput {
+  /** block 类型，固定为 artifact。 */
+  kind: 'artifact';
+  /** 可选的稳定 block id。 */
+  id?: string;
+  /** 可选 slot；不传时沿用 userMessage 默认 slot。 */
+  slot?: string;
+  /** artifact 标题。 */
+  title: string;
+  /** artifact 类型。 */
+  artifactKind: string;
+  /** artifact 唯一标识。 */
+  artifactId?: string;
+  /** artifact 标签。 */
+  label?: string;
+  /** artifact 链接。 */
+  href?: string;
+  /** artifact 说明。 */
+  message?: string;
+  /** 额外透传给 block 的数据。 */
+  data?: RuntimeData;
+}
+
+/**
+ * 结构化用户消息里的自定义 block。
+ */
+export interface FrameworkChatUserCustomBlockInput {
+  /** block 类型，固定为 custom。 */
+  kind: 'custom';
+  /** 可选的稳定 block id。 */
+  id?: string;
+  /** 可选 slot；不传时沿用 userMessage 默认 slot。 */
+  slot?: string;
+  /** 自定义 block 的 renderer。 */
+  renderer: string;
+  /** 自定义 block 的 type；不传时默认沿用 renderer。 */
+  type?: string;
+  /** 自定义 block 的内容文本。 */
+  content?: string;
+  /** 自定义 block 的稳定状态。 */
+  state?: SurfaceBlockState;
+  /** 自定义 block 的数据载荷。 */
+  data?: RuntimeData;
+}
+
+/**
+ * 共享 chat helper 支持的结构化用户消息 block 联合类型。
+ */
+export type FrameworkChatUserMessageBlockInput =
+  | FrameworkChatUserTextBlockInput
+  | FrameworkChatUserAttachmentBlockInput
+  | FrameworkChatUserArtifactBlockInput
+  | FrameworkChatUserCustomBlockInput;
+
+/**
+ * 一次发送里可选的结构化用户消息。
+ */
+export interface FrameworkChatStructuredInput {
+  /** 当前轮需要显示在 UI 上的主文本。 */
+  text?: string;
+  /** 真正发给后端的文本；不传时自动回退到 `text` 或 text block。 */
+  requestText?: string;
+  /** 当前用户消息里还要一起插入的结构化 blocks。 */
+  blocks?: FrameworkChatUserMessageBlockInput[];
+}
+
+/**
+ * chat helper 支持的统一输入结构。
+ */
+export type FrameworkChatInputValue = string | FrameworkChatStructuredInput;
 
 /**
  * 共享 chat helper 的 assistant 操作栏配置。
@@ -110,8 +250,8 @@ export interface FrameworkChatSessionOptionsLike<
 > {
   /** 当前聊天真正要连接的 source。 */
   source: MaybeRefOrGetter<TSource | null | undefined>;
-  /** 当前输入框里的文案。 */
-  input?: MaybeRefOrGetter<string | undefined> | undefined;
+  /** 当前输入框里的文案，或已结构化好的用户消息。 */
+  input?: MaybeRefOrGetter<FrameworkChatInputValue | undefined> | undefined;
   /** 当前整段聊天所属的 conversationId。 */
   conversationId: MaybeRefOrGetter<string>;
   /** adapter 的 run 标题简写。 */
@@ -142,6 +282,8 @@ export interface FrameworkChatSessionOptionsLike<
   sessionId?: boolean | FrameworkChatSessionIdOptions<TRawPacket> | undefined;
   /** 是否在真正连接前预插一条用户消息。 */
   userMessage?: false | FrameworkChatUserMessageOptions | undefined;
+  /** 当前 chat helper 是否在连接失败后自动重试。 */
+  reconnect?: false | FrameworkChatReconnectOptions<TRawPacket, TSource> | undefined;
   /** assistant 默认消息操作栏的快捷配置。 */
   assistantActions?: false | FrameworkChatAssistantActionsOptions | undefined;
 }
@@ -175,7 +317,7 @@ export interface FrameworkChatSessionResult<
   /** 当前是否处于“手动中断后等待恢复”的状态。 */
   interrupted: ShallowRef<boolean>;
   /** 发送当前输入框内容。 */
-  send: (input?: string, source?: TSource) => Promise<void>;
+  send: (input?: FrameworkChatInputValue, source?: TSource) => Promise<void>;
   /** 重新生成上一条 assistant 回复。 */
   regenerate: (source?: TSource) => Promise<void>;
   /** 重新发起上一条输入；默认行为等价于 retry last input。 */
@@ -251,7 +393,17 @@ function resolveFrameworkChatIdFactory<TChatIds extends FrameworkChatIds>(
 }
 
 /**
- * 把空字符串 / 只含空白的输入统一收敛成真正可用的消息文本。
+ * 共享 chat helper 内部使用的归一化输入结构。
+ */
+interface ResolvedFrameworkChatInput {
+  /** 当前轮真正发给后端的文本。 */
+  requestText: string;
+  /** 当前轮要预插入到 UI 的结构化 blocks。 */
+  blocks: FrameworkChatUserMessageBlockInput[];
+}
+
+/**
+ * 把空值统一收敛成真正可用的消息文本。
  */
 function resolveFrameworkChatText(value: string | undefined): string {
   if (typeof value === 'string') {
@@ -259,6 +411,111 @@ function resolveFrameworkChatText(value: string | undefined): string {
   }
 
   return '';
+}
+
+/**
+ * 为结构化用户消息 block 创建默认稳定 id。
+ */
+function createFrameworkChatUserBlockId(
+  ids: FrameworkChatIds,
+  kind: FrameworkChatUserMessageBlockInput['kind'],
+  index: number
+): string {
+  return `block:${ids.userMessageId}:${kind}:${index}`;
+}
+
+/**
+ * 提取一组结构化用户消息 blocks 里可直接发给后端的文本部分。
+ */
+function extractFrameworkChatRequestTextFromBlocks(
+  blocks: FrameworkChatUserMessageBlockInput[]
+): string {
+  return blocks
+    .filter((block): block is FrameworkChatUserTextBlockInput => block.kind === 'text')
+    .map((block) => resolveFrameworkChatText(block.text))
+    .filter((text) => text.length > 0)
+    .join('\n\n');
+}
+
+/**
+ * 浅拷贝结构化用户消息 block，避免后续重试直接引用外部可变对象。
+ */
+function cloneFrameworkChatUserBlock(
+  block: FrameworkChatUserMessageBlockInput
+): FrameworkChatUserMessageBlockInput {
+  switch (block.kind) {
+    case 'text':
+      return {
+        ...block
+      };
+    case 'attachment':
+    case 'artifact':
+    case 'custom':
+      return {
+        ...block,
+        ...(block.data ? { data: { ...block.data } } : {})
+      };
+    default:
+      return block;
+  }
+}
+
+/**
+ * 把任意输入统一解析成 chat helper 后续真正要消费的结构。
+ */
+function resolveFrameworkChatInput(value: FrameworkChatInputValue | undefined): ResolvedFrameworkChatInput {
+  if (typeof value === 'string' || value === undefined) {
+    const text = resolveFrameworkChatText(value);
+
+    return {
+      requestText: text,
+      blocks: text.length > 0
+        ? [{
+            kind: 'text',
+            text
+          }]
+        : []
+    };
+  }
+
+  const inputBlocks = Array.isArray(value.blocks)
+    ? value.blocks.map((block) => cloneFrameworkChatUserBlock(block))
+    : [];
+  const displayText = resolveFrameworkChatText(value.text);
+  const requestText = (() => {
+    const explicitRequestText = resolveFrameworkChatText(value.requestText);
+
+    if (explicitRequestText.length > 0) {
+      return explicitRequestText;
+    }
+
+    if (displayText.length > 0) {
+      return displayText;
+    }
+
+    return extractFrameworkChatRequestTextFromBlocks(inputBlocks);
+  })();
+  const blocks = displayText.length > 0
+    ? [
+        {
+          kind: 'text',
+          text: displayText
+        } satisfies FrameworkChatUserTextBlockInput,
+        ...inputBlocks
+      ]
+    : inputBlocks.length > 0
+      ? inputBlocks
+      : requestText.length > 0
+        ? [{
+            kind: 'text',
+            text: requestText
+          } satisfies FrameworkChatUserTextBlockInput]
+        : [];
+
+  return {
+    requestText,
+    blocks
+  };
 }
 
 /**
@@ -425,7 +682,7 @@ function createFrameworkChatEventActionHooks<TRawPacket>(
  * 预插入一条用户消息，确保 user / assistant / tool 落在统一聊天语义里。
  */
 function seedFrameworkUserMessage<TRawPacket, TSource, TChatIds extends FrameworkChatIds>(
-  text: string,
+  input: ResolvedFrameworkChatInput,
   ids: TChatIds,
   runtime: UseAdapterSessionResult<TRawPacket, TSource>['runtime'],
   options: FrameworkChatUserMessageOptions | false | undefined,
@@ -441,15 +698,129 @@ function seedFrameworkUserMessage<TRawPacket, TSource, TChatIds extends Framewor
     slot = options.slot;
   }
 
-  runtime.apply(cmd.message.text({
-    id: `block:${ids.userMessageId}:text`,
-    role: 'user',
-    slot,
-    text,
-    conversationId: ids.conversationId,
-    turnId: ids.turnId,
-    messageId: ids.userMessageId,
-    at
+  const commands = input.blocks.map((block, index) => {
+    const baseSemantics = {
+      role: 'user' as const,
+      slot: block.slot ?? slot,
+      conversationId: ids.conversationId,
+      turnId: ids.turnId,
+      messageId: ids.userMessageId,
+      at
+    };
+
+    switch (block.kind) {
+      case 'text':
+        return cmd.message.text({
+          ...baseSemantics,
+          id: block.id ?? createFrameworkChatUserBlockId(ids, block.kind, index),
+          text: block.text
+        });
+      case 'attachment':
+        return cmd.message.attachment({
+          ...baseSemantics,
+          id: block.id ?? createFrameworkChatUserBlockId(ids, block.kind, index),
+          title: block.title,
+          attachmentKind: block.attachmentKind,
+          ...(block.attachmentId ? { attachmentId: block.attachmentId } : {}),
+          ...(block.label ? { label: block.label } : {}),
+          ...(block.href ? { href: block.href } : {}),
+          ...(block.message ? { message: block.message } : {}),
+          ...(block.mimeType ? { mimeType: block.mimeType } : {}),
+          ...(block.sizeText ? { sizeText: block.sizeText } : {}),
+          ...(block.previewSrc ? { previewSrc: block.previewSrc } : {}),
+          ...(block.status ? { status: block.status } : {}),
+          ...(block.data ? { data: block.data } : {})
+        });
+      case 'artifact':
+        return cmd.message.artifact({
+          ...baseSemantics,
+          id: block.id ?? createFrameworkChatUserBlockId(ids, block.kind, index),
+          title: block.title,
+          artifactKind: block.artifactKind,
+          ...(block.artifactId ? { artifactId: block.artifactId } : {}),
+          ...(block.label ? { label: block.label } : {}),
+          ...(block.href ? { href: block.href } : {}),
+          ...(block.message ? { message: block.message } : {}),
+          ...(block.data ? { data: block.data } : {})
+        });
+      case 'custom':
+        return cmd.message.insert({
+          ...baseSemantics,
+          id: block.id ?? createFrameworkChatUserBlockId(ids, block.kind, index),
+          type: block.type ?? block.renderer,
+          renderer: block.renderer,
+          state: block.state ?? 'stable',
+          ...(block.content !== undefined ? { content: block.content } : {}),
+          data: block.data ?? {}
+        });
+      default:
+        return cmd.message.text({
+          ...baseSemantics,
+          id: createFrameworkChatUserBlockId(ids, 'text', index),
+          text: input.requestText
+        });
+    }
+  });
+
+  if (commands.length === 0) {
+    return;
+  }
+
+  runtime.apply(commands);
+}
+
+/**
+ * 读取一次失败连接最适合展示给用户的错误文案。
+ */
+function resolveFrameworkChatErrorMessage(
+  error: BridgeError<unknown> | Error,
+  frameworkName: string
+): string {
+  const causeMessage = (
+    'cause' in error
+    && error.cause instanceof Error
+    && typeof error.cause.message === 'string'
+    && error.cause.message.trim().length > 0
+  )
+    ? error.cause.message
+    : '';
+
+  if (causeMessage.length > 0) {
+    return causeMessage;
+  }
+
+  if (typeof error.message === 'string' && error.message.trim().length > 0) {
+    return error.message;
+  }
+
+  return `${frameworkName} 请求失败。`;
+}
+
+/**
+ * 在当前 assistant 消息尾部写入一个默认错误 block。
+ */
+function upsertFrameworkAssistantErrorBlock<TRawPacket, TSource, TChatIds extends FrameworkChatIds>(
+  input: {
+    frameworkName: string;
+    error: BridgeError<TRawPacket> | Error;
+    ids: TChatIds;
+    runtime: UseAdapterSessionResult<TRawPacket, TSource>['runtime'];
+    at: number;
+  }
+) {
+  input.runtime.apply(cmd.error.upsert({
+    id: `block:${input.ids.assistantMessageId}:error`,
+    role: 'assistant',
+    title: `${input.frameworkName} 连接失败`,
+    message: resolveFrameworkChatErrorMessage(input.error, input.frameworkName),
+    conversationId: input.ids.conversationId,
+    turnId: input.ids.turnId,
+    messageId: input.ids.assistantMessageId,
+    at: input.at,
+    data: {
+      framework: input.frameworkName,
+      error: true
+    }
   }));
 }
 
@@ -569,7 +940,14 @@ function resolveFrameworkChatAssistantActions(
 /**
  * 读取当前 bridge 状态对应的简短状态文案。
  */
-function resolveFrameworkStatusLabel(phase: UseAdapterSessionResult['status']['value']['phase']): string {
+function resolveFrameworkStatusLabel(
+  phase: UseAdapterSessionResult['status']['value']['phase'],
+  reconnecting: boolean
+): string {
+  if (reconnecting) {
+    return '重连中';
+  }
+
   switch (phase) {
     case 'consuming':
       return '连接中';
@@ -597,6 +975,7 @@ export function useFrameworkChatSession<
 ): FrameworkChatSessionResult<TRawPacket, TSource, TChatIds> {
   const requestInput = shallowRef('');
   const lastInput = shallowRef('');
+  const lastSubmission = shallowRef<ResolvedFrameworkChatInput | null>(null);
   const sessionId = shallowRef('');
   const initialSource = resolveFrameworkChatInitialSource(config.options.source);
   const interrupted = shallowRef(false);
@@ -688,29 +1067,45 @@ export function useFrameworkChatSession<
   }
 
   const sessionState = useAdapterSession(adapter, {
-    overrides: sessionOverrides
+    overrides: sessionOverrides,
+    ...(config.options.reconnect !== undefined
+      ? {
+          reconnect: config.options.reconnect
+        }
+      : {})
   });
   devtools.attachRuntime(sessionState.runtime);
-  const busy = computed(() => sessionState.status.value.phase === 'consuming');
-  const statusLabel = computed(() => resolveFrameworkStatusLabel(sessionState.status.value.phase));
-  const transportError = computed(() => sessionState.error.value?.message ?? '');
+  const busy = computed(() => {
+    return sessionState.status.value.phase === 'consuming' || sessionState.reconnecting.value;
+  });
+  const statusLabel = computed(() => resolveFrameworkStatusLabel(
+    sessionState.status.value.phase,
+    sessionState.reconnecting.value
+  ));
+  const transportError = computed(() => {
+    if (!sessionState.error.value) {
+      return '';
+    }
+
+    return resolveFrameworkChatErrorMessage(sessionState.error.value, config.frameworkName);
+  });
 
   /**
    * 发送一次新的用户输入。
    */
-  async function send(input?: string, source?: TSource) {
+  async function send(input?: FrameworkChatInputValue, source?: TSource) {
     let nextInput = input;
 
     if (nextInput === undefined) {
       nextInput = toValue(config.options.input);
     }
 
-    const text = resolveFrameworkChatText(nextInput);
+    const normalizedInput = resolveFrameworkChatInput(nextInput);
     const conversationId = toValue(config.options.conversationId);
     const at = Date.now();
     const ids = createIds({
       conversationId,
-      text,
+      text: normalizedInput.requestText,
       at
     });
     const resolvedSourceInput = toValue(config.options.source);
@@ -726,29 +1121,42 @@ export function useFrameworkChatSession<
       fallbackSource as TSource | undefined
     );
 
-    lastInput.value = text;
-    requestInput.value = text;
+    lastInput.value = normalizedInput.requestText;
+    requestInput.value = normalizedInput.requestText;
+    lastSubmission.value = normalizedInput;
     chatIds.value = ids;
     activeSource.value = nextSource;
     interrupted.value = false;
     sessionState.disconnect();
     sessionState.reset();
-    seedFrameworkUserMessage(text, ids, sessionState.runtime, config.options.userMessage, at);
-    await sessionState.connect(nextSource);
+    seedFrameworkUserMessage(normalizedInput, ids, sessionState.runtime, config.options.userMessage, at);
+
+    try {
+      await sessionState.connect(nextSource);
+    } catch (error) {
+      upsertFrameworkAssistantErrorBlock({
+        frameworkName: config.frameworkName,
+        error: error as BridgeError<TRawPacket> | Error,
+        ids,
+        runtime: sessionState.runtime,
+        at: Date.now()
+      });
+      throw error;
+    }
   }
 
   /**
    * 重新生成上一条 assistant 回复。
    */
   async function regenerate(source?: TSource) {
-    await send(lastInput.value, source);
+    await send(lastSubmission.value ?? lastInput.value, source);
   }
 
   /**
    * 重新发起上一条输入。
    */
   async function retry(source?: TSource) {
-    await send(lastInput.value, source);
+    await send(lastSubmission.value ?? lastInput.value, source);
   }
 
   /**
@@ -791,6 +1199,15 @@ export function useFrameworkChatSession<
     try {
       await sessionState.connect(nextSource);
     } catch (error) {
+      if (chatIds.value) {
+        upsertFrameworkAssistantErrorBlock({
+          frameworkName: config.frameworkName,
+          error: error as BridgeError<TRawPacket> | Error,
+          ids: chatIds.value,
+          runtime: sessionState.runtime,
+          at: Date.now()
+        });
+      }
       interrupted.value = true;
       throw error;
     }

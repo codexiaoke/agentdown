@@ -9,7 +9,7 @@ const docsBase = process.env.DOCS_BASE ?? (process.env.GITHUB_ACTIONS === 'true'
 
 export default defineConfig({
   title: 'Agentdown',
-  description: '面向流式输出的 Agent Markdown UI Runtime 文档站',
+  description: '面向流式输出的 Agent Markdown UI Runtime',
   lang: 'zh-CN',
   base: docsBase,
   cleanUrls: true,
@@ -27,36 +27,24 @@ export default defineConfig({
     siteTitle: 'Agentdown',
     nav: [
       { text: '快速开始', link: '/guide/getting-started' },
+      { text: '指南', link: '/guide/core-concepts' },
       { text: '适配器', link: '/guide/framework-adapters' },
-      { text: 'Markdown', link: '/guide/markdown-rendering' },
-      { text: 'Runtime', link: '/runtime/overview' },
-      { text: '性能', link: '/guide/performance' },
-      { text: 'API', link: '/api/run-surface' },
+      { text: 'API', link: '/api/runtime' },
       { text: 'GitHub', link: repositoryUrl }
     ],
     sidebar: {
       '/guide/': [
         {
-          text: '开始',
+          text: '指南',
           items: [
             { text: '快速开始', link: '/guide/getting-started' },
+            { text: '核心概念', link: '/guide/core-concepts' },
             { text: '官方框架适配', link: '/guide/framework-adapters' },
-            { text: '框架能力矩阵', link: '/guide/framework-capability-matrix' },
-            { text: '自定义 Framework', link: '/guide/custom-framework' },
-            { text: 'Agno 深入接入', link: '/guide/agno-adapter' },
-            { text: 'Markdown 渲染', link: '/guide/markdown-rendering' },
+            { text: '自定义协议接入', link: '/guide/custom-framework' },
+            { text: 'RunSurface 定制', link: '/guide/run-surface' },
+            { text: '流式 Markdown', link: '/guide/streaming-markdown' },
             { text: '性能优化', link: '/guide/performance' },
-            { text: '组件覆写', link: '/guide/component-overrides' }
-          ]
-        }
-      ],
-      '/runtime/': [
-        {
-          text: 'Runtime',
-          items: [
-            { text: '概览', link: '/runtime/overview' },
-            { text: '协议与事件', link: '/runtime/protocol' },
-            { text: 'Streaming 组装', link: '/runtime/reducer' }
+            { text: 'FastAPI Backend', link: '/guide/backend-fastapi' }
           ]
         }
       ],
@@ -64,30 +52,10 @@ export default defineConfig({
         {
           text: 'API 参考',
           items: [
-            { text: 'RunSurface', link: '/api/run-surface' },
-            { text: 'MarkdownRenderer', link: '/api/renderer' },
             { text: 'Runtime 与 Bridge', link: '/api/runtime' },
-            { text: '协议辅助函数', link: '/api/events' },
-            { text: '核心类型', link: '/api/types' }
-          ]
-        }
-      ],
-      '/examples/': [
-        {
-          text: '示例',
-          items: [{ text: 'SSE 天气示例', link: '/examples/team-mode' }]
-        }
-      ],
-      '/reference/': [
-        {
-          text: '参考',
-          items: [
-            { text: 'V1 产品设计', link: '/reference/v1-design' },
-            { text: 'V2 产品设计', link: '/reference/v2-design' },
-            { text: 'Adapter Kit 2.0 RFC', link: '/reference/adapter-kit-2-rfc' },
-            { text: 'FAQ', link: '/reference/faq' },
-            { text: '发布清单', link: '/reference/release' },
-            { text: '路线图', link: '/reference/roadmap' }
+            { text: 'RunSurface', link: '/api/run-surface' },
+            { text: 'MarkdownRenderer', link: '/api/markdown-renderer' },
+            { text: '官方适配器', link: '/api/adapters' }
           ]
         }
       ]

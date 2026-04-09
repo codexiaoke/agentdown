@@ -432,7 +432,7 @@ function parseTokens(
       const block: MarkdownThoughtBlock = {
         id: createBlockId('thought', index),
         kind: 'thought',
-        title: options.thoughtTitle ?? 'Thought Process',
+        title: options.thoughtTitle ?? '思考过程',
         blocks: nestedBlocks
       };
       blocks.push(block);

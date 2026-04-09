@@ -7,7 +7,9 @@ import {
   createFrameworkChatIds,
   type FrameworkChatAssistantActionsOptions,
   type FrameworkChatDevtoolsOptions,
+  type FrameworkChatInputValue,
   type FrameworkChatIds,
+  type FrameworkChatReconnectOptions,
   type FrameworkChatSessionIdOptions,
   type FrameworkChatSessionResult,
   type FrameworkChatUserMessageOptions,
@@ -49,6 +51,12 @@ export interface CrewAIChatSessionIdOptions extends FrameworkChatSessionIdOption
 export interface CrewAIChatUserMessageOptions extends FrameworkChatUserMessageOptions {}
 
 /**
+ * CrewAI chat helper 对自动重连行为的配置。
+ */
+export interface CrewAIChatReconnectOptions<TSource = FetchTransportSource>
+  extends FrameworkChatReconnectOptions<CrewAIEvent, TSource> {}
+
+/**
  * CrewAI chat helper 对 assistant 操作栏的快捷配置。
  */
 export interface CrewAIChatAssistantActionsOptions extends FrameworkChatAssistantActionsOptions {}
@@ -61,8 +69,8 @@ export interface UseCrewAIChatSessionOptions<
 > {
   /** 当前聊天真正要连接的 source，例如 `/api/stream/crewai`。 */
   source: MaybeRefOrGetter<TSource | null | undefined>;
-  /** 当前输入框里的文案。 */
-  input?: MaybeRefOrGetter<string | undefined>;
+  /** 当前输入框里的文案，或已结构化好的用户消息。 */
+  input?: MaybeRefOrGetter<FrameworkChatInputValue | undefined>;
   /** 当前整段聊天所属的 conversationId。 */
   conversationId: MaybeRefOrGetter<string>;
   /** 透传给自定义 backend 的模式字段。 */
@@ -91,6 +99,8 @@ export interface UseCrewAIChatSessionOptions<
   sessionId?: boolean | CrewAIChatSessionIdOptions;
   /** 是否在真正连接前预插一条用户消息；默认开启。 */
   userMessage?: false | CrewAIChatUserMessageOptions;
+  /** 当前 chat helper 是否在连接失败后自动重试。 */
+  reconnect?: false | CrewAIChatReconnectOptions<TSource>;
   /** assistant 默认消息操作栏的快捷配置；默认开启。 */
   assistantActions?: false | CrewAIChatAssistantActionsOptions;
 }

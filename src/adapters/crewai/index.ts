@@ -24,6 +24,7 @@ export type {
   CrewAIChatAssistantActionsOptions,
   CrewAIChatIdFactory,
   CrewAIChatIds,
+  CrewAIChatReconnectOptions,
   CrewAIChatSessionIdOptions,
   CrewAIChatUserMessageOptions,
   UseCrewAIChatSessionOptions,

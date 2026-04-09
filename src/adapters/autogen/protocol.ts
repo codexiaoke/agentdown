@@ -62,6 +62,13 @@ function createAutoGenApprovalBlockId(
 }
 
 /**
+ * 基于 run id 生成默认错误 block id。
+ */
+function createAutoGenRunErrorBlockId(runId: string): string {
+  return `block:error:${runId}`;
+}
+
+/**
  * 读取 AutoGen HITL approval block 的标题。
  */
 function resolveAutoGenApprovalTitle(packet: AutoGenEvent): string {
@@ -363,29 +370,50 @@ export function createAutoGenProtocol(
           break;
         case 'error_event':
           ensureRunStarted(state, session, packet, context, commands, options);
-          abortCurrentStream(session, commands, extractErrorMessage(packet));
+          {
+            const errorMessage = extractErrorMessage(packet);
 
-          commands.push(
-            cmd.node.error({
-              id: session.runId,
-              ...(session.title ? { title: session.title } : {}),
-              message: extractErrorMessage(packet),
-              data: {
-                rawEvent: packet
-              },
-              at: context.now()
-            }),
-            cmd.run.finish({
-              id: session.runId,
-              ...(session.title ? { title: session.title } : {}),
-              message: extractErrorMessage(packet),
-              status: 'error',
-              data: {
-                rawEvent: packet
-              },
-              at: context.now()
-            })
-          );
+            abortCurrentStream(session, commands, errorMessage);
+
+            commands.push(
+              cmd.error.upsert({
+                id: createAutoGenRunErrorBlockId(session.runId),
+                role: 'assistant',
+                slot: options.slot ?? 'main',
+                title: '运行失败',
+                message: errorMessage,
+                refId: session.runId,
+                ...(session.groupId !== undefined ? { groupId: session.groupId } : {}),
+                ...(session.conversationId !== undefined ? { conversationId: session.conversationId } : {}),
+                ...(session.turnId !== undefined ? { turnId: session.turnId } : {}),
+                ...(session.messageId !== undefined ? { messageId: session.messageId } : {}),
+                data: {
+                  rawEvent: packet,
+                  runId: session.runId
+                },
+                at: context.now()
+              }),
+              cmd.node.error({
+                id: session.runId,
+                ...(session.title ? { title: session.title } : {}),
+                message: errorMessage,
+                data: {
+                  rawEvent: packet
+                },
+                at: context.now()
+              }),
+              cmd.run.finish({
+                id: session.runId,
+                ...(session.title ? { title: session.title } : {}),
+                message: errorMessage,
+                status: 'error',
+                data: {
+                  rawEvent: packet
+                },
+                at: context.now()
+              })
+            );
+          }
 
           disposeRunSession(state, session);
 

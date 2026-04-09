@@ -1,4 +1,5 @@
 import type { Component } from 'vue';
+import type { AgentdownTheme } from '../config/types';
 import type {
   AguiComponentMap,
   MarkdownApprovalStatus,
@@ -44,6 +45,20 @@ export interface RunSurfacePerformanceOptions {
    * 单个 text block 超过该长度后按 slab 分段渲染。
    */
   textSlabChars?: number;
+  /**
+   * 是否对单条消息内部的大量 surface block 启用窗口化。
+   * 适合长文档流式输出这类“只有 1 条 assistant 消息，但里面有很多 block”的场景。
+   */
+  blockVirtualize?: boolean;
+  /**
+   * 单条消息内部 block 窗口化使用的 rootMargin。
+   */
+  blockVirtualizeMargin?: string;
+  /**
+   * 单条消息内部 block 数达到多少后才启动窗口化。
+   * 小消息直接全量挂载，避免不必要的观察器和 spacer 开销。
+   */
+  blockVirtualizeThreshold?: number;
 }
 
 /**
@@ -567,4 +582,6 @@ export interface RunSurfaceOptions {
   approvalActions?: RunSurfaceApprovalActionsOptions | false;
   /** handoff 卡片对应的动作区域配置。 */
   handoffActions?: RunSurfaceHandoffActionsOptions | false;
+  /** 当前 RunSurface 作用域内要覆盖的主题。 */
+  theme?: AgentdownTheme;
 }

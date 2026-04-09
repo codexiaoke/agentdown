@@ -1,5 +1,6 @@
 import { createBridge } from './createBridge';
 import { createAgentRuntime } from './createAgentRuntime';
+import { mergeAgentdownThemes } from '../config/theme';
 import type { RunSurfaceOptions } from '../surface/types';
 import type {
   AgentRuntime,
@@ -77,6 +78,7 @@ export interface AgentdownPreset<
 function mergeSurfaceOptions(base: RunSurfaceOptions = {}, override: RunSurfaceOptions = {}): RunSurfaceOptions {
   const baseApprovalActions = base.approvalActions;
   const overrideApprovalActions = override.approvalActions;
+  const theme = mergeAgentdownThemes(base.theme, override.theme);
   let approvalActions = overrideApprovalActions;
 
   if (overrideApprovalActions === undefined) {
@@ -122,6 +124,7 @@ function mergeSurfaceOptions(base: RunSurfaceOptions = {}, override: RunSurfaceO
       ...(base.messageActions ?? {}),
       ...(override.messageActions ?? {})
     },
+    ...(theme ? { theme } : {}),
     ...(approvalActions !== undefined ? { approvalActions } : {})
   };
 }

@@ -297,6 +297,7 @@ function markdownBlockToSurfaceBlock(
       next.content = block.expression;
       break;
     case 'artifact':
+    case 'error':
     case 'approval':
     case 'attachment':
     case 'branch':

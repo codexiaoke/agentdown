@@ -4,6 +4,9 @@ import MarkdownBlockList from './MarkdownBlockList.vue';
 import MarkdownBlockRenderer from './MarkdownBlockRenderer.vue';
 import MarkdownMeasuredBlock from './MarkdownMeasuredBlock.vue';
 import { defaultMarkdownBuiltinComponents } from './defaultMarkdownComponents';
+import { useAgentdownConfig } from '../config/context';
+import { resolveAgentdownThemeCssVars } from '../config/theme';
+import type { AgentdownTheme } from '../config/types';
 import { estimateMarkdownBlockHeight, shouldMeasureMarkdownBlockHeight } from './markdownBlockPerformance';
 import {
   resolveMarkdownRendererPerformance,
@@ -28,21 +31,32 @@ import type {
 } from '../core/types';
 
 interface Props {
+  /** 原始 markdown 文本。 */
   source: string;
+  /** 默认行高。 */
   lineHeight?: number;
+  /** 默认字体声明。 */
   font?: string;
+  /** thought 容器默认标题。 */
   thoughtTitle?: string;
+  /** 是否允许直接渲染不安全 HTML。 */
   allowUnsafeHtml?: boolean;
+  /** markdown 内嵌 AGUI 组件注册表。 */
   aguiComponents?: AguiComponentMap;
+  /** markdown 内置 block 组件覆写。 */
   builtinComponents?: MarkdownBuiltinComponentOverrides;
+  /** markdown-it 插件扩展。 */
   plugins?: MarkdownEnginePlugin[];
+  /** 渲染性能配置。 */
   performance?: MarkdownRendererPerformanceOptions;
+  /** 当前 MarkdownRenderer 局部主题。 */
+  theme?: AgentdownTheme;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   lineHeight: 26,
   font: AGENTDOWN_DEFAULT_TEXT_FONT,
-  thoughtTitle: 'Thought Process',
+  thoughtTitle: '思考过程',
   allowUnsafeHtml: false,
   aguiComponents: () => ({}),
   builtinComponents: () => ({}),
@@ -89,6 +103,12 @@ const resolvedBuiltinComponents = computed(() => ({
   ...defaultMarkdownBuiltinComponents,
   ...props.builtinComponents
 }));
+const resolvedAgentdownConfig = useAgentdownConfig(computed(() => {
+  return props.theme ? { theme: props.theme } : undefined;
+}));
+const resolvedThemeStyle = computed(() => {
+  return resolveAgentdownThemeCssVars(resolvedAgentdownConfig.value.theme);
+});
 const blockGaps = computed(() => {
   return renderableBlocks.value.map((block, index) => {
     return getMarkdownBlockGapAfter(block, renderableBlocks.value[index + 1]);
@@ -418,6 +438,7 @@ onBeforeUnmount(() => {
   <div
     ref="containerRef"
     class="agentdown-root"
+    :style="resolvedThemeStyle"
     :data-agentdown-render-mode="resolvedPerformance.mode"
     :data-agentdown-renderable-blocks="telemetrySnapshot.renderableBlockCount"
     :data-agentdown-mounted-blocks="telemetrySnapshot.mountedBlockCount"

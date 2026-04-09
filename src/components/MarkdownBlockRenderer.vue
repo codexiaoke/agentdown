@@ -57,6 +57,9 @@ defineProps<Props>();
     :is="builtinComponents.thought"
     v-else-if="block.kind === 'thought'"
     :title="block.title"
+    :status="block.status"
+    :duration-text="block.durationText"
+    :duration-ms="block.durationMs"
   >
     <MarkdownBlockList
       :blocks="block.blocks"
@@ -86,6 +89,15 @@ defineProps<Props>();
     :artifact-kind="block.artifactKind"
     :label="block.label"
     :href="block.href"
+    :ref-id="block.refId"
+  />
+
+  <component
+    :is="builtinComponents.error"
+    v-else-if="block.kind === 'error'"
+    :title="block.title"
+    :message="block.message"
+    :code="block.code"
     :ref-id="block.refId"
   />
 

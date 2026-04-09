@@ -1,6 +1,7 @@
 import type {
   BlockInsertCommand,
   BlockPatchCommand,
+  BlockUpsertCommand,
   EventRecordCommand,
   NodePatchCommand,
   NodeRemoveCommand,
@@ -171,6 +172,16 @@ export interface MessageAttachmentInput extends Omit<MessageBlockInput, 'type' |
 }
 
 /**
+ * error 消息的快捷输入结构。
+ */
+export interface MessageErrorInput extends Omit<MessageBlockInput, 'type' | 'renderer' | 'content'> {
+  title?: string;
+  message: string;
+  code?: string;
+  refId?: string;
+}
+
+/**
  * 内容替换支持的目标内容类型。
  */
 export type ContentKind = 'text' | 'markdown';
@@ -279,6 +290,7 @@ export type HelperProtocolSemanticEvent =
   | 'tool.update'
   | 'tool.finish'
   | 'artifact.upsert'
+  | 'error.upsert'
   | 'approval.update'
   | 'attachment.upsert'
   | 'branch.upsert'
@@ -301,6 +313,7 @@ type HelperProtocolInputByEvent = {
   'tool.update': ToolUpdateInput;
   'tool.finish': ToolUpdateInput;
   'artifact.upsert': MessageArtifactInput;
+  'error.upsert': MessageErrorInput;
   'approval.update': ApprovalUpdateInput;
   'attachment.upsert': MessageAttachmentInput;
   'branch.upsert': BranchUpdateInput;
@@ -541,6 +554,19 @@ function createArtifactData(input: MessageArtifactInput): RuntimeData {
 }
 
 /**
+ * 生成 error block 默认 data。
+ */
+function createErrorData(input: MessageErrorInput): RuntimeData {
+  return {
+    kind: 'error',
+    title: input.title ?? '出错了',
+    message: input.message,
+    ...(input.code ? { code: input.code } : {}),
+    ...(input.refId ? { refId: input.refId } : {})
+  };
+}
+
+/**
  * 生成 attachment block 默认 data。
  */
 function createAttachmentData(input: MessageAttachmentInput): RuntimeData {
@@ -582,6 +608,28 @@ function createMessageArtifactCommand(
 }
 
 /**
+ * 快速生成一条 error 消息插入命令。
+ */
+function createMessageErrorCommand(
+  input: MessageErrorInput,
+  options: Omit<BlockInsertCommand, 'type' | 'block'> = {}
+): BlockInsertCommand {
+  return createMessageInsertCommand(
+    {
+      ...input,
+      type: 'error',
+      renderer: 'error',
+      content: input.message,
+      data: mergeData(
+        createErrorData(input),
+        input.data
+      )
+    },
+    options
+  );
+}
+
+/**
  * 快速生成一条 attachment 消息插入命令。
  */
 function createMessageAttachmentCommand(
@@ -613,6 +661,23 @@ function createArtifactUpsertCommand(input: MessageArtifactInput): BlockPatchCom
     state: input.state ?? 'stable',
     data: mergeData(
       createArtifactData(input),
+      input.data
+    )
+  });
+}
+
+/**
+ * 生成 error 消息的 upsert 命令。
+ */
+function createErrorUpsertCommand(input: MessageErrorInput): BlockUpsertCommand {
+  return createMessageUpsertCommand({
+    ...input,
+    type: 'error',
+    renderer: 'error',
+    content: input.message,
+    state: input.state ?? 'stable',
+    data: mergeData(
+      createErrorData(input),
       input.data
     )
   });
@@ -977,6 +1042,12 @@ function executeHelperCommand(
           atDefault: context.now()
         })
       );
+    case 'error.upsert':
+      return cmd.error.upsert(
+        applyHelperDefaults(input as MessageErrorInput, defaults['error.upsert'], {
+          atDefault: context.now()
+        })
+      );
     case 'approval.update':
       return cmd.approval.update(
         applyHelperDefaults(input as ApprovalUpdateInput, defaults['approval.update'], {
@@ -1272,6 +1343,13 @@ export const cmd = {
     ): BlockInsertCommand {
       return createMessageArtifactCommand(input, options);
     },
+    /** 快速创建 error 消息。 */
+    error(
+      input: MessageErrorInput,
+      options: Omit<BlockInsertCommand, 'type' | 'block'> = {}
+    ): BlockInsertCommand {
+      return createMessageErrorCommand(input, options);
+    },
     /** 快速创建 attachment 消息。 */
     attachment(
       input: MessageAttachmentInput,
@@ -1319,6 +1397,10 @@ export const cmd = {
     artifactUpsert(input: MessageArtifactInput): BlockPatchCommand {
       return createArtifactUpsertCommand(input);
     },
+    /** 按 block id 创建或覆盖 error 消息。 */
+    errorUpsert(input: MessageErrorInput): BlockUpsertCommand {
+      return createErrorUpsertCommand(input);
+    },
     /** 按 block id 更新 attachment 消息。 */
     attachmentUpsert(input: MessageAttachmentInput): BlockPatchCommand {
       return createAttachmentUpsertCommand(input);
@@ -1336,6 +1418,12 @@ export const cmd = {
     /** 独立 artifact helper，便于协议层按语义直接调用。 */
     upsert(input: MessageArtifactInput): BlockPatchCommand {
       return createArtifactUpsertCommand(input);
+    }
+  },
+  error: {
+    /** 独立 error helper，便于协议层按语义直接调用。 */
+    upsert(input: MessageErrorInput): BlockUpsertCommand {
+      return createErrorUpsertCommand(input);
     }
   },
   approval: {

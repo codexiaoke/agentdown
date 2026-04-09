@@ -52,13 +52,13 @@ cp backend/.env.example backend/.env
 
 至少需要填写：
 
-```env
+```dotenv
 DEEPSEEK_API_KEY=your_key
 ```
 
 可选项：
 
-```env
+```dotenv
 DEEPSEEK_MODEL=deepseek-chat
 DEEPSEEK_BASE_URL=https://api.deepseek.com
 ```

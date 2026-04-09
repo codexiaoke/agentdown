@@ -14,6 +14,62 @@ function createProtocolTestContext(nowValue = 1000): ProtocolContext {
 }
 
 describe('defineProtocol helpers', () => {
+  it('creates visible error blocks through cmd helpers', () => {
+    const runtime = createAgentRuntime();
+
+    runtime.apply([
+      cmd.message.error({
+        id: 'block:error:insert',
+        role: 'assistant',
+        title: '连接失败',
+        message: 'Weather service timeout.',
+        code: 'TIMEOUT',
+        conversationId: 'session:test',
+        turnId: 'turn:test',
+        messageId: 'message:assistant:test',
+        at: 10
+      }),
+      cmd.error.upsert({
+        id: 'block:error:upsert',
+        role: 'assistant',
+        title: '运行失败',
+        message: 'Tool execution failed.',
+        refId: 'run:test',
+        conversationId: 'session:test',
+        turnId: 'turn:test',
+        messageId: 'message:assistant:test',
+        at: 20
+      })
+    ]);
+
+    const snapshot = runtime.snapshot();
+    const insertedBlock = snapshot.blocks.find((block) => block.id === 'block:error:insert');
+    const upsertedBlock = snapshot.blocks.find((block) => block.id === 'block:error:upsert');
+
+    expect(insertedBlock).toMatchObject({
+      type: 'error',
+      renderer: 'error',
+      content: 'Weather service timeout.',
+      data: {
+        kind: 'error',
+        title: '连接失败',
+        message: 'Weather service timeout.',
+        code: 'TIMEOUT'
+      }
+    });
+    expect(upsertedBlock).toMatchObject({
+      type: 'error',
+      renderer: 'error',
+      content: 'Tool execution failed.',
+      data: {
+        kind: 'error',
+        title: '运行失败',
+        message: 'Tool execution failed.',
+        refId: 'run:test'
+      }
+    });
+  });
+
   it('creates attachment, branch and handoff blocks through cmd helpers', () => {
     const runtime = createAgentRuntime();
 
@@ -229,6 +285,53 @@ describe('defineProtocol helpers', () => {
             kind: 'handoff',
             assignee: '审核同学',
             targetType: 'human'
+          }
+        }
+      }
+    ]);
+  });
+
+  it('maps error helper semantics into runtime commands', () => {
+    type Packet = {
+      event: 'RequestFailed';
+      id: string;
+      message: string;
+    };
+
+    const protocol = defineHelperProtocol<Packet>({
+      bindings: {
+        'error.upsert': {
+          on: 'RequestFailed',
+          resolve: (event) => ({
+            id: `block:error:${event.id}`,
+            title: '请求失败',
+            message: event.message
+          })
+        }
+      }
+    });
+
+    const commands = protocol.map({
+      packet: {
+        event: 'RequestFailed',
+        id: 'fetch-weather',
+        message: 'Network unavailable.'
+      },
+      context: createProtocolTestContext(200)
+    });
+
+    expect(commands).toMatchObject([
+      {
+        type: 'block.upsert',
+        block: {
+          id: 'block:error:fetch-weather',
+          type: 'error',
+          renderer: 'error',
+          content: 'Network unavailable.',
+          data: {
+            kind: 'error',
+            title: '请求失败',
+            message: 'Network unavailable.'
           }
         }
       }

@@ -7,12 +7,14 @@ import DraftOverlayDemo from './pages/DraftOverlayDemo.vue';
 import HumanLoopDemo from './pages/HumanLoopDemo.vue';
 import LongDocumentDemo from './pages/LongDocumentDemo.vue';
 import PerformanceLabDemo from './pages/PerformanceLabDemo.vue';
+import PretextDemo from './pages/PretextDemo.vue';
 import ProtocolHelpersDemo from './pages/ProtocolHelpersDemo.vue';
 import ReplayTranscriptDemo from './pages/ReplayTranscriptDemo.vue';
 import SseAutoGenDemo from './pages/SseAutoGenDemo.vue';
 import SseCrewAIDemo from './pages/SseCrewAIDemo.vue';
 import SseLangChainDemo from './pages/SseLangChainDemo.vue';
 import SseWeatherDemo from './pages/SseWeatherDemo.vue';
+import StreamingBenchmarkDemo from './pages/StreamingBenchmarkDemo.vue';
 import StreamingMarkdownDemo from './pages/StreamingMarkdownDemo.vue';
 import UserFileDemo from './pages/UserFileDemo.vue';
 
@@ -40,10 +42,22 @@ const routes: DemoRoute[] = [
     component: LongDocumentDemo
   },
   {
+    path: '/pretext',
+    title: 'Pretext 演示',
+    description: '只展示会命中 pretext 的标题、段落和行内样式，拖动宽度直接看排版变化。',
+    component: PretextDemo
+  },
+  {
     path: '/performance-lab',
     title: '性能实验室',
     description: '切换基线和优化方案，直接观察 DOM、挂载块数与滚动窗口变化。',
     component: PerformanceLabDemo
+  },
+  {
+    path: '/streaming-benchmark',
+    title: '流式性能基准',
+    description: '针对长文档流式输出跑真实 RunSurface 基准，页面和脚本都能直接取结果。',
+    component: StreamingBenchmarkDemo
   },
   {
     path: '/devtools',
@@ -124,7 +138,11 @@ const routes: DemoRoute[] = [
  */
 function normalizeHash(hash: string): string {
   const normalized = hash.replace(/^#/, '') || routes[0]?.path || '/blocks';
-  return routes.some(route => route.path === normalized) ? normalized : routes[0]?.path || '/blocks';
+  const normalizedPath = normalized.split('?')[0] ?? normalized;
+
+  return routes.some(route => route.path === normalizedPath)
+    ? normalizedPath
+    : routes[0]?.path || '/blocks';
 }
 
 const currentPath = ref(routes[0]?.path || '/blocks');
@@ -135,8 +153,10 @@ const currentPath = ref(routes[0]?.path || '/blocks');
 function syncRoute() {
   const normalized = normalizeHash(window.location.hash);
   currentPath.value = normalized;
+  const currentHash = window.location.hash.replace(/^#/, '');
+  const currentHashPath = currentHash.split('?')[0] ?? currentHash;
 
-  if (window.location.hash !== `#${normalized}`) {
+  if (currentHashPath !== normalized) {
     window.location.hash = normalized;
   }
 }

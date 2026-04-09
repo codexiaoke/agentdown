@@ -29,6 +29,31 @@ import { useRuntimeTranscript, type UseRuntimeTranscriptResult } from './useRunt
 export type AdapterSessionTranscriptSource = 'exported' | 'imported' | 'custom';
 
 /**
+ * `useAdapterSession()` 自动重连的配置。
+ */
+export interface UseAdapterSessionReconnectOptions<
+  TRawPacket = unknown,
+  TSource = AsyncIterable<TRawPacket> | Iterable<TRawPacket>
+> {
+  /** 最多额外重试多少次；默认 2 次。 */
+  retries?: number;
+  /** 每次重试前等待多久；默认指数退避到 5 秒以内。 */
+  delayMs?: number | ((input: {
+    attempt: number;
+    error: BridgeError<TRawPacket> | Error;
+    source: TSource | undefined;
+    status: BridgeStatus;
+  }) => number);
+  /** 是否应该继续重试；默认始终允许。 */
+  shouldRetry?: (input: {
+    attempt: number;
+    error: BridgeError<TRawPacket> | Error;
+    source: TSource | undefined;
+    status: BridgeStatus;
+  }) => boolean;
+}
+
+/**
  * `useAdapterSession()` 的可选行为配置。
  */
 export interface UseAdapterSessionOptions<
@@ -47,6 +72,8 @@ export interface UseAdapterSessionOptions<
   transcript?: CreateRuntimeTranscriptOptions;
   /** runtime replay 配置。 */
   replay?: ReplayRuntimeHistoryOptions;
+  /** 连接失败后是否自动重试。 */
+  reconnect?: false | UseAdapterSessionReconnectOptions<TRawPacket, TSource>;
   /** 当前作用域销毁时是否自动关闭 session。 */
   closeSessionOnScopeDispose?: boolean;
 }
@@ -90,6 +117,10 @@ export interface UseAdapterSessionResult<
   bridgeSnapshot: ShallowRef<BridgeSnapshot<TRawPacket>>;
   /** 当前是否处于消费中。 */
   consuming: ComputedRef<boolean>;
+  /** 当前是否正处于自动重连等待或重试中。 */
+  reconnecting: ComputedRef<boolean>;
+  /** 当前已经进入第几次自动重连。 */
+  reconnectAttempt: ShallowRef<number>;
   /** 最近一次连接或 bridge 报错。 */
   error: ComputedRef<BridgeError<TRawPacket> | Error | undefined>;
   /** 手动刷新 bridge 状态快照。 */
@@ -158,6 +189,42 @@ export function useAdapterSession<
   const status = shallowRef(session.status);
   const bridgeSnapshot = shallowRef(session.snapshot);
   const sessionError = shallowRef<BridgeError<TRawPacket> | Error | undefined>(session.error);
+  const reconnectAttempt = shallowRef(0);
+  const reconnectingState = shallowRef(false);
+  let connectRunId = 0;
+  let reconnectTimer: ReturnType<typeof globalThis.setTimeout> | null = null;
+  let resolveReconnectWait: (() => void) | null = null;
+
+  /**
+   * 清空当前等待中的重连定时器。
+   */
+  function clearReconnectTimer() {
+    if (reconnectTimer === null) {
+      return;
+    }
+
+    globalThis.clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+    resolveReconnectWait?.();
+    resolveReconnectWait = null;
+  }
+
+  /**
+   * 清空当前自动重连状态。
+   */
+  function resetReconnectState() {
+    clearReconnectTimer();
+    reconnectAttempt.value = 0;
+    reconnectingState.value = false;
+  }
+
+  /**
+   * 取消当前这条连接链路后续可能继续发生的自动重连。
+   */
+  function cancelReconnectFlow() {
+    connectRunId += 1;
+    resetReconnectState();
+  }
 
   /**
    * 从 adapter session 同步一份最新 bridge 状态。
@@ -176,6 +243,141 @@ export function useAdapterSession<
       snapshot: nextSnapshot,
       error: nextError
     };
+  }
+
+  /**
+   * 读取自动重连配置；没开启时返回 `null`。
+   */
+  function resolveReconnectOptions() {
+    return options.reconnect === false || options.reconnect === undefined
+      ? null
+      : options.reconnect;
+  }
+
+  /**
+   * 计算下一次自动重连前应等待的时长。
+   */
+  function resolveReconnectDelay(
+    reconnectOptions: UseAdapterSessionReconnectOptions<TRawPacket, TSource>,
+    input: {
+      attempt: number;
+      error: BridgeError<TRawPacket> | Error;
+      source: TSource | undefined;
+      status: BridgeStatus;
+    }
+  ): number {
+    if (typeof reconnectOptions.delayMs === 'function') {
+      return Math.max(0, reconnectOptions.delayMs(input));
+    }
+
+    if (typeof reconnectOptions.delayMs === 'number') {
+      return Math.max(0, reconnectOptions.delayMs);
+    }
+
+    return Math.min(1000 * 2 ** Math.max(0, input.attempt - 1), 5000);
+  }
+
+  /**
+   * 等待一次自动重连延迟；如果中途被新连接打断，则直接结束当前流程。
+   */
+  async function waitReconnectDelay(delayMs: number, runId: number): Promise<boolean> {
+    if (delayMs <= 0) {
+      return runId === connectRunId;
+    }
+
+    await new Promise<void>((resolve) => {
+      resolveReconnectWait = resolve;
+      reconnectTimer = globalThis.setTimeout(() => {
+        reconnectTimer = null;
+        resolveReconnectWait = null;
+        resolve();
+      }, delayMs);
+    });
+
+    return runId === connectRunId;
+  }
+
+  /**
+   * 执行一次带自动重连能力的连接流程。
+   */
+  async function executeSessionConnect(
+    operation: 'connect' | 'restart',
+    nextSource?: TSource
+  ) {
+    const resolvedReconnectOptions = resolveReconnectOptions();
+    const runId = ++connectRunId;
+    const resolvedSource = nextSource ?? source.value ?? session.source;
+    const maxRetries = Math.max(0, resolvedReconnectOptions?.retries ?? 2);
+    let attempt = 0;
+
+    resetReconnectState();
+
+    if (nextSource !== undefined) {
+      source.value = nextSource;
+    }
+
+    refresh();
+
+    while (true) {
+      try {
+        if (operation === 'connect') {
+          await session.connect(resolvedSource);
+        } else {
+          await session.restart(resolvedSource);
+        }
+
+        runtimeState.refresh();
+        break;
+      } catch (error) {
+        const normalizedError = error instanceof Error
+          ? error
+          : new Error('Adapter session consume failed.');
+        sessionError.value = normalizedError;
+        const { status: nextStatus } = refresh();
+
+        if (!resolvedReconnectOptions) {
+          throw normalizedError;
+        }
+
+        attempt += 1;
+
+        const shouldRetry = attempt <= maxRetries && (
+          resolvedReconnectOptions.shouldRetry?.({
+            attempt,
+            error: normalizedError,
+            source: resolvedSource,
+            status: nextStatus
+          })
+          ?? true
+        );
+
+        if (!shouldRetry) {
+          throw normalizedError;
+        }
+
+        reconnectAttempt.value = attempt;
+        reconnectingState.value = true;
+
+        const delayMs = resolveReconnectDelay(resolvedReconnectOptions, {
+          attempt,
+          error: normalizedError,
+          source: resolvedSource,
+          status: nextStatus
+        });
+        const shouldContinue = await waitReconnectDelay(delayMs, runId);
+
+        if (!shouldContinue) {
+          return;
+        }
+      } finally {
+        source.value = session.source;
+        refresh();
+      }
+    }
+
+    if (runId === connectRunId) {
+      resetReconnectState();
+    }
   }
 
   /**
@@ -277,25 +479,14 @@ export function useAdapterSession<
    * 连接当前或新的 source。
    */
   async function connect(nextSource?: TSource) {
-    if (nextSource !== undefined) {
-      source.value = nextSource;
-    }
-
-    refresh();
-
-    try {
-      await session.connect(nextSource);
-      runtimeState.refresh();
-    } finally {
-      source.value = session.source;
-      refresh();
-    }
+    await executeSessionConnect('connect', nextSource);
   }
 
   /**
    * 中断当前连接。
    */
   function disconnect() {
+    cancelReconnectFlow();
     session.disconnect();
     refresh();
   }
@@ -304,19 +495,7 @@ export function useAdapterSession<
    * 重新连接当前或新的 source。
    */
   async function restart(nextSource?: TSource) {
-    if (nextSource !== undefined) {
-      source.value = nextSource;
-    }
-
-    refresh();
-
-    try {
-      await session.restart(nextSource);
-      runtimeState.refresh();
-    } finally {
-      source.value = session.source;
-      refresh();
-    }
+    await executeSessionConnect('restart', nextSource);
   }
 
   /**
@@ -340,6 +519,7 @@ export function useAdapterSession<
    * 重置当前 session，并保持 runtime / bridge / transcript 状态同步。
    */
   function reset() {
+    cancelReconnectFlow();
     session.reset();
     runtimeState.refresh();
     refresh();
@@ -353,6 +533,7 @@ export function useAdapterSession<
    * 关闭当前 session。
    */
   function close() {
+    cancelReconnectFlow();
     replay.pause();
     session.close();
     refresh();
@@ -379,6 +560,7 @@ export function useAdapterSession<
   );
 
   onScopeDispose(() => {
+    cancelReconnectFlow();
     replay.pause();
 
     if (options.closeSessionOnScopeDispose ?? true) {
@@ -404,6 +586,8 @@ export function useAdapterSession<
     status,
     bridgeSnapshot,
     consuming: computed(() => status.value.phase === 'consuming'),
+    reconnecting: computed(() => reconnectingState.value),
+    reconnectAttempt,
     error: computed(() => sessionError.value),
     refresh,
     useExportedTranscript,

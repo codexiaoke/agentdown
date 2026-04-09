@@ -1,5 +1,23 @@
 import { sliceInlineFragments } from '../core/inlineFragments';
 import type { MarkdownBlock, MarkdownTextBlock } from '../core/types';
+import type { SurfaceBlock } from '../runtime/types';
+
+const SURFACE_MARKDOWN_KINDS = new Set<MarkdownBlock['kind']>([
+  'text',
+  'html',
+  'code',
+  'mermaid',
+  'math',
+  'thought',
+  'agui',
+  'artifact',
+  'error',
+  'approval',
+  'attachment',
+  'branch',
+  'handoff',
+  'timeline'
+]);
 
 /**
  * 长文本 slab 优先尝试命中的自然断点。
@@ -31,12 +49,85 @@ export function isHeavyMarkdownKind(kind: MarkdownBlock['kind']): boolean {
     || kind === 'thought'
     || kind === 'agui'
     || kind === 'artifact'
+    || kind === 'error'
     || kind === 'approval'
     || kind === 'attachment'
     || kind === 'branch'
     || kind === 'handoff'
     || kind === 'timeline'
   );
+}
+
+/**
+ * 尝试把一个 surface block 还原成结构化 markdown block。
+ * 这让 surface 层也能复用 markdown 侧的性能估算和可见性判断逻辑。
+ */
+export function resolveSurfaceBlockMarkdownBlock(block: SurfaceBlock): MarkdownBlock | null {
+  const data = block.data as Partial<MarkdownBlock> & { kind?: unknown };
+
+  if (typeof data.kind === 'string' && SURFACE_MARKDOWN_KINDS.has(data.kind as MarkdownBlock['kind'])) {
+    return data as MarkdownBlock;
+  }
+
+  if (block.renderer === 'text' && typeof block.content === 'string') {
+    return {
+      id: block.id,
+      kind: 'text',
+      tag: 'p',
+      text: block.content
+    };
+  }
+
+  return null;
+}
+
+/**
+ * 判断一个 surface block 是否已经有肉眼可见的内容。
+ * 这个结果既用于 draft placeholder，也用于消息级窗口化前的首屏显示策略。
+ */
+export function hasSurfaceBlockVisibleContent(block: SurfaceBlock): boolean {
+  if (typeof block.content === 'string' && block.content.trim().length > 0) {
+    return true;
+  }
+
+  const markdownBlock = resolveSurfaceBlockMarkdownBlock(block);
+
+  if (markdownBlock) {
+    switch (markdownBlock.kind) {
+      case 'text':
+        return markdownBlock.text.trim().length > 0;
+      case 'html':
+        return markdownBlock.html.trim().length > 0;
+      case 'code':
+      case 'mermaid':
+        return true;
+      case 'math':
+        return markdownBlock.expression.trim().length > 0;
+      case 'thought':
+        return markdownBlock.blocks.length > 0 || markdownBlock.title.trim().length > 0;
+      case 'agui':
+      case 'artifact':
+      case 'error':
+      case 'approval':
+      case 'attachment':
+      case 'branch':
+      case 'handoff':
+      case 'timeline':
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  if (block.renderer === 'markdown.draft' || block.renderer === 'text.draft' || block.renderer === 'markdown') {
+    return false;
+  }
+
+  if (typeof block.data !== 'object' || block.data === null) {
+    return block.data !== undefined;
+  }
+
+  return Object.keys(block.data).length > 0;
 }
 
 /**

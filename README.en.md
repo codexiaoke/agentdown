@@ -2,8 +2,8 @@
 
 Language: [中文](./README.md) | **English**
 
-Agentdown is a streaming-first Agent Markdown UI Runtime for Vue 3.  
-It combines markdown rendering, protocol mapping, stream assembly, runtime state, and interactive surface components so agent output can become a real UI instead of a plain text blob.
+Agentdown is a UI runtime for agent product frontends, built on Vue 3.  
+It takes SSE / JSON / framework event streams from your backend and turns raw agent output into chat messages, tool cards, approvals, handoffs, artifacts, and continuously updating Markdown UI.
 
 Documentation: [https://codexiaoke.github.io/agentdown/](https://codexiaoke.github.io/agentdown/)
 
@@ -11,6 +11,87 @@ Documentation: [https://codexiaoke.github.io/agentdown/](https://codexiaoke.gith
 
 ```text
 raw packet / SSE -> protocol -> bridge -> assembler -> runtime -> Agent UI
+```
+
+## What Agentdown Actually Does
+
+In plain terms:
+
+> Agentdown turns the event stream produced by your agent backend into a real frontend chat UI.
+
+It is much closer to a rendering/runtime layer for agent products than to a model SDK or backend orchestration framework.
+
+- Input: Agno, LangChain, AutoGen, CrewAI, or your own SSE / JSON event stream
+- Output: chat messages, tool call cards, approval blocks, handoff blocks, artifacts, long-form Markdown, and custom AGUI components
+- Layer: agent product frontend
+
+It does not try to be:
+
+- an LLM SDK
+- a backend agent orchestration framework
+- your database, memory layer, or job queue
+
+It is mainly responsible for:
+
+- rendering streaming Markdown without flashing broken partial structures
+- turning tool calls and Human-In-The-Loop events into real UI
+- keeping long text and heavy blocks performant in the browser
+- letting official framework events plug into the frontend directly
+
+## Fastest Way To Integrate Official Frameworks
+
+If your backend already uses Agno, LangChain, AutoGen, or CrewAI, the recommended entry point is not to hand-build the protocol chain first. Start with:
+
+- `useAgnoChatSession()`
+- `useLangChainChatSession()`
+- `useAutoGenChatSession()`
+- `useCrewAIChatSession()`
+
+These helpers are designed for real chat pages and usually let you wire all of this in just a few lines:
+
+- streaming text
+- tool call cards
+- conversation, turn, and message semantic ids
+- message actions such as regenerate and copy
+- Human-In-The-Loop flows such as approval, handoff, interrupt, and resume
+
+If your goal is “connect a real agent backend and get the chat UI working fast”, start here first.
+
+Minimal example:
+
+```vue
+<script setup lang="ts">
+import { ref } from 'vue';
+import {
+  RunSurface,
+  useAgnoChatSession
+} from 'agentdown';
+
+const prompt = ref('Check Beijing weather and explain the tool call process.');
+
+// `mode: "hitl"` keeps Human-In-The-Loop events in the same chat flow.
+const session = useAgnoChatSession<string>({
+  source: 'http://127.0.0.1:8000/api/stream/agno',
+  input: prompt,
+  conversationId: 'session:weather-demo',
+  title: 'Agno Assistant',
+  mode: 'hitl'
+});
+</script>
+
+<template>
+  <form @submit.prevent="session.send()">
+    <textarea v-model="prompt" rows="2" />
+    <button :disabled="session.busy">
+      {{ session.busy ? 'Requesting...' : 'Send' }}
+    </button>
+  </form>
+
+  <RunSurface
+    :runtime="session.runtime"
+    v-bind="session.surface"
+  />
+</template>
 ```
 
 Agentdown is built for:
@@ -58,12 +139,14 @@ Agentdown is built for:
 
 ## Official Adapter Status
 
+If you want to connect a real chat page quickly, this is the first section to look at.
+
 | Framework | Entry points | Streaming text | Tool cards | Built-in operation approval | Notes |
 | --- | --- | --- | --- | --- | --- |
-| Agno | `createAgnoProtocol()` / `defineAgnoPreset()` | Yes | Yes | Yes | consumes official Agno SSE events |
-| LangChain | `createLangChainProtocol()` / `defineLangChainPreset()` | Yes | Yes | Yes | consumes `astream_events()`-style packets |
-| AutoGen | `createAutoGenProtocol()` / `defineAutoGenPreset()` | Yes | Yes | Yes | consumes official `run_stream()` packets |
-| CrewAI | `createCrewAIProtocol()` / `defineCrewAIPreset()` | Yes | Yes | Not by default | consumes official SSE chunks with `parseCrewAISseMessage()` and currently focuses on streaming output plus tool rendering |
+| Agno | `useAgnoChatSession()` / `createAgnoAdapter()` | Yes | Yes | Yes | chat pages should start with `useAgnoChatSession()` |
+| LangChain | `useLangChainChatSession()` / `createLangChainAdapter()` | Yes | Yes | Yes | consumes `astream_events()`-style packets directly |
+| AutoGen | `useAutoGenChatSession()` / `createAutoGenAdapter()` | Yes | Yes | Yes | consumes official `run_stream()` packets directly |
+| CrewAI | `useCrewAIChatSession()` / `createCrewAIAdapter()` | Yes | Yes | Not by default | consumes official SSE chunks with `parseCrewAISseMessage()` and focuses on streaming output plus tool rendering |
 
 ## Install
 
@@ -180,28 +263,112 @@ If your backend sends full content snapshots instead of token appends, use `cmd.
 
 ### 3. Preferred path for official frameworks
 
+For Agno, LangChain, AutoGen, and CrewAI, chat pages should start with the built-in `use*ChatSession()` helpers.  
+This is the current recommended Agno path:
+
+```vue
+<script setup lang="ts">
+import { ref } from 'vue';
+import {
+  RunSurface,
+  // Keep the tool-name mapping in one place.
+  defineAgnoToolComponents,
+  // Preferred page-level helper for real chat screens.
+  useAgnoChatSession
+} from 'agentdown';
+import WeatherToolCard from './WeatherToolCard.vue';
+
+const prompt = ref('Check Beijing weather and explain the tool call process.');
+
+// `useAgnoChatSession()` automatically wires adapter, transport,
+// chat ids, optimistic user message insertion, and regenerate.
+const session = useAgnoChatSession<string>({
+  source: 'http://127.0.0.1:8000/api/stream/agno',
+  input: prompt,
+  conversationId: 'session:weather-demo',
+  title: 'Agno Assistant',
+  mode: 'hitl',
+  tools: defineAgnoToolComponents({
+    lookup_weather: {
+      match: 'lookup_weather',
+      component: WeatherToolCard
+    }
+  })
+});
+</script>
+
+<template>
+  <form @submit.prevent="session.send()">
+    <textarea
+      v-model="prompt"
+      rows="2"
+      placeholder="Check Beijing weather"
+    />
+
+    <button :disabled="session.busy">
+      {{ session.busy ? 'Requesting...' : 'Send' }}
+    </button>
+
+    <p v-if="session.sessionId">
+      Backend sessionId: {{ session.sessionId }}
+    </p>
+  </form>
+
+  <RunSurface
+    :runtime="session.runtime"
+    v-bind="session.surface"
+  />
+</template>
+```
+
+For the other official frameworks, replace the helper with:
+
+- `useLangChainChatSession()`
+- `useAutoGenChatSession()`
+- `useCrewAIChatSession()`
+
+If you need lower-level control, then move down to:
+
+- `createAgnoAdapter()`
+- `createAgnoProtocol()`
+- `defineAgnoPreset()`
+
+You can also attach side effects for non-UI events:
+
+```ts
+import { defineAgnoEventActions, useAgnoChatSession } from 'agentdown';
+
+const session = useAgnoChatSession<string>({
+  source: 'http://127.0.0.1:8000/api/stream/agno',
+  conversationId: 'session:weather-demo',
+  eventActions: defineAgnoEventActions({
+    SessionCreated: {
+      run({ event }) {
+        console.log('raw agno event:', event);
+      }
+    }
+  })
+});
+```
+
+If you prefer the lower-level preset route:
+
 ```ts
 import {
   type AgnoEvent,
-  // SSE transport for official Agno events.
   createSseTransport,
-  // Preset bundles protocol, assemblers, and surface defaults.
   defineAgnoPreset,
-  // Keep the tool-name mapping in one place.
   defineAgnoToolComponents
 } from 'agentdown';
 import WeatherToolCard from './WeatherToolCard.vue';
 
-// Render weather-related tools as a dedicated weather card.
 const agnoTools = defineAgnoToolComponents({
-  'tool.weather': {
-    match: ['weather', '天气'],
-    mode: 'includes',
+  lookup_weather: {
+    match: 'lookup_weather',
     component: WeatherToolCard
   }
 });
 
-// Build a reusable Agno preset for this page or feature.
 const preset = defineAgnoPreset<string>({
   protocolOptions: {
     defaultRunTitle: 'Agno Assistant',
@@ -212,7 +379,6 @@ const preset = defineAgnoPreset<string>({
   }
 });
 
-// Create runtime, bridge, and surface options together.
 const { runtime, bridge, surface } = preset.createSession({
   bridge: {
     transport: createSseTransport<AgnoEvent, string>({
@@ -290,13 +456,17 @@ See [backend/README.md](./backend/README.md) for details.
 ## Docs Map
 
 - [Getting Started](https://codexiaoke.github.io/agentdown/guide/getting-started)
+- [Core Concepts](https://codexiaoke.github.io/agentdown/guide/core-concepts)
 - [Framework Adapters](https://codexiaoke.github.io/agentdown/guide/framework-adapters)
-- [Agno Deep Dive](https://codexiaoke.github.io/agentdown/guide/agno-adapter)
-- [Markdown Rendering](https://codexiaoke.github.io/agentdown/guide/markdown-rendering)
+- [Custom Framework Mapping](https://codexiaoke.github.io/agentdown/guide/custom-framework)
+- [RunSurface](https://codexiaoke.github.io/agentdown/guide/run-surface)
+- [Streaming Markdown](https://codexiaoke.github.io/agentdown/guide/streaming-markdown)
 - [Performance](https://codexiaoke.github.io/agentdown/guide/performance)
-- [Runtime Overview](https://codexiaoke.github.io/agentdown/runtime/overview)
-- [Protocol Mapping](https://codexiaoke.github.io/agentdown/runtime/protocol)
+- [FastAPI Backend](https://codexiaoke.github.io/agentdown/guide/backend-fastapi)
+- [Runtime API](https://codexiaoke.github.io/agentdown/api/runtime)
 - [RunSurface API](https://codexiaoke.github.io/agentdown/api/run-surface)
+- [MarkdownRenderer API](https://codexiaoke.github.io/agentdown/api/markdown-renderer)
+- [Adapters API](https://codexiaoke.github.io/agentdown/api/adapters)
 
 ## License
 

@@ -55,6 +55,13 @@ function trimComparableText(value: string): string {
 }
 
 /**
+ * 基于 run id 生成默认错误 block id。
+ */
+function createCrewAIRunErrorBlockId(runId: string): string {
+  return `block:error:${runId}`;
+}
+
+/**
  * 把最终 `CrewOutput` 文本补齐到当前会话里。
  *
  * 规则：
@@ -282,13 +289,32 @@ export function createCrewAIProtocol(
 
       if (isErrorEvent(packet)) {
         ensureRunStarted(state, session, packet, context, commands, options);
-        abortCurrentStream(session, commands, extractErrorMessage(packet));
+        const errorMessage = extractErrorMessage(packet);
+
+        abortCurrentStream(session, commands, errorMessage);
 
         commands.push(
+          cmd.error.upsert({
+            id: createCrewAIRunErrorBlockId(session.runId),
+            role: 'assistant',
+            slot: options.slot ?? 'main',
+            title: '运行失败',
+            message: errorMessage,
+            refId: session.runId,
+            ...(session.groupId !== undefined ? { groupId: session.groupId } : {}),
+            ...(session.conversationId !== undefined ? { conversationId: session.conversationId } : {}),
+            ...(session.turnId !== undefined ? { turnId: session.turnId } : {}),
+            ...(session.messageId !== undefined ? { messageId: session.messageId } : {}),
+            data: {
+              rawEvent: packet,
+              runId: session.runId
+            },
+            at: context.now()
+          }),
           cmd.node.error({
             id: session.runId,
             ...(session.title ? { title: session.title } : {}),
-            message: extractErrorMessage(packet),
+            message: errorMessage,
             data: {
               rawEvent: packet
             },
@@ -297,7 +323,7 @@ export function createCrewAIProtocol(
           cmd.run.finish({
             id: session.runId,
             ...(session.title ? { title: session.title } : {}),
-            message: extractErrorMessage(packet),
+            message: errorMessage,
             status: 'error',
             data: {
               rawEvent: packet

@@ -137,6 +137,39 @@ describe('createAutoGenProtocol', () => {
     });
   });
 
+  it('creates a visible assistant error block when the run fails', () => {
+    const bridge = createAutoGenTestBridge();
+
+    bridge.push([
+      {
+        type: 'TaskStarted',
+        id: 'task-error-1',
+        source: 'assistant'
+      },
+      {
+        type: 'ErrorEvent',
+        id: 'task-error-1',
+        message: 'Weather API timeout.'
+      }
+    ]);
+    bridge.flush('autogen-run-error');
+
+    const snapshot = bridge.runtime.snapshot();
+    const runNode = snapshot.nodes.find((node) => node.type === 'run');
+    const errorBlock = snapshot.blocks.find((block) => block.type === 'error');
+
+    expect(runNode).toBeDefined();
+    expect(errorBlock).toMatchObject({
+      renderer: 'error',
+      data: {
+        kind: 'error',
+        title: '运行失败',
+        message: 'Weather API timeout.',
+        refId: runNode?.id as string
+      }
+    });
+  });
+
   it('finishes pending tools from ToolCallSummaryMessage when execution events are missing', () => {
     const bridge = createAutoGenTestBridge();
 

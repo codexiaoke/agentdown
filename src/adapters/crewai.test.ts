@@ -161,6 +161,41 @@ describe('createCrewAIProtocol', () => {
     });
   });
 
+  it('creates a visible assistant error block when the run fails', () => {
+    const bridge = createCrewAITestBridge();
+
+    bridge.push([
+      {
+        agent_id: 'agent-error-1',
+        agent_role: 'Weather Researcher',
+        chunk_type: {
+          _value_: 'text'
+        },
+        content: '我来帮您查询天气。'
+      },
+      {
+        event: 'ErrorEvent',
+        type: 'ErrorEvent',
+        agent_id: 'agent-error-1',
+        message: 'Weather API timeout.'
+      }
+    ]);
+    bridge.flush('crewai-run-error');
+
+    const snapshot = bridge.runtime.snapshot();
+    const errorBlock = snapshot.blocks.find((block) => block.type === 'error');
+
+    expect(errorBlock).toMatchObject({
+      renderer: 'error',
+      data: {
+        kind: 'error',
+        title: '运行失败',
+        message: 'Weather API timeout.',
+        refId: 'agent-error-1'
+      }
+    });
+  });
+
   it('handles actual CrewAI-style string chunk types and incremental tool-call arguments', () => {
     const bridge = createCrewAITestBridge();
 

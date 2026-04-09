@@ -142,6 +142,39 @@ describe('createLangChainProtocol', () => {
     });
   });
 
+  it('creates a visible assistant error block when the run fails', () => {
+    const bridge = createLangChainTestBridge();
+
+    bridge.push([
+      {
+        event: 'on_chain_start',
+        run_id: 'run-error-1',
+        name: 'LangGraph'
+      },
+      {
+        event: 'error',
+        run_id: 'run-error-1',
+        data: {
+          message: 'Weather API timeout.'
+        }
+      }
+    ]);
+    bridge.flush('langchain-run-error');
+
+    const snapshot = bridge.runtime.snapshot();
+    const errorBlock = snapshot.blocks.find((block) => block.type === 'error');
+
+    expect(errorBlock).toMatchObject({
+      renderer: 'error',
+      data: {
+        kind: 'error',
+        title: '运行失败',
+        message: 'Weather API timeout.',
+        refId: 'run-error-1'
+      }
+    });
+  });
+
   it('maps a LangChain HITL interrupt into approval blocks and marks the run as paused', () => {
     const bridge = createLangChainTestBridge();
 

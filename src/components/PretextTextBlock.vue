@@ -109,6 +109,18 @@ const blockStyle = computed(() => {
 const blockTone = computed(() => {
   return props.tag === 'h6' ? 'subtle' : 'default';
 });
+
+/**
+ * 暴露当前文本块使用的布局引擎，方便 demo 和开发者工具直接确认是否命中 pretext。
+ */
+const layoutEngine = 'pretext';
+
+/**
+ * 标记当前 pretext 文本块走的是 plain text 还是 rich text 分支。
+ */
+const layoutMode = computed(() => {
+  return hasRichFragments.value ? 'rich' : 'plain';
+});
 </script>
 
 <template>
@@ -117,12 +129,14 @@ const blockTone = computed(() => {
     class="agentdown-text-block"
     :data-tag="tag"
     :data-tone="blockTone"
+    :data-layout-engine="layoutEngine"
+    :data-layout-mode="layoutMode"
     :style="blockStyle"
   >
     <template v-if="hasRichFragments && richLines.length > 0">
       <span
         v-for="(line, index) in richLines"
-        :key="`${tag}-${index}`"
+        :key="`${tag}-rich-line-${index}`"
         class="agentdown-text-line agentdown-text-line--rich"
         :class="{
           'agentdown-text-line--empty': line.fragments.length === 0
@@ -131,15 +145,15 @@ const blockTone = computed(() => {
           top: `${index * typography.lineHeight}px`,
           height: `${typography.lineHeight}px`
         }"
-      >
-        <component
-          :is="fragment.href ? 'a' : 'span'"
-          v-for="fragment in line.fragments"
-          :key="fragment.id"
-          class="agentdown-text-fragment"
-          :class="{
-            'agentdown-text-fragment--strong': fragment.strong,
-            'agentdown-text-fragment--em': fragment.em,
+        >
+          <component
+            :is="fragment.href ? 'a' : 'span'"
+            v-for="(fragment, fragmentIndex) in line.fragments"
+            :key="`${tag}-rich-line-${index}-fragment-${fragmentIndex}`"
+            class="agentdown-text-fragment"
+            :class="{
+              'agentdown-text-fragment--strong': fragment.strong,
+              'agentdown-text-fragment--em': fragment.em,
             'agentdown-text-fragment--del': fragment.del,
             'agentdown-text-fragment--code': fragment.code,
             'agentdown-text-fragment--link': !!fragment.href
@@ -157,7 +171,7 @@ const blockTone = computed(() => {
     <template v-else-if="lines.length > 0">
       <span
         v-for="(line, index) in lines"
-        :key="`${tag}-${index}-${line.text}`"
+        :key="`${tag}-plain-line-${index}`"
         class="agentdown-text-line"
         :style="{
           top: `${index * typography.lineHeight}px`,

@@ -41,6 +41,7 @@ export function getMarkdownBlockGapAfter(
     || current.kind === 'math'
     || current.kind === 'agui'
     || current.kind === 'artifact'
+    || current.kind === 'error'
     || current.kind === 'approval'
     || current.kind === 'attachment'
     || current.kind === 'branch'

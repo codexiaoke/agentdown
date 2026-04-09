@@ -3,13 +3,15 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch 
 import { defaultMarkdownBuiltinComponents } from './defaultMarkdownComponents';
 import { AGENTDOWN_DEFAULT_TEXT_FONT } from './pretextRichText';
 import RunSurfaceAssistantShell from './RunSurfaceAssistantShell.vue';
-import RunSurfaceBlock from './RunSurfaceBlock.vue';
+import RunSurfaceGroupBlockList from './RunSurfaceGroupBlockList.vue';
 import RunSurfaceMessageActions from './RunSurfaceMessageActions.vue';
 import RunSurfaceToolRenderer from './RunSurfaceToolRenderer.vue';
 import RunSurfaceUserBubble from './RunSurfaceUserBubble.vue';
+import { useAgentdownConfig } from '../config/context';
+import { resolveAgentdownThemeCssVars } from '../config/theme';
+import type { AgentdownTheme } from '../config/types';
 import type {
   AguiComponentMap,
-  MarkdownBlock,
   MarkdownBuiltinComponentOverrides
 } from '../core/types';
 import type { AgentRuntime, RuntimeSnapshot, SurfaceBlock } from '../runtime/types';
@@ -30,20 +32,36 @@ import type {
  * `RunSurface` 的组件输入参数。
  */
 interface Props {
+  /** 当前要渲染的 runtime。 */
   runtime: AgentRuntime;
+  /** 默认读取哪个 slot。 */
   slot?: string;
+  /** 文本行高。 */
   lineHeight?: number;
+  /** 默认字体声明。 */
   font?: string;
+  /** 空状态文案。 */
   emptyText?: string;
+  /** 性能配置。 */
   performance?: RunSurfacePerformanceOptions;
+  /** markdown 内嵌 AGUI 组件注册表。 */
   aguiComponents?: AguiComponentMap;
+  /** markdown 内置 block 组件覆写。 */
   builtinComponents?: MarkdownBuiltinComponentOverrides;
+  /** runtime renderer 覆写。 */
   renderers?: RunSurfaceRendererMap;
+  /** draft 占位组件。 */
   draftPlaceholder?: RunSurfaceDraftPlaceholder;
+  /** 消息 shell 配置。 */
   messageShells?: RunSurfaceMessageShellMap;
+  /** 消息动作配置。 */
   messageActions?: RunSurfaceMessageActionsMap;
+  /** approval 动作配置。 */
   approvalActions?: RunSurfaceApprovalActionsOptions | false;
+  /** handoff 动作配置。 */
   handoffActions?: RunSurfaceHandoffActionsOptions | false;
+  /** 当前 RunSurface 局部主题。 */
+  theme?: AgentdownTheme;
 }
 
 /**
@@ -68,6 +86,9 @@ interface ResolvedRunSurfacePerformance {
   lazyMount: boolean;
   lazyMountMargin: string;
   textSlabChars: number;
+  blockVirtualize: boolean;
+  blockVirtualizeMargin: string;
+  blockVirtualizeThreshold: number;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -100,6 +121,12 @@ const resolvedBuiltinComponents = computed(() => ({
   ...defaultMarkdownBuiltinComponents,
   ...props.builtinComponents
 }));
+const resolvedAgentdownConfig = useAgentdownConfig(computed(() => {
+  return props.theme ? { theme: props.theme } : undefined;
+}));
+const resolvedThemeStyle = computed(() => {
+  return resolveAgentdownThemeCssVars(resolvedAgentdownConfig.value.theme);
+});
 
 const resolvedPerformance = computed<ResolvedRunSurfacePerformance>(() => {
   const configuredGroupWindow = props.performance?.groupWindow;
@@ -109,7 +136,10 @@ const resolvedPerformance = computed<ResolvedRunSurfacePerformance>(() => {
     groupWindowStep: Math.max(12, props.performance?.groupWindowStep ?? 40),
     lazyMount: props.performance?.lazyMount ?? true,
     lazyMountMargin: props.performance?.lazyMountMargin ?? '720px 0px',
-    textSlabChars: Math.max(640, props.performance?.textSlabChars ?? 1600)
+    textSlabChars: Math.max(640, props.performance?.textSlabChars ?? 1600),
+    blockVirtualize: props.performance?.blockVirtualize ?? true,
+    blockVirtualizeMargin: props.performance?.blockVirtualizeMargin ?? '1400px 0px',
+    blockVirtualizeThreshold: Math.max(12, props.performance?.blockVirtualizeThreshold ?? 24)
   };
 });
 
@@ -429,60 +459,6 @@ watch(
   }
 );
 
-/**
- * 判断 markdown block 是否已经有足够的可见内容。
- */
-function hasMarkdownBlockVisibleContent(block: MarkdownBlock): boolean {
-  switch (block.kind) {
-    case 'text':
-      return block.text.trim().length > 0;
-    case 'html':
-      return block.html.trim().length > 0;
-    case 'code':
-    case 'mermaid':
-      return true;
-    case 'math':
-      return block.expression.trim().length > 0;
-    case 'thought':
-      return block.blocks.length > 0 || block.title.trim().length > 0;
-    case 'agui':
-    case 'artifact':
-    case 'approval':
-    case 'attachment':
-    case 'branch':
-    case 'handoff':
-    case 'timeline':
-      return true;
-    default:
-      return false;
-  }
-}
-
-/**
- * 判断一个 surface block 是否已经包含肉眼可见的内容。
- */
-function hasBlockVisibleContent(block: SurfaceBlock): boolean {
-  if (typeof block.content === 'string' && block.content.trim().length > 0) {
-    return true;
-  }
-
-  const data = block.data as Partial<MarkdownBlock> & { kind?: unknown };
-
-  if (typeof data.kind === 'string') {
-    return hasMarkdownBlockVisibleContent(data as MarkdownBlock);
-  }
-
-  if (block.renderer === 'markdown.draft' || block.renderer === 'text.draft' || block.renderer === 'markdown') {
-    return false;
-  }
-
-  if (typeof block.data !== 'object' || block.data === null) {
-    return block.data !== undefined;
-  }
-
-  return Object.keys(block.data).length > 0;
-}
-
 onBeforeUnmount(() => {
   unsubscribe?.();
   observer?.disconnect();
@@ -493,7 +469,8 @@ onBeforeUnmount(() => {
 <template>
   <section
     ref="containerRef"
-    class="agentdown-run-surface"
+    class="agentdown-root agentdown-run-surface"
+    :style="resolvedThemeStyle"
   >
     <p
       v-if="groups.length === 0"
@@ -527,10 +504,8 @@ onBeforeUnmount(() => {
         :data-role="group.role"
       >
         <div class="agentdown-run-surface-group-stack">
-          <RunSurfaceBlock
-            v-for="(block, index) in group.blocks"
-            :key="block.id"
-            :block="block"
+          <RunSurfaceGroupBlockList
+            :blocks="group.blocks"
             :role="group.role"
             :runtime="runtime"
             :snapshot="snapshot"
@@ -547,7 +522,9 @@ onBeforeUnmount(() => {
             :lazy-mount="resolvedPerformance.lazyMount"
             :lazy-mount-margin="resolvedPerformance.lazyMountMargin"
             :text-slab-chars="resolvedPerformance.textSlabChars"
-            :has-visible-content-before="group.blocks.slice(0, index).some(hasBlockVisibleContent)"
+            :virtualize="resolvedPerformance.blockVirtualize"
+            :virtualize-margin="resolvedPerformance.blockVirtualizeMargin"
+            :virtualize-threshold="resolvedPerformance.blockVirtualizeThreshold"
           />
 
           <RunSurfaceMessageActions

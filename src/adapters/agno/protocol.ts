@@ -52,6 +52,13 @@ function createRequirementApprovalBlockId(requirementId: string): string {
 }
 
 /**
+ * 基于 run id 生成默认错误 block id。
+ */
+function createAgnoRunErrorBlockId(runId: string): string {
+  return `block:error:${runId}`;
+}
+
+/**
  * 把 `RunPaused` 里的 confirmation requirement 映射成 approval block。
  */
 function appendPausedRequirementCommands(
@@ -317,13 +324,32 @@ export function createAgnoProtocol(options: AgnoProtocolOptions = {}): RuntimePr
         case 'error': {
           // 错误场景除了结束 run，还会额外给 run 节点打一条 error 意图。
           ensureRunStarted(state, session, packet, context, commands, options);
-          abortCurrentStream(session, commands, extractErrorMessage(packet));
+          const errorMessage = extractErrorMessage(packet);
+
+          abortCurrentStream(session, commands, errorMessage);
 
           commands.push(
+            cmd.error.upsert({
+              id: createAgnoRunErrorBlockId(session.runId),
+              role: 'assistant',
+              slot: options.slot ?? 'main',
+              title: '运行失败',
+              message: errorMessage,
+              refId: session.runId,
+              ...(session.groupId !== undefined ? { groupId: session.groupId } : {}),
+              ...(session.conversationId !== undefined ? { conversationId: session.conversationId } : {}),
+              ...(session.turnId !== undefined ? { turnId: session.turnId } : {}),
+              ...(session.messageId !== undefined ? { messageId: session.messageId } : {}),
+              data: {
+                rawEvent: packet,
+                runId: session.runId
+              },
+              at: context.now()
+            }),
             cmd.node.error({
               id: session.runId,
               ...(session.title ? { title: session.title } : {}),
-              message: extractErrorMessage(packet),
+              message: errorMessage,
               data: {
                 rawEvent: packet
               },
@@ -332,7 +358,7 @@ export function createAgnoProtocol(options: AgnoProtocolOptions = {}): RuntimePr
             cmd.run.finish({
               id: session.runId,
               ...(session.title ? { title: session.title } : {}),
-              message: extractErrorMessage(packet),
+              message: errorMessage,
               status: 'error',
               data: {
                 rawEvent: packet

@@ -408,9 +408,29 @@ export interface BridgeOptions<TRawPacket = unknown, TSource = unknown> {
   assemblers?: Record<string, StreamAssembler>;
   scheduler?: 'sync' | 'microtask' | 'animation-frame' | FlushScheduler;
   batch?: {
+    /** 一次 flush 最多收多少条命令。 */
     maxCommands?: number;
+    /** 最长允许积攒多久后再 flush。 */
     maxLatencyMs?: number;
+    /** 是否把同一 stream 的连续 delta 先合并，再交给 assembler。 */
     coalesceStreamDeltas?: boolean;
+  };
+  consume?: {
+    /**
+     * 单次 consume 切片里最多连续处理多少个 packet。
+     * 到达阈值后会先 flush，再主动让出主线程一帧。
+     */
+    maxPacketsPerSlice?: number;
+    /**
+     * 单次 consume 切片最长连续执行多久（毫秒）。
+     * 适合防止 `delay=0` 的同步高频流把浏览器主线程长时间占满。
+     */
+    yieldAfterMs?: number;
+    /**
+     * consume 切片之间如何主动让出执行权。
+     * 默认优先使用 `requestAnimationFrame`，没有浏览器环境时退回 `setTimeout(0)`。
+     */
+    yieldScheduler?: 'animation-frame' | 'timeout' | (() => Promise<void>);
   };
   debug?: {
     recordRawPackets?: boolean;

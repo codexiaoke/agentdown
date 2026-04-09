@@ -4,6 +4,7 @@ import ArtifactBlock from './ArtifactBlock.vue';
 import AguiComponentWrapper from './AguiComponentWrapper.vue';
 import BranchBlock from './BranchBlock.vue';
 import CodeBlock from './CodeBlock.vue';
+import ErrorBlock from './ErrorBlock.vue';
 import HandoffBlock from './HandoffBlock.vue';
 import HtmlBlock from './HtmlBlock.vue';
 import MathBlock from './MathBlock.vue';
@@ -23,6 +24,7 @@ export const defaultMarkdownBuiltinComponents: MarkdownBuiltinComponents = {
   html: HtmlBlock,
   agui: AguiComponentWrapper,
   artifact: ArtifactBlock,
+  error: ErrorBlock,
   approval: ApprovalBlock,
   attachment: AttachmentBlock,
   branch: BranchBlock,

@@ -17,6 +17,7 @@ export type {
   AgnoChatAssistantActionsOptions,
   AgnoChatIdFactory,
   AgnoChatIds,
+  AgnoChatReconnectOptions,
   AgnoChatSessionIdOptions,
   AgnoChatUserMessageOptions,
   UseAgnoChatSessionOptions,

@@ -11,6 +11,8 @@ import type {
 } from './types';
 import { coalesceStreamDeltas, createIdFactory, isAsyncIterable, isIterable, toArray, toAsyncIterable, trimLog } from './utils';
 
+type ConsumeYieldScheduler = NonNullable<NonNullable<BridgeOptions['consume']>['yieldScheduler']>;
+
 /**
  * 判断当前异常是否属于用户主动中断带来的 abort 错误。
  */
@@ -102,6 +104,50 @@ function createSchedulerRunner(scheduler: BridgeOptions['scheduler']) {
 }
 
 /**
+ * 读取一个尽量高精度的当前时间戳。
+ */
+function nowMs(): number {
+  if (typeof globalThis.performance?.now === 'function') {
+    return globalThis.performance.now();
+  }
+
+  return Date.now();
+}
+
+/**
+ * 把 consume 过程中的“主动让出执行权”配置统一转换成可执行函数。
+ */
+function createConsumeYieldRunner(scheduler: ConsumeYieldScheduler | undefined) {
+  /**
+   * 在 packet 消费切片之间主动让出主线程，给浏览器布局和绘制留出机会。
+   */
+  return async function yieldToHost(): Promise<void> {
+    if (typeof scheduler === 'function') {
+      await scheduler();
+      return;
+    }
+
+    if (scheduler === 'timeout') {
+      await new Promise<void>((resolve) => {
+        globalThis.setTimeout(resolve, 0);
+      });
+      return;
+    }
+
+    if (typeof globalThis.requestAnimationFrame === 'function') {
+      await new Promise<void>((resolve) => {
+        globalThis.requestAnimationFrame(() => resolve());
+      });
+      return;
+    }
+
+    await new Promise<void>((resolve) => {
+      globalThis.setTimeout(resolve, 16);
+    });
+  };
+}
+
+/**
  * 创建一个负责消费 packet、展开 stream、批量 flush 的 bridge。
  */
 export function createBridge<TRawPacket = unknown, TSource = AsyncIterable<TRawPacket> | Iterable<TRawPacket>>(
@@ -116,6 +162,11 @@ export function createBridge<TRawPacket = unknown, TSource = AsyncIterable<TRawP
     maxCommands: options.batch?.maxCommands ?? 200,
     maxLatencyMs: options.batch?.maxLatencyMs ?? 16,
     coalesceStreamDeltas: options.batch?.coalesceStreamDeltas ?? true
+  };
+  const consumeScheduling = {
+    maxPacketsPerSlice: Math.max(1, options.consume?.maxPacketsPerSlice ?? 96),
+    yieldAfterMs: Math.max(0, options.consume?.yieldAfterMs ?? 8),
+    yieldToHost: createConsumeYieldRunner(options.consume?.yieldScheduler)
   };
   const debugOptions = {
     recordRawPackets: options.debug?.recordRawPackets ?? false,
@@ -178,7 +229,9 @@ export function createBridge<TRawPacket = unknown, TSource = AsyncIterable<TRawP
       return;
     }
 
-    if (!scheduled) {
+    const shouldScheduleImmediateFlush = phase !== 'consuming' || batchOptions.maxLatencyMs <= 0;
+
+    if (!scheduled && shouldScheduleImmediateFlush) {
       scheduled = true;
       scheduleCleanup = runScheduler(() => {
         scheduled = false;
@@ -363,6 +416,7 @@ export function createBridge<TRawPacket = unknown, TSource = AsyncIterable<TRawP
       return;
     }
 
+    const wasConsuming = phase === 'consuming';
     clearScheduling();
 
     let expanded: RuntimeCommand[];
@@ -381,7 +435,7 @@ export function createBridge<TRawPacket = unknown, TSource = AsyncIterable<TRawP
     }
 
     lastFlushAt = Date.now();
-    phase = 'idle';
+    phase = wasConsuming ? 'consuming' : 'idle';
     options.hooks?.onFlush?.(expanded ?? []);
   }
 
@@ -390,6 +444,7 @@ export function createBridge<TRawPacket = unknown, TSource = AsyncIterable<TRawP
    */
   async function consume(source: TSource, consumeOptions: { signal?: AbortSignal } = {}) {
     phase = 'consuming';
+    lastError = undefined;
     const signal = consumeOptions.signal ?? new AbortController().signal;
 
     const iterable = transport
@@ -401,6 +456,8 @@ export function createBridge<TRawPacket = unknown, TSource = AsyncIterable<TRawP
           : handleError(
               createBridgeError('consume', 'Bridge consume requires a transport or an iterable source.')
             );
+    let packetsInSlice = 0;
+    let sliceStartedAt = nowMs();
 
     try {
       for await (const packet of iterable) {
@@ -409,6 +466,32 @@ export function createBridge<TRawPacket = unknown, TSource = AsyncIterable<TRawP
         }
 
         pushPacket(packet);
+        packetsInSlice += 1;
+
+        const sliceDuration = nowMs() - sliceStartedAt;
+        const shouldYield = (
+          packetsInSlice >= consumeScheduling.maxPacketsPerSlice
+          || (consumeScheduling.yieldAfterMs > 0 && sliceDuration >= consumeScheduling.yieldAfterMs)
+        );
+
+        if (!shouldYield) {
+          continue;
+        }
+
+        flush('consume-slice');
+
+        if (signal.aborted) {
+          break;
+        }
+
+        await consumeScheduling.yieldToHost();
+
+        if (signal.aborted) {
+          break;
+        }
+
+        packetsInSlice = 0;
+        sliceStartedAt = nowMs();
       }
 
       flush('consume-complete');

@@ -54,6 +54,7 @@ export function estimateMarkdownBlockHeight(
       return block.minHeight;
 
     case 'artifact':
+    case 'error':
     case 'approval':
     case 'attachment':
     case 'branch':

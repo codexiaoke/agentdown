@@ -13,7 +13,9 @@ import {
   createFrameworkChatIds,
   type FrameworkChatAssistantActionsOptions,
   type FrameworkChatDevtoolsOptions,
+  type FrameworkChatInputValue,
   type FrameworkChatIds,
+  type FrameworkChatReconnectOptions,
   type FrameworkChatSessionIdOptions,
   type FrameworkChatSessionResult,
   type FrameworkChatUserMessageOptions,
@@ -60,6 +62,12 @@ export interface LangChainChatSessionIdOptions extends FrameworkChatSessionIdOpt
 export interface LangChainChatUserMessageOptions extends FrameworkChatUserMessageOptions {}
 
 /**
+ * LangChain chat helper 对自动重连行为的配置。
+ */
+export interface LangChainChatReconnectOptions<TSource = FetchTransportSource>
+  extends FrameworkChatReconnectOptions<LangChainEvent, TSource> {}
+
+/**
  * LangChain chat helper 对 assistant 操作栏的快捷配置。
  */
 export interface LangChainChatAssistantActionsOptions extends FrameworkChatAssistantActionsOptions {}
@@ -72,8 +80,8 @@ export interface UseLangChainChatSessionOptions<
 > {
   /** 当前聊天真正要连接的 source，例如 `/api/stream/langchain`。 */
   source: MaybeRefOrGetter<TSource | null | undefined>;
-  /** 当前输入框里的文案。 */
-  input?: MaybeRefOrGetter<string | undefined>;
+  /** 当前输入框里的文案，或已结构化好的用户消息。 */
+  input?: MaybeRefOrGetter<FrameworkChatInputValue | undefined>;
   /** 当前整段聊天所属的 conversationId。 */
   conversationId: MaybeRefOrGetter<string>;
   /** LangChain backend 的运行模式，例如 `hitl`。 */
@@ -102,6 +110,8 @@ export interface UseLangChainChatSessionOptions<
   sessionId?: boolean | LangChainChatSessionIdOptions;
   /** 是否在真正连接前预插一条用户消息；默认开启。 */
   userMessage?: false | LangChainChatUserMessageOptions;
+  /** 当前 chat helper 是否在连接失败后自动重试。 */
+  reconnect?: false | LangChainChatReconnectOptions<TSource>;
   /** assistant 默认消息操作栏的快捷配置；默认开启。 */
   assistantActions?: false | LangChainChatAssistantActionsOptions;
 }

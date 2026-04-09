@@ -88,6 +88,12 @@ export interface MarkdownThoughtBlock {
   kind: 'thought';
   /** 折叠面板标题。 */
   title: string;
+  /** 当前 thought 的状态。 */
+  status?: 'idle' | 'thinking' | 'done';
+  /** 后端直接返回的耗时文本。 */
+  durationText?: string;
+  /** 以毫秒为单位的思考耗时。 */
+  durationMs?: number;
   /** thought 内部递归解析后的子 block。 */
   blocks: MarkdownBlock[];
 }
@@ -159,6 +165,21 @@ export interface MarkdownArtifactBlock {
   label?: string;
   /** 产物链接。 */
   href?: string;
+}
+
+export interface MarkdownErrorBlock {
+  /** 当前 block 的稳定标识。 */
+  id: string;
+  /** block 类型，固定为 error。 */
+  kind: 'error';
+  /** 绑定的 runtime ref。 */
+  refId?: string;
+  /** 错误标题。 */
+  title: string;
+  /** 错误说明。 */
+  message: string;
+  /** 业务层可选错误码。 */
+  code?: string;
 }
 
 export interface MarkdownApprovalBlock {
@@ -275,6 +296,7 @@ export type MarkdownBlock =
   | MarkdownMathBlock
   | MarkdownAguiBlock
   | MarkdownArtifactBlock
+  | MarkdownErrorBlock
   | MarkdownApprovalBlock
   | MarkdownAttachmentBlock
   | MarkdownBranchBlock
@@ -298,6 +320,8 @@ export interface MarkdownBuiltinComponents {
   agui: Component;
   /** 负责渲染 artifact 卡片的组件。 */
   artifact: Component;
+  /** 负责渲染 error 卡片的组件。 */
+  error: Component;
   /** 负责渲染 approval 卡片的组件。 */
   approval: Component;
   /** 负责渲染 attachment 卡片的组件。 */

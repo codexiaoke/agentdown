@@ -53,6 +53,55 @@ function createDemoAdapter() {
   });
 }
 
+/**
+ * 创建一个首轮失败、第二轮成功的测试 adapter，用于验证自动重连。
+ */
+function createRetryingDemoAdapter() {
+  let attempt = 0;
+
+  return defineAdapter<DemoPacket, string>({
+    name: 'retry-demo',
+    protocol: defineProtocol<DemoPacket>([
+      {
+        match() {
+          return true;
+        },
+        map({ event, context }) {
+          const at = context.now();
+
+          return cmd.block.upsert({
+            id: `block:${event.id}`,
+            slot: 'main',
+            type: 'text',
+            renderer: 'text',
+            state: 'stable',
+            content: event.text,
+            data: {
+              packetId: event.id
+            },
+            createdAt: at,
+            updatedAt: at
+          });
+        }
+      }
+    ]),
+    transport: {
+      async *connect(source: string) {
+        attempt += 1;
+
+        if (attempt === 1) {
+          throw new Error(`connect failed for ${source}`);
+        }
+
+        yield {
+          id: `retry:${attempt}`,
+          text: `reconnected to ${source}`
+        };
+      }
+    }
+  });
+}
+
 describe('useAdapterSession', () => {
   it('connects a session and keeps runtime state in sync', async () => {
     const adapter = createDemoAdapter();
@@ -126,6 +175,33 @@ describe('useAdapterSession', () => {
       }
     ]);
     expect(sessionState.runtime.block('block:auto-2')?.content).toBe('reactive reconnect works');
+
+    scope.stop();
+  });
+
+  it('retries connect automatically when reconnect is enabled', async () => {
+    const adapter = createRetryingDemoAdapter();
+    const scope = effectScope();
+    const sessionState = scope.run(() => useAdapterSession(adapter, {
+      overrides: {
+        source: 'retry-source'
+      },
+      reconnect: {
+        retries: 1,
+        delayMs: 0
+      }
+    }));
+
+    if (!sessionState) {
+      throw new Error('Failed to create retrying adapter session state.');
+    }
+
+    await sessionState.connect();
+
+    expect(sessionState.runtime.block('block:retry:2')?.content).toBe('reconnected to retry-source');
+    expect(sessionState.reconnectAttempt.value).toBe(0);
+    expect(sessionState.reconnecting.value).toBe(false);
+    expect(sessionState.error.value).toBeUndefined();
 
     scope.stop();
   });

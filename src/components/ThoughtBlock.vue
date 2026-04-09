@@ -1,19 +1,47 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
+import { resolveThoughtHeader, type ThoughtHeaderStatus } from './thoughtHeader';
 
+/**
+ * `ThoughtBlock` 的输入参数。
+ */
 interface Props {
-  title: string;
+  /** 原始标题文案。 */
+  title?: string | undefined;
+  /** 显式传入的思考状态。 */
+  status?: ThoughtHeaderStatus | undefined;
+  /** 后端直接返回的耗时文本。 */
+  durationText?: string | undefined;
+  /** 以后端毫秒值传入的思考耗时。 */
+  durationMs?: number | undefined;
 }
 
-defineProps<Props>();
+const props = defineProps<Props>();
 
+/**
+ * 当前 thought 面板是否展开。
+ */
 const expanded = ref(false);
+
+/**
+ * 归一化后的 thought 头部展示模型。
+ */
+const header = computed(() => {
+  return resolveThoughtHeader({
+    title: props.title,
+    status: props.status,
+    durationText: props.durationText,
+    durationMs: props.durationMs
+  });
+});
 </script>
 
 <template>
   <section
     class="agentdown-thought"
     :data-expanded="expanded ? 'true' : 'false'"
+    :data-shimmer="header.shimmering ? 'true' : 'false'"
+    :data-status="header.status"
   >
     <button
       type="button"
@@ -22,16 +50,12 @@ const expanded = ref(false);
       @click="expanded = !expanded"
     >
       <span class="agentdown-thought-copy">
+        <span class="agentdown-thought-title">{{ header.title }}</span>
         <span
-          class="agentdown-thought-marker"
+          class="agentdown-thought-chevron"
           aria-hidden="true"
         />
-        <span class="agentdown-thought-title">{{ title }}</span>
       </span>
-      <span
-        class="agentdown-thought-chevron"
-        aria-hidden="true"
-      />
     </button>
 
     <transition name="agentdown-thought-transition">

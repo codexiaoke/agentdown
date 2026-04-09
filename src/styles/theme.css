@@ -9,7 +9,28 @@
   --agentdown-border-color: #e5e7eb;
   --agentdown-border-soft: #eef2f6;
   --agentdown-code-bg: #fafbfc;
-  --agentdown-thought-bg: #fcfcfd;
+  --agentdown-thought-bg: #f7f8fc;
+  --agentdown-thought-accent: #4263ff;
+  --agentdown-thought-accent-soft: rgba(66, 99, 255, 0.14);
+  --agentdown-thought-title-color: #868f9c;
+  --agentdown-thought-title-done-color: #8d96a3;
+  --agentdown-thought-title-muted: #a7b0bc;
+  --agentdown-thought-title-highlight-color: #ffffff;
+  --agentdown-thought-chevron-color: #9aa3af;
+  --agentdown-thought-chevron-expanded-color: #8c95a2;
+  --agentdown-thought-body-color: #858d99;
+  --agentdown-thought-body-strong-color: #707987;
+  --agentdown-thought-body-subtle-color: #b5bcc6;
+  --agentdown-thought-body-link-color: #9098a6;
+  --agentdown-thought-body-code-color: #7f8794;
+  --agentdown-thought-line-color: rgba(148, 163, 184, 0.28);
+  --agentdown-tool-title-color: #475569;
+  --agentdown-tool-status-pending-bg: #f8fafc;
+  --agentdown-tool-status-pending-color: #64748b;
+  --agentdown-tool-status-success-bg: #f2f8f3;
+  --agentdown-tool-status-success-color: #5f7a67;
+  --agentdown-tool-status-danger-bg: #fbf4f4;
+  --agentdown-tool-status-danger-color: #987272;
   --agentdown-agui-bg: #fbfcfe;
   --agentdown-radius: 16px;
   --agentdown-shadow: 0 10px 30px rgba(15, 23, 42, 0.04);
@@ -46,6 +67,7 @@
   margin: 0;
   white-space: pre-wrap;
   color: var(--agentdown-text-color);
+  contain: layout paint;
 }
 
 .agentdown-text-line {
@@ -768,19 +790,17 @@
 
 .agentdown-thought {
   overflow: hidden;
-  border: 1px solid var(--agentdown-border-color);
-  border-radius: var(--agentdown-radius);
-  background: var(--agentdown-thought-bg);
+  border-radius: calc(var(--agentdown-radius) - 2px);
+  background: transparent;
 }
 
 .agentdown-thought-toggle {
   width: 100%;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
+  justify-content: flex-start;
   border: 0;
-  padding: 0.85rem 0.95rem;
+  padding: 0.18rem 0;
   background: transparent;
   color: var(--agentdown-text-color);
   font: inherit;
@@ -791,49 +811,165 @@
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 0.7rem;
-}
-
-.agentdown-thought-marker {
-  flex: 0 0 auto;
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: #d1d5db;
+  gap: 0.22rem;
 }
 
 .agentdown-thought-title {
+  display: inline-block;
   min-width: 0;
+  position: relative;
   overflow: hidden;
-  color: var(--agentdown-text-color);
-  font-size: 0.93rem;
-  font-weight: 600;
-  letter-spacing: -0.01em;
+  color: var(--agentdown-thought-title-color);
+  font-size: 0.98rem;
+  font-weight: 400;
+  letter-spacing: -0.018em;
   text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.agentdown-thought[data-status='done'] .agentdown-thought-title {
+  color: var(--agentdown-thought-title-done-color);
+}
+
+.agentdown-thought[data-shimmer='true'] .agentdown-thought-title {
+  color: transparent;
+  background-image: linear-gradient(
+    100deg,
+    var(--agentdown-thought-title-muted) 0%,
+    var(--agentdown-thought-title-muted) 34%,
+    var(--agentdown-thought-title-highlight-color) 46%,
+    var(--agentdown-thought-title-highlight-color) 50%,
+    var(--agentdown-thought-title-highlight-color) 54%,
+    var(--agentdown-thought-title-muted) 66%,
+    var(--agentdown-thought-title-muted) 100%
+  );
+  background-position: 130% 0;
+  background-size: 240% 100%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  will-change: background-position;
+  animation: agentdown-thought-shimmer 1.9s ease-in-out infinite;
 }
 
 .agentdown-thought-chevron {
   flex: 0 0 auto;
   width: 8px;
   height: 8px;
-  border-right: 1.5px solid var(--agentdown-subtle-color);
-  border-bottom: 1.5px solid var(--agentdown-subtle-color);
-  transform: rotate(45deg) translateY(-1px);
+  position: relative;
+  margin-left: 0.02rem;
+  transition: color 180ms ease;
+  color: var(--agentdown-thought-chevron-color);
+}
+
+.agentdown-thought-chevron::before {
+  content: '';
+  position: absolute;
+  inset: 50% auto auto 50%;
+  width: 6px;
+  height: 6px;
+  border-right: 1.4px solid currentColor;
+  border-bottom: 1.4px solid currentColor;
+  transform: translate(-62%, -42%) rotate(-45deg);
   transition:
     transform 180ms ease,
     border-color 180ms ease;
 }
 
 .agentdown-thought[data-expanded='true'] .agentdown-thought-chevron {
-  border-color: var(--agentdown-muted-color);
-  transform: rotate(225deg) translateY(-1px);
+  color: var(--agentdown-thought-chevron-expanded-color);
+}
+
+.agentdown-thought[data-expanded='true'] .agentdown-thought-chevron::before {
+  transform: translate(-48%, -58%) rotate(45deg);
 }
 
 .agentdown-thought-body {
-  padding: 0 0.95rem 0.95rem;
-  border-top: 1px solid var(--agentdown-border-soft);
+  margin: 0.42rem 0 0.2rem 0.8rem;
+  padding: 0.08rem 0 0.08rem 0.9rem;
+  border-left: 1px solid var(--agentdown-thought-line-color);
+  background: transparent;
+  font-size: 0.94rem;
+}
+
+.agentdown-thought-body .agentdown-text-block {
+  color: var(--agentdown-thought-body-color);
+  font-size: 0.92em !important;
+}
+
+.agentdown-thought-body .agentdown-text-block[data-tag='h1'],
+.agentdown-thought-body .agentdown-text-block[data-tag='h2'],
+.agentdown-thought-body .agentdown-text-block[data-tag='h3'],
+.agentdown-thought-body .agentdown-text-block[data-tag='h4'],
+.agentdown-thought-body .agentdown-text-block[data-tag='h5'] {
+  color: var(--agentdown-thought-body-strong-color);
+}
+
+.agentdown-thought-body .agentdown-text-block[data-tag='h6'],
+.agentdown-thought-body .agentdown-text-block[data-tone='subtle'] {
+  color: var(--agentdown-thought-body-subtle-color);
+}
+
+.agentdown-thought-body .agentdown-text-fragment--strong,
+.agentdown-thought-body .agentdown-html-block :is(strong, b) {
+  color: var(--agentdown-thought-body-strong-color);
+  font-weight: 600;
+}
+
+.agentdown-thought-body .agentdown-text-fragment--link,
+.agentdown-thought-body .agentdown-html-block a {
+  color: var(--agentdown-thought-body-link-color);
+  text-decoration-color: currentColor;
+}
+
+.agentdown-thought-body .agentdown-html-block {
+  color: var(--agentdown-thought-body-color);
+  font-size: 0.94rem;
+  line-height: 1.78;
+}
+
+.agentdown-thought-body .agentdown-html-block :is(h1, h2, h3, h4, h5) {
+  color: var(--agentdown-thought-body-strong-color);
+}
+
+.agentdown-thought-body .agentdown-html-block h6 {
+  color: var(--agentdown-thought-body-subtle-color);
+}
+
+.agentdown-thought-body .agentdown-html-block :is(p, ul, ol, blockquote, pre, figure, hr) {
+  margin-bottom: 0.82rem;
+}
+
+.agentdown-thought-body .agentdown-html-block ul,
+.agentdown-thought-body .agentdown-html-block ol {
+  padding-left: 1.15rem;
+}
+
+.agentdown-thought-body .agentdown-html-block li + li {
+  margin-top: 0.24rem;
+}
+
+.agentdown-thought-body .agentdown-html-block li::marker {
+  color: var(--agentdown-thought-body-subtle-color);
+}
+
+.agentdown-thought-body .agentdown-html-block blockquote {
+  border-left-color: var(--agentdown-thought-line-color);
+  color: var(--agentdown-thought-body-subtle-color);
+}
+
+.agentdown-thought-body .agentdown-code-block {
+  border-color: rgba(148, 163, 184, 0.18);
+  background: rgba(248, 250, 252, 0.8);
+  box-shadow: none;
+}
+
+.agentdown-thought-body .agentdown-text-fragment--code,
+.agentdown-thought-body .agentdown-html-block :is(p, li, blockquote, td, th) code {
+  color: var(--agentdown-thought-body-code-color);
+  border-color: rgba(203, 213, 225, 0.9);
+  background: rgba(248, 250, 252, 0.92);
 }
 
 .agentdown-thought-transition-enter-active,
@@ -847,6 +983,16 @@
 .agentdown-thought-transition-leave-to {
   opacity: 0;
   transform: translateY(-4px);
+}
+
+@keyframes agentdown-thought-shimmer {
+  0% {
+    background-position: 130% 0;
+  }
+
+  100% {
+    background-position: -120% 0;
+  }
 }
 
 .agentdown-agui {
@@ -891,12 +1037,20 @@
     animation: none;
   }
 
+  .agentdown-thought[data-shimmer='true'] .agentdown-thought-title {
+    color: var(--agentdown-thought-title-muted);
+    background-image: none;
+    -webkit-text-fill-color: currentColor;
+  }
+
   .agentdown-copy-button,
   .agentdown-thought-chevron,
+  .agentdown-thought-title,
   .agentdown-thought-transition-enter-active,
   .agentdown-thought-transition-leave-active,
   .agentdown-agui-transition-enter-active,
   .agentdown-agui-transition-leave-active {
     transition: none;
+    animation: none;
   }
 }

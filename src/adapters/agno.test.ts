@@ -224,6 +224,37 @@ describe('createAgnoProtocol', () => {
     });
   });
 
+  it('creates a visible assistant error block when the run fails', () => {
+    const bridge = createAgnoTestBridge();
+
+    bridge.push([
+      {
+        event: 'RunStarted',
+        run_id: 'run-error-1',
+        agent_name: '天气助手'
+      },
+      {
+        event: 'RunError',
+        run_id: 'run-error-1',
+        message: 'Weather API timeout.'
+      }
+    ]);
+    bridge.flush('agno-run-error');
+
+    const snapshot = bridge.runtime.snapshot();
+    const errorBlock = snapshot.blocks.find((block) => block.type === 'error');
+
+    expect(errorBlock).toMatchObject({
+      renderer: 'error',
+      data: {
+        kind: 'error',
+        title: '运行失败',
+        message: 'Weather API timeout.',
+        refId: 'run-error-1'
+      }
+    });
+  });
+
   it('splits assistant markdown into separate segments around a tool call', () => {
     const bridge = createAgnoTestBridge();
 
@@ -572,6 +603,140 @@ describe('useAgnoChatSession', () => {
     await nextTick();
 
     expect(sessionState.sessionId.value).toBe('backend-session-1');
+
+    scope.stop();
+  });
+
+  it('supports structured user messages and preserves them during retry', async () => {
+    const scope = effectScope();
+    const capturedBodies: Array<Record<string, unknown>> = [];
+    let requestCount = 0;
+    const sessionState = scope.run(() => useAgnoChatSession<string>({
+      source: 'http://agno.test/api/stream',
+      conversationId: 'session:demo:agno-structured',
+      transport: {
+        fetch: (async (_input, init) => {
+          requestCount += 1;
+          capturedBodies.push(JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>);
+
+          return createAgnoSseResponse([
+            {
+              event: 'RunStarted',
+              run_id: `run-structured-${requestCount}`
+            },
+            {
+              event: 'RunContent',
+              run_id: `run-structured-${requestCount}`,
+              content: requestCount === 1 ? '我先看一下附件。' : '我重新看了一下附件。'
+            },
+            {
+              event: 'RunContentCompleted',
+              run_id: `run-structured-${requestCount}`
+            },
+            {
+              event: 'RunCompleted',
+              run_id: `run-structured-${requestCount}`
+            }
+          ]);
+        }) as typeof fetch
+      }
+    }));
+
+    if (!sessionState) {
+      throw new Error('Failed to create structured Agno chat session.');
+    }
+
+    await sessionState.send({
+      text: '帮我根据附件查一下北京天气',
+      requestText: '请根据我上传的附件，再帮我查一下北京天气。',
+      blocks: [
+        {
+          kind: 'attachment',
+          title: '城市列表',
+          attachmentKind: 'file',
+          label: 'cities.txt',
+          sizeText: '2 KB'
+        },
+        {
+          kind: 'custom',
+          renderer: 'user.file-card',
+          type: 'user.file-card',
+          data: {
+            filename: 'cities.txt'
+          }
+        }
+      ]
+    });
+    await nextTick();
+
+    const firstSnapshot = sessionState.runtime.snapshot();
+    const userBlocks = firstSnapshot.blocks.filter((block) => {
+      return block.messageId === sessionState.chatIds.value?.userMessageId;
+    });
+
+    expect(capturedBodies[0]).toEqual({
+      message: '请根据我上传的附件，再帮我查一下北京天气。'
+    });
+    expect(sessionState.lastInput.value).toBe('请根据我上传的附件，再帮我查一下北京天气。');
+    expect(userBlocks.map((block) => block.type)).toEqual([
+      'text',
+      'attachment',
+      'user.file-card'
+    ]);
+    expect(userBlocks[1]?.data).toMatchObject({
+      kind: 'attachment',
+      title: '城市列表',
+      label: 'cities.txt'
+    });
+    expect(userBlocks[2]?.renderer).toBe('user.file-card');
+
+    await sessionState.retry();
+    await nextTick();
+
+    expect(requestCount).toBe(2);
+    expect(capturedBodies[1]).toEqual({
+      message: '请根据我上传的附件，再帮我查一下北京天气。'
+    });
+
+    scope.stop();
+  });
+
+  it('writes a visible assistant error block when the transport connection fails', async () => {
+    const scope = effectScope();
+    const prompt = ref('帮我查一下北京天气');
+    const sessionState = scope.run(() => useAgnoChatSession<string>({
+      source: 'http://agno.test/api/stream',
+      input: prompt,
+      conversationId: 'session:demo:agno-connect-error',
+      transport: {
+        fetch: (async () => {
+          throw new Error('network down');
+        }) as typeof fetch
+      }
+    }));
+
+    if (!sessionState) {
+      throw new Error('Failed to create Agno connect error session.');
+    }
+
+    await expect(sessionState.send()).rejects.toMatchObject({
+      message: 'Bridge consume failed.'
+    });
+    await nextTick();
+
+    const snapshot = sessionState.runtime.snapshot();
+    const errorBlock = snapshot.blocks.find((block) => block.type === 'error');
+
+    expect(errorBlock).toMatchObject({
+      renderer: 'error',
+      messageId: sessionState.chatIds.value?.assistantMessageId,
+      data: {
+        kind: 'error',
+        title: 'Agno 连接失败',
+        message: 'network down'
+      }
+    });
+    expect(sessionState.transportError.value).toBe('network down');
 
     scope.stop();
   });

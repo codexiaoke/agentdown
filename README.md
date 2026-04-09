@@ -2,8 +2,8 @@
 
 语言导航：**中文** | [English](./README.en.md)
 
-Agentdown 是一个面向流式输出的 Agent Markdown UI Runtime，基于 Vue 3 构建。  
-它把 markdown 渲染、流式协议映射、运行态状态树和可交互组件组合在一起，让 Agent 的输出不再只是纯文本。
+Agentdown 是一个给 Agent 产品前端使用的 UI Runtime，基于 Vue 3 构建。  
+它接收后端返回的 SSE / JSON / 框架事件流，把原始 Agent 输出渲染成聊天消息、工具卡片、审批、handoff、artifact 和可持续更新的 Markdown 界面。
 
 [在线文档](https://codexiaoke.github.io/agentdown/)
 
@@ -11,6 +11,88 @@ Agentdown 是一个面向流式输出的 Agent Markdown UI Runtime，基于 Vue 
 
 ```text
 raw packet / SSE -> protocol -> bridge -> assembler -> runtime -> Agent UI
+```
+
+## 它到底是做什么的
+
+用最直白的话说：
+
+> Agentdown 负责把 Agent 后端吐出来的“事件流”，变成用户真正能用的前端聊天界面。
+
+它更像是 Agent 产品的前端渲染层，而不是模型层或后端编排层。
+
+- 输入：Agno、LangChain、AutoGen、CrewAI 或你自己的 SSE / JSON 事件流
+- 输出：聊天消息、工具调用卡片、审批块、handoff 块、artifact、长文 Markdown 和自定义 AGUI 组件
+- 作用位置：Agent 产品前端
+
+它不负责这些事情：
+
+- 不负责调用大模型
+- 不负责编排多 Agent 工作流
+- 不负责替你实现后端记忆、数据库和任务队列
+
+它主要负责这些事情：
+
+- 把流式文本稳定渲染成 Markdown，而不是半截乱码
+- 把工具调用、审批、人机交互事件渲染成真正的 UI
+- 把长文本和大组件控制在浏览器可承受的性能范围内
+- 让官方框架事件可以直接接到前端页面
+
+## 最快接入官方框架
+
+如果你的后端已经是 Agno、LangChain、AutoGen、CrewAI 之一，最推荐的入口不是自己从零拼 protocol，而是直接用：
+
+- `useAgnoChatSession()`
+- `useLangChainChatSession()`
+- `useAutoGenChatSession()`
+- `useCrewAIChatSession()`
+
+这层就是给真实聊天页准备的最快接法，通常几行配置就能把下面这些一起接上：
+
+- 流式文本
+- 工具调用卡片
+- 消息分组和会话语义 id
+- 重新生成、复制等消息操作
+- approval / handoff / interrupt / resume 这类人机交互流程
+
+如果你要做的就是“接一个真实 Agent 后端，并尽快把聊天页跑起来”，先看这层。
+
+最短示例：
+
+```vue
+<script setup lang="ts">
+import { ref } from 'vue';
+import {
+  RunSurface,
+  useAgnoChatSession
+} from 'agentdown';
+
+// 当前输入框内容。
+const prompt = ref('帮我查一下北京天气，并说明工具调用过程。');
+
+// `mode: "hitl"` 会把人机交互事件也一起接进来。
+const session = useAgnoChatSession<string>({
+  source: 'http://127.0.0.1:8000/api/stream/agno',
+  input: prompt,
+  conversationId: 'session:weather-demo',
+  title: 'Agno 助手',
+  mode: 'hitl'
+});
+</script>
+
+<template>
+  <form @submit.prevent="session.send()">
+    <textarea v-model="prompt" rows="2" />
+    <button :disabled="session.busy">
+      {{ session.busy ? '请求中...' : '发送' }}
+    </button>
+  </form>
+
+  <RunSurface
+    :runtime="session.runtime"
+    v-bind="session.surface"
+  />
+</template>
 ```
 
 如果你正在做：
@@ -60,8 +142,10 @@ raw packet / SSE -> protocol -> bridge -> assembler -> runtime -> Agent UI
 
 ## 官方框架适配状态
 
+如果你要快速接一个真实聊天页，这一节就是最应该先看的入口。
+
 | 框架 | 推荐入口 | 流式文本 | 工具卡片 | 内置操作审批 | 说明 |
-| --- | --- | --- |
+| --- | --- | --- | --- | --- | --- |
 | Agno | `useAgnoChatSession()` / `createAgnoAdapter()` | 支持 | 支持 | 支持 | 聊天页面优先用 `useAgnoChatSession()` |
 | LangChain | `useLangChainChatSession()` / `createLangChainAdapter()` | 支持 | 支持 | 支持 | 直接消费 `astream_events()` 风格事件 |
 | AutoGen | `useAutoGenChatSession()` / `createAutoGenAdapter()` | 支持 | 支持 | 支持 | 直接消费官方 `run_stream()` 事件 |
@@ -79,7 +163,8 @@ raw packet / SSE -> protocol -> bridge -> assembler -> runtime -> Agent UI
 更完整的能力说明见：
 
 - [官方框架适配](https://codexiaoke.github.io/agentdown/guide/framework-adapters)
-- [框架能力矩阵](https://codexiaoke.github.io/agentdown/guide/framework-capability-matrix)
+- [核心概念](https://codexiaoke.github.io/agentdown/guide/core-concepts)
+- [自定义协议接入](https://codexiaoke.github.io/agentdown/guide/custom-framework)
 
 ## 安装
 
@@ -215,31 +300,130 @@ cmd.content.replace({
 
 ## 接官方框架最推荐的方式
 
-对 Agno、LangChain、AutoGen、CrewAI，优先用内置 preset。  
-下面这个例子是 Agno，其他框架的写法完全同一套思路。
+对 Agno、LangChain、AutoGen、CrewAI，聊天页面优先用各自的 `use*ChatSession()`。  
+下面这个例子是最新的 `useAgnoChatSession()` 写法，其他框架只需要把 helper 换成对应版本即可。
+
+```vue
+<script setup lang="ts">
+import { ref } from 'vue';
+import {
+  RunSurface,
+  // 让“工具名 -> 组件”的配置只维护一份。
+  defineAgnoToolComponents,
+  // 聊天页面优先使用这一层高阶 helper。
+  useAgnoChatSession
+} from 'agentdown';
+import WeatherToolCard from './WeatherToolCard.vue';
+
+// 当前输入框里的问题。
+const prompt = ref('帮我查一下北京天气，并说明工具调用过程。');
+
+// `useAgnoChatSession()` 会自动帮你：
+// 1. 创建 adapter / transport
+// 2. 生成 turnId / messageId
+// 3. 预插入用户消息
+// 4. 把 regenerate 接回同一个聊天流
+const session = useAgnoChatSession<string>({
+  source: 'http://127.0.0.1:8000/api/stream/agno',
+  input: prompt,
+  conversationId: 'session:weather-demo',
+  title: 'Agno 助手',
+  mode: 'hitl',
+  tools: defineAgnoToolComponents({
+    lookup_weather: {
+      match: 'lookup_weather',
+      component: WeatherToolCard
+    }
+  })
+});
+</script>
+
+<template>
+  <form @submit.prevent="session.send()">
+    <textarea
+      v-model="prompt"
+      rows="2"
+      placeholder="帮我查一下北京天气"
+    />
+
+    <button :disabled="session.busy">
+      {{ session.busy ? '请求中...' : '发送' }}
+    </button>
+
+    <p v-if="session.sessionId">
+      后端 sessionId：{{ session.sessionId }}
+    </p>
+  </form>
+
+  <RunSurface
+    :runtime="session.runtime"
+    v-bind="session.surface"
+  />
+</template>
+```
+
+如果你想接另外三个内置框架，只需要把 helper 换成：
+
+- `useLangChainChatSession()`
+- `useAutoGenChatSession()`
+- `useCrewAIChatSession()`
+
+如果你需要更底层的控制，再往下用：
+
+- `createAgnoAdapter()`
+- `createAgnoProtocol()`
+- `defineAgnoPreset()`
+
+## 某些非 UI 事件怎么处理
+
+如果你想做“某个 SSE 事件来了，就执行一个副作用”，例如抓后端回传的 sessionId、标题、埋点或日志，可以继续叠加事件 action。
+
+```ts
+import { defineAgnoEventActions, useAgnoChatSession } from 'agentdown';
+
+const session = useAgnoChatSession<string>({
+  source: 'http://127.0.0.1:8000/api/stream/agno',
+  conversationId: 'session:weather-demo',
+  eventActions: defineAgnoEventActions({
+    SessionCreated: {
+      run({ event }) {
+        console.log('raw agno event:', event);
+      }
+    }
+  })
+});
+```
+
+如果你想把“某个 SSE 事件来了，就渲染一个自定义组件”，现在也可以直接用：
+
+- `defineAgnoEventComponents()`
+- `defineLangChainEventComponents()`
+- `defineAutoGenEventComponents()`
+- `defineCrewAIEventComponents()`
+
+配合 `composeProtocols()` 把“官方主协议”和“额外事件组件协议”组合起来即可。
+
+## 更底层的 Agno 写法
+
+如果你的页面已经有自己的一套 bridge / protocol / transport 组织方式，再用更底层的 `preset` / `adapter` 即可。
 
 ```ts
 import {
   type AgnoEvent,
-  // 用官方 Agno 事件直接做 SSE 请求。
   createSseTransport,
-  // preset 会把 protocol、assembler 和 surface 默认配置收起来。
   defineAgnoPreset,
-  // 让“工具名 -> 组件”的配置只维护一份。
-  defineAgnoToolComponents
+  defineAgnoToolComponents,
+  useBridgeTransport
 } from 'agentdown';
 import WeatherToolCard from './WeatherToolCard.vue';
 
-// 命中 weather/天气 的工具名时，渲染成天气卡片。
 const agnoTools = defineAgnoToolComponents({
-  'tool.weather': {
-    match: ['weather', '天气'],
-    mode: 'includes',
+  lookup_weather: {
+    match: 'lookup_weather',
     component: WeatherToolCard
   }
 });
 
-// 创建一个 Agno preset，后面页面里直接复用即可。
 const preset = defineAgnoPreset<string>({
   protocolOptions: {
     defaultRunTitle: 'Agno 助手',
@@ -250,7 +434,6 @@ const preset = defineAgnoPreset<string>({
   }
 });
 
-// 一次性拿到 runtime、bridge 和可直接传给 RunSurface 的 surface 配置。
 const { runtime, bridge, surface } = preset.createSession({
   bridge: {
     transport: createSseTransport<AgnoEvent, string>({
@@ -270,10 +453,6 @@ const { runtime, bridge, surface } = preset.createSession({
     })
   }
 });
-```
-
-```ts
-import { useBridgeTransport } from 'agentdown';
 
 // `useBridgeTransport()` 负责 start / stop / status 这层页面状态。
 const { start } = useBridgeTransport({
@@ -284,22 +463,6 @@ const { start } = useBridgeTransport({
 // 启动后，Agno 原始事件会被 bridge 持续消费。
 await start();
 ```
-
-```vue
-<RunSurface
-  :runtime="runtime"
-  v-bind="surface"
-/>
-```
-
-如果你想做“某个 SSE 事件来了，就渲染一个自定义组件”，现在也可以直接用：
-
-- `defineAgnoEventComponents()`
-- `defineLangChainEventComponents()`
-- `defineAutoGenEventComponents()`
-- `defineCrewAIEventComponents()`
-
-配合 `composeProtocols()` 把“官方主协议”和“额外事件组件协议”组合起来即可。
 
 ## 为什么它在流式场景下体验更稳定
 
@@ -390,13 +553,17 @@ python3 backend/run.py
 ## 文档导航
 
 - [快速开始](https://codexiaoke.github.io/agentdown/guide/getting-started)
+- [核心概念](https://codexiaoke.github.io/agentdown/guide/core-concepts)
 - [官方框架适配](https://codexiaoke.github.io/agentdown/guide/framework-adapters)
-- [Agno 深入接入](https://codexiaoke.github.io/agentdown/guide/agno-adapter)
-- [Markdown 渲染](https://codexiaoke.github.io/agentdown/guide/markdown-rendering)
+- [自定义协议接入](https://codexiaoke.github.io/agentdown/guide/custom-framework)
+- [RunSurface](https://codexiaoke.github.io/agentdown/guide/run-surface)
+- [流式 Markdown](https://codexiaoke.github.io/agentdown/guide/streaming-markdown)
 - [性能优化](https://codexiaoke.github.io/agentdown/guide/performance)
-- [Runtime 概览](https://codexiaoke.github.io/agentdown/runtime/overview)
-- [协议映射](https://codexiaoke.github.io/agentdown/runtime/protocol)
+- [FastAPI 后端接入](https://codexiaoke.github.io/agentdown/guide/backend-fastapi)
+- [Runtime API](https://codexiaoke.github.io/agentdown/api/runtime)
 - [RunSurface API](https://codexiaoke.github.io/agentdown/api/run-surface)
+- [MarkdownRenderer API](https://codexiaoke.github.io/agentdown/api/markdown-renderer)
+- [适配器 API](https://codexiaoke.github.io/agentdown/api/adapters)
 
 ## 开发命令
 

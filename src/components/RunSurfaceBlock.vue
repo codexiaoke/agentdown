@@ -6,8 +6,7 @@ import { createStreamingMarkdownTextBlock } from '../core/streamingInlineFragmen
 import type {
   AguiComponentMap,
   MarkdownBlock,
-  MarkdownBuiltinComponents,
-  MarkdownTextBlock
+  MarkdownBuiltinComponents
 } from '../core/types';
 import type {
   AgentRuntime,
@@ -33,6 +32,7 @@ import type {
 } from '../surface/types';
 import {
   hasHeavyMarkdownContent,
+  resolveSurfaceBlockMarkdownBlock,
   splitMarkdownBlocksForRender
 } from '../surface/renderUtils';
 import {
@@ -68,22 +68,6 @@ const props = defineProps<Props>();
 
 const blockRef = ref<HTMLElement | null>(null);
 const shouldMountHeavyContent = ref(!props.lazyMount);
-
-const MARKDOWN_KINDS = new Set<MarkdownBlock['kind']>([
-  'text',
-  'html',
-  'code',
-  'mermaid',
-  'math',
-  'thought',
-  'agui',
-  'artifact',
-  'approval',
-  'attachment',
-  'branch',
-  'handoff',
-  'timeline'
-]);
 
 let visibilityObserver: IntersectionObserver | null = null;
 
@@ -309,24 +293,7 @@ const draftMessageShellProps = computed(() => resolveMessageShellProps('draft'))
  * 把当前 block 还原成 markdown 语义 block。
  */
 const markdownBlock = computed<MarkdownBlock | null>(() => {
-  const data = props.block.data as Partial<MarkdownBlock> & { kind?: unknown };
-
-  if (typeof data.kind === 'string' && MARKDOWN_KINDS.has(data.kind as MarkdownBlock['kind'])) {
-    return data as MarkdownBlock;
-  }
-
-  if (props.block.renderer === 'text' && typeof props.block.content === 'string') {
-    const textBlock: MarkdownTextBlock = {
-      id: props.block.id,
-      kind: 'text',
-      tag: 'p',
-      text: props.block.content
-    };
-
-    return textBlock;
-  }
-
-  return null;
+  return resolveSurfaceBlockMarkdownBlock(props.block);
 });
 
 /**
@@ -538,6 +505,7 @@ const lazyPlaceholderMinHeight = computed(() => {
 
   if (
     activeBlock?.kind === 'artifact'
+    || activeBlock?.kind === 'error'
     || activeBlock?.kind === 'approval'
     || activeBlock?.kind === 'attachment'
     || activeBlock?.kind === 'branch'

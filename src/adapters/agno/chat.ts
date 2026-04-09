@@ -13,7 +13,9 @@ import {
   createFrameworkChatIds,
   type FrameworkChatAssistantActionsOptions,
   type FrameworkChatDevtoolsOptions,
+  type FrameworkChatInputValue,
   type FrameworkChatIds,
+  type FrameworkChatReconnectOptions,
   type FrameworkChatSessionIdOptions,
   type FrameworkChatSessionResult,
   type FrameworkChatUserMessageOptions,
@@ -59,6 +61,12 @@ export interface AgnoChatSessionIdOptions extends FrameworkChatSessionIdOptions<
 export interface AgnoChatUserMessageOptions extends FrameworkChatUserMessageOptions {}
 
 /**
+ * Agno chat helper 对自动重连行为的配置。
+ */
+export interface AgnoChatReconnectOptions<TSource = FetchTransportSource>
+  extends FrameworkChatReconnectOptions<AgnoEvent, TSource> {}
+
+/**
  * Agno chat helper 对 assistant 操作栏的快捷配置。
  */
 export interface AgnoChatAssistantActionsOptions extends FrameworkChatAssistantActionsOptions {}
@@ -78,8 +86,8 @@ export interface UseAgnoChatSessionOptions<
 > {
   /** 当前聊天真正要连接的 source，例如 `/api/stream/agno`。 */
   source: MaybeRefOrGetter<TSource | null | undefined>;
-  /** 当前输入框里的文案。 */
-  input?: MaybeRefOrGetter<string | undefined>;
+  /** 当前输入框里的文案，或已结构化好的用户消息。 */
+  input?: MaybeRefOrGetter<FrameworkChatInputValue | undefined>;
   /** 当前整段聊天所属的 conversationId。 */
   conversationId: MaybeRefOrGetter<string>;
   /** 透传给 Agno backend 的运行模式，例如 `hitl`。 */
@@ -110,6 +118,8 @@ export interface UseAgnoChatSessionOptions<
   sessionId?: boolean | AgnoChatSessionIdOptions;
   /** 是否在真正连接前预插一条用户消息；默认开启。 */
   userMessage?: false | AgnoChatUserMessageOptions;
+  /** 当前 chat helper 是否在连接失败后自动重试。 */
+  reconnect?: false | AgnoChatReconnectOptions<TSource>;
   /** assistant 默认消息操作栏的快捷配置；默认开启。 */
   assistantActions?: false | AgnoChatAssistantActionsOptions;
 }

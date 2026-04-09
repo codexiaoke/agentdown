@@ -1,10 +1,12 @@
 import './styles/theme.css';
 
 export { default as DefaultMarkdownApprovalBlock } from './components/ApprovalBlock.vue';
+export { default as AgentdownProvider } from './components/AgentdownProvider.vue';
 export { default as DefaultMarkdownAttachmentBlock } from './components/AttachmentBlock.vue';
 export { default as AgentDevtoolsOverlay } from './components/AgentDevtoolsOverlay.vue';
 export { default as DefaultMarkdownArtifactBlock } from './components/ArtifactBlock.vue';
 export { default as DefaultMarkdownBranchBlock } from './components/BranchBlock.vue';
+export { default as DefaultMarkdownErrorBlock } from './components/ErrorBlock.vue';
 export { default as MarkdownRenderer } from './components/MarkdownRenderer.vue';
 export { default as RunSurface } from './components/RunSurface.vue';
 export { default as DefaultRunSurfaceAssistantShell } from './components/RunSurfaceAssistantShell.vue';
@@ -22,6 +24,14 @@ export { default as DefaultMarkdownTextBlock } from './components/PretextTextBlo
 export { default as DefaultMarkdownThoughtBlock } from './components/ThoughtBlock.vue';
 export { default as DefaultMarkdownTimelineBlock } from './components/TimelineBlock.vue';
 export { defaultMarkdownBuiltinComponents } from './components/defaultMarkdownComponents';
+export { createAgentdownPlugin } from './config/plugin';
+export {
+  defineAgentdownConfig,
+  defineAgentdownTheme,
+  mergeAgentdownThemes,
+  resolveAgentdownThemeCssVars
+} from './config/theme';
+export { mergeAgentdownConfigs, useAgentdownConfig } from './config/context';
 export { createMarkdownEngine } from './core/createMarkdownEngine';
 export { parseMarkdown } from './core/parseMarkdown';
 export { useAdapterSession } from './composables/useAdapterSession';
@@ -226,6 +236,7 @@ export type {
   MarkdownBuiltinComponentOverrides,
   MarkdownCodeBlock,
   MarkdownEnginePlugin,
+  MarkdownErrorBlock,
   MarkdownHeadingTag,
   MarkdownHandoffBlock,
   MarkdownHandoffStatus,
@@ -265,7 +276,19 @@ export type {
   UseAgentChatResult
 } from './composables/useAgentChat';
 export type {
+  FrameworkChatInputValue,
+  FrameworkChatReconnectOptions,
+  FrameworkChatStructuredInput,
+  FrameworkChatUserArtifactBlockInput,
+  FrameworkChatUserAttachmentBlockInput,
+  FrameworkChatUserCustomBlockInput,
+  FrameworkChatUserMessageBlockInput,
+  FrameworkChatUserMessageOptions,
+  FrameworkChatUserTextBlockInput
+} from './adapters/shared/chatFactory';
+export type {
   AdapterSessionTranscriptSource,
+  UseAdapterSessionReconnectOptions,
   UseAdapterSessionOptions,
   UseAdapterSessionResult
 } from './composables/useAdapterSession';
@@ -329,6 +352,7 @@ export type {
   AgnoChatAssistantActionsOptions,
   AgnoChatIdFactory,
   AgnoChatIds,
+  AgnoChatReconnectOptions,
   AgnoChatSessionIdOptions,
   AgnoChatUserMessageOptions,
   AgnoBlockIdResolver,
@@ -414,6 +438,7 @@ export type {
   CrewAIChatAssistantActionsOptions,
   CrewAIChatIdFactory,
   CrewAIChatIds,
+  CrewAIChatReconnectOptions,
   CrewAIChatSessionIdOptions,
   CrewAIChatUserMessageOptions,
   CrewAIChunkType,
@@ -445,6 +470,7 @@ export type {
   AutoGenChatAssistantActionsOptions,
   AutoGenChatIdFactory,
   AutoGenChatIds,
+  AutoGenChatReconnectOptions,
   AutoGenChatSessionIdOptions,
   AutoGenChatUserMessageOptions,
   AutoGenConversationIdResolver,
@@ -473,6 +499,7 @@ export type {
   LangChainChatAssistantActionsOptions,
   LangChainChatIdFactory,
   LangChainChatIds,
+  LangChainChatReconnectOptions,
   LangChainChatSessionIdOptions,
   LangChainChatUserMessageOptions,
   LangChainConversationIdResolver,
@@ -624,6 +651,7 @@ export type {
   MessageAttachmentInput,
   MessageArtifactInput,
   MessageBlockInput,
+  MessageErrorInput,
   MessageTextInput,
   NodeErrorInput,
   RunFinishInput,
@@ -631,6 +659,16 @@ export type {
   ToolStartInput,
   ToolUpdateInput
 } from './runtime/defineProtocol';
+export type {
+  AgentdownConfig,
+  AgentdownTheme,
+  AgentdownThemeColorTokens,
+  AgentdownThemeLayoutTokens,
+  AgentdownThoughtThemeTokens,
+  AgentdownToolThemeTokens,
+  AgentdownThemeTokens,
+  AgentdownThemeComponentTokens,
+} from './config/types';
 export type {
   FetchTransportSource,
   JsonRequestOptions,

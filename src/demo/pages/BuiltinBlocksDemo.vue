@@ -2,6 +2,7 @@
 import {
   cmd,
   createAgentRuntime,
+  DefaultMarkdownThoughtBlock,
   MarkdownRenderer,
   RunSurface
 } from '../../index';
@@ -96,6 +97,29 @@ const agentUiSource = `
 `;
 
 /**
+ * thought 头部状态演示数据，专门用来展示“正在思考”和“已思考”的默认样式。
+ */
+const thoughtSamples = [
+  {
+    id: 'thinking',
+    status: 'thinking' as const,
+    lines: [
+      '先快速定位这次 SQL 报错是不是类型不匹配。',
+      '再确认参数是从哪一层被当成字符串传进来的。'
+    ]
+  },
+  {
+    id: 'done',
+    status: 'done' as const,
+    durationMs: 7_200,
+    lines: [
+      '问题已经定位清楚：数据库字段是 smallint，但查询参数传成了字符串。',
+      '下一步只需要把 status 入参改成数字类型，或者在 SQL 层做显式类型转换。'
+    ]
+  }
+];
+
+/**
  * 预置一段运行态内容，演示默认 tool renderer 也可以直接使用。
  */
 function seedRuntimePreview() {
@@ -111,21 +135,35 @@ function seedRuntimePreview() {
       at: now
     }),
     ...cmd.tool.start({
-      id: 'tool:builtin:weather',
+      id: 'tool:builtin:searching',
       title: '查询天气',
       groupId: 'turn:assistant:builtin',
       at: now + 1
     }),
+    ...cmd.tool.start({
+      id: 'tool:builtin:summary',
+      title: '整理天气摘要',
+      groupId: 'turn:assistant:builtin',
+      at: now + 2
+    }),
     ...cmd.tool.finish({
-      id: 'tool:builtin:weather',
-      title: '查询天气',
-      at: now + 2,
-      result: {
-        city: '北京',
-        condition: '晴',
-        tempC: 26,
-        humidity: '42%'
-      }
+      id: 'tool:builtin:summary',
+      title: '整理天气摘要',
+      at: now + 3,
+      result: '北京今日晴朗，体感舒适。'
+    }),
+    ...cmd.tool.start({
+      id: 'tool:builtin:failing',
+      title: '同步团队日报',
+      groupId: 'turn:assistant:builtin',
+      at: now + 4
+    }),
+    ...cmd.tool.finish({
+      id: 'tool:builtin:failing',
+      title: '同步团队日报',
+      at: now + 5,
+      status: 'error',
+      message: '日报系统暂时不可用。'
     })
   ]);
 }
@@ -168,6 +206,28 @@ seedRuntimePreview();
         :font="markdownFont"
         :line-height="26"
       />
+
+      <div class="demo-thought-gallery">
+        <div class="demo-thought-gallery__head">
+          <strong>thought 状态示例</strong>
+          <p>这里直接展示默认 thought 组件的进行中和完成态，方便观察闪光动画和耗时文案。</p>
+        </div>
+
+        <DefaultMarkdownThoughtBlock
+          v-for="sample in thoughtSamples"
+          :key="sample.id"
+          :status="sample.status"
+          :duration-ms="sample.durationMs"
+        >
+          <p
+            v-for="(line, index) in sample.lines"
+            :key="`${sample.id}:${index}`"
+            class="demo-thought-gallery__line"
+          >
+            {{ line }}
+          </p>
+        </DefaultMarkdownThoughtBlock>
+      </div>
     </section>
 
     <section class="demo-section">
@@ -189,7 +249,7 @@ seedRuntimePreview();
       <div class="demo-section__head">
         <span>Section 03</span>
         <h2>默认 Tool Renderer</h2>
-        <p>即使你还没注册业务组件，tool block 现在也会先有一个开箱即用的默认卡片。</p>
+        <p>即使你还没注册业务组件，tool block 现在也会先有一个开箱即用的默认极简状态行。</p>
       </div>
 
       <RunSurface :runtime="runtime" />
@@ -266,6 +326,31 @@ seedRuntimePreview();
   margin-top: 8px;
   color: #64748b;
   line-height: 1.8;
+}
+
+.demo-thought-gallery {
+  margin-top: 24px;
+  display: grid;
+  gap: 18px;
+}
+
+.demo-thought-gallery__head strong,
+.demo-thought-gallery__head p {
+  margin: 0;
+}
+
+.demo-thought-gallery__head p {
+  margin-top: 6px;
+  color: #64748b;
+  line-height: 1.75;
+}
+
+.demo-thought-gallery__line {
+  margin: 0 0 10px;
+}
+
+.demo-thought-gallery__line:last-child {
+  margin-bottom: 0;
 }
 
 @media (max-width: 720px) {

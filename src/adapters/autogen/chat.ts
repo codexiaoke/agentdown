@@ -13,7 +13,9 @@ import {
   createFrameworkChatIds,
   type FrameworkChatAssistantActionsOptions,
   type FrameworkChatDevtoolsOptions,
+  type FrameworkChatInputValue,
   type FrameworkChatIds,
+  type FrameworkChatReconnectOptions,
   type FrameworkChatSessionIdOptions,
   type FrameworkChatSessionResult,
   type FrameworkChatUserMessageOptions,
@@ -59,6 +61,12 @@ export interface AutoGenChatSessionIdOptions extends FrameworkChatSessionIdOptio
 export interface AutoGenChatUserMessageOptions extends FrameworkChatUserMessageOptions {}
 
 /**
+ * AutoGen chat helper 对自动重连行为的配置。
+ */
+export interface AutoGenChatReconnectOptions<TSource = FetchTransportSource>
+  extends FrameworkChatReconnectOptions<AutoGenEvent, TSource> {}
+
+/**
  * AutoGen chat helper 对 assistant 操作栏的快捷配置。
  */
 export interface AutoGenChatAssistantActionsOptions extends FrameworkChatAssistantActionsOptions {}
@@ -71,8 +79,8 @@ export interface UseAutoGenChatSessionOptions<
 > {
   /** 当前聊天真正要连接的 source，例如 `/api/stream/autogen`。 */
   source: MaybeRefOrGetter<TSource | null | undefined>;
-  /** 当前输入框里的文案。 */
-  input?: MaybeRefOrGetter<string | undefined>;
+  /** 当前输入框里的文案，或已结构化好的用户消息。 */
+  input?: MaybeRefOrGetter<FrameworkChatInputValue | undefined>;
   /** 当前整段聊天所属的 conversationId。 */
   conversationId: MaybeRefOrGetter<string>;
   /** AutoGen backend 的运行模式，例如 `hitl`。 */
@@ -101,6 +109,8 @@ export interface UseAutoGenChatSessionOptions<
   sessionId?: boolean | AutoGenChatSessionIdOptions;
   /** 是否在真正连接前预插一条用户消息；默认开启。 */
   userMessage?: false | AutoGenChatUserMessageOptions;
+  /** 当前 chat helper 是否在连接失败后自动重试。 */
+  reconnect?: false | AutoGenChatReconnectOptions<TSource>;
   /** assistant 默认消息操作栏的快捷配置；默认开启。 */
   assistantActions?: false | AutoGenChatAssistantActionsOptions;
 }
