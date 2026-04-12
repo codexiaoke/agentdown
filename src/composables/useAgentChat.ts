@@ -68,6 +68,22 @@ import {
   type UseLangChainChatSessionOptions,
   type UseLangChainChatSessionResult
 } from '../adapters/langchain';
+import {
+  defineSpringAiEventActions,
+  defineSpringAiEventComponents,
+  defineSpringAiToolComponents,
+  type SpringAiChatAssistantActionsOptions,
+  type SpringAiChatIdFactory,
+  type SpringAiChatSessionIdOptions,
+  type SpringAiChatUserMessageOptions,
+  type SpringAiEvent,
+  type SpringAiProtocolOptions,
+  type SpringAiSseTransportOptions,
+  type SpringAiToolRendererContext,
+  useSpringAiChatSession,
+  type UseSpringAiChatSessionOptions,
+  type UseSpringAiChatSessionResult
+} from '../adapters/springai';
 import type {
   ToolNameComponentDefinition,
   ToolNameComponentMap,
@@ -87,7 +103,7 @@ import type {
 /**
  * 当前统一 chat 入口内置支持的后端框架 id。
  */
-export type AgentChatBuiltinFrameworkId = 'agno' | 'langchain' | 'autogen' | 'crewai';
+export type AgentChatBuiltinFrameworkId = 'agno' | 'langchain' | 'autogen' | 'crewai' | 'springai';
 
 /**
  * 一个可被 `useAgentChat()` 直接消费的框架 session 配置最小结构。
@@ -436,6 +452,30 @@ export type AgentChatCrewAIEventActionsInput =
   | AgentChatEventActionMap<CrewAIEvent>;
 
 /**
+ * Spring AI 统一 chat 入口里 `tools` 可接收的输入。
+ */
+export type AgentChatSpringAiToolsInput =
+  | ToolNameRegistryResult<SpringAiToolRendererContext>
+  | ToolNameComponentMap
+  | AgentChatToolMap;
+
+/**
+ * Spring AI 统一 chat 入口里 `events` 可接收的输入。
+ */
+export type AgentChatSpringAiEventsInput =
+  | EventComponentRegistryResult<SpringAiEvent>
+  | EventComponentDefinitionMap<SpringAiEvent>
+  | AgentChatEventComponentMap<SpringAiEvent>;
+
+/**
+ * Spring AI 统一 chat 入口里 `eventActions` 可接收的输入。
+ */
+export type AgentChatSpringAiEventActionsInput =
+  | EventActionRegistryResult<SpringAiEvent>
+  | EventActionDefinitionMap<SpringAiEvent>
+  | AgentChatEventActionMap<SpringAiEvent>;
+
+/**
  * Agno 统一 chat 入口配置。
  */
 export type UseAgentChatAgnoOptions<TSource = string> = UseAgentChatFrameworkOptions<
@@ -480,6 +520,17 @@ export type UseAgentChatCrewAIOptions<TSource = string> = UseAgentChatFrameworkO
 >;
 
 /**
+ * Spring AI 统一 chat 入口配置。
+ */
+export type UseAgentChatSpringAiOptions<TSource = string> = UseAgentChatFrameworkOptions<
+  'springai',
+  UseSpringAiChatSessionOptions<TSource>,
+  AgentChatSpringAiToolsInput,
+  AgentChatSpringAiEventsInput,
+  AgentChatSpringAiEventActionsInput
+>;
+
+/**
  * 自定义 framework 的统一 chat 入口配置。
  */
 export type UseAgentChatCustomOptions<
@@ -512,6 +563,7 @@ export type UseAgentChatOptions<TSource = string> =
   | UseAgentChatLangChainOptions<TSource>
   | UseAgentChatAutoGenOptions<TSource>
   | UseAgentChatCrewAIOptions<TSource>
+  | UseAgentChatSpringAiOptions<TSource>
   | UseAgentChatCustomOptions<
     TSource,
     AgentChatFrameworkSessionOptions<TSource>,
@@ -534,6 +586,7 @@ export type UseAgentChatResult<
   | UseLangChainChatSessionResult<TSource>
   | UseAutoGenChatSessionResult<TSource>
   | UseCrewAIChatSessionResult<TSource>
+  | UseSpringAiChatSessionResult<TSource>
 > = TResult;
 
 /**
@@ -556,7 +609,9 @@ export type ResolveUseAgentChatResult<TOptions> =
         : TFramework extends 'autogen'
           ? UseAutoGenChatSessionResult<InferAgentChatSource<TOptions>>
           : TFramework extends 'crewai'
-        ? UseCrewAIChatSessionResult<InferAgentChatSource<TOptions>>
+            ? UseCrewAIChatSessionResult<InferAgentChatSource<TOptions>>
+            : TFramework extends 'springai'
+              ? UseSpringAiChatSessionResult<InferAgentChatSource<TOptions>>
             : TFramework extends AnyAgentChatFrameworkDriver
               ? ExtractAgentChatFrameworkResult<TFramework>
               : never
@@ -964,6 +1019,57 @@ function resolveCrewAIEventActions(
 }
 
 /**
+ * 统一解析 Spring AI tools 输入。
+ */
+function resolveSpringAiTools(
+  input: UseAgentChatSpringAiOptions['tools']
+) {
+  if (!input) {
+    return undefined;
+  }
+
+  if (isToolRegistryResult<SpringAiToolRendererContext>(input)) {
+    return input;
+  }
+
+  return defineSpringAiToolComponents(normalizeAgentChatToolDefinitions(input));
+}
+
+/**
+ * 统一解析 Spring AI 事件组件输入。
+ */
+function resolveSpringAiEvents(
+  input: UseAgentChatSpringAiOptions['events']
+) {
+  if (!input) {
+    return undefined;
+  }
+
+  if (isEventComponentRegistryResult<SpringAiEvent>(input)) {
+    return input;
+  }
+
+  return defineSpringAiEventComponents(normalizeAgentChatEventComponentDefinitions(input));
+}
+
+/**
+ * 统一解析 Spring AI 事件副作用输入。
+ */
+function resolveSpringAiEventActions(
+  input: UseAgentChatSpringAiOptions['eventActions']
+) {
+  if (!input) {
+    return undefined;
+  }
+
+  if (isEventActionRegistryResult<SpringAiEvent>(input)) {
+    return input;
+  }
+
+  return defineSpringAiEventActions(normalizeAgentChatEventActionDefinitions(input));
+}
+
+/**
  * 内置的 Agno chat framework driver。
  */
 export const agnoChatFramework = defineAgentChatFramework<
@@ -1044,13 +1150,34 @@ export const crewAIChatFramework = defineAgentChatFramework<
 });
 
 /**
+ * 内置的 Spring AI chat framework driver。
+ */
+export const springAiChatFramework = defineAgentChatFramework<
+  string,
+  UseSpringAiChatSessionOptions<string>,
+  UseSpringAiChatSessionResult<string>,
+  AgentChatSpringAiToolsInput,
+  AgentChatSpringAiEventsInput,
+  AgentChatSpringAiEventActionsInput
+>({
+  id: 'springai',
+  useChatSession(sessionOptions) {
+    return useSpringAiChatSession<string>(sessionOptions);
+  },
+  resolveTools: resolveSpringAiTools,
+  resolveEvents: resolveSpringAiEvents,
+  resolveEventActions: resolveSpringAiEventActions
+});
+
+/**
  * 内置 framework driver 注册表。
  */
 export const builtinAgentChatFrameworks = createAgentChatFrameworkRegistry({
   agno: agnoChatFramework,
   langchain: langChainChatFramework,
   autogen: autoGenChatFramework,
-  crewai: crewAIChatFramework
+  crewai: crewAIChatFramework,
+  springai: springAiChatFramework
 });
 
 /**
@@ -1157,6 +1284,9 @@ export function useAgentChat<TSource = string>(
 export function useAgentChat<TSource = string>(
   options: UseAgentChatCrewAIOptions<TSource>
 ): UseCrewAIChatSessionResult<TSource>;
+export function useAgentChat<TSource = string>(
+  options: UseAgentChatSpringAiOptions<TSource>
+): UseSpringAiChatSessionResult<TSource>;
 export function useAgentChat<
   TFramework extends AnyAgentChatFrameworkDriver
 >(
@@ -1202,5 +1332,11 @@ export type {
   LangChainChatUserMessageOptions,
   LangChainProtocolOptions,
   LangChainSseTransportOptions,
+  SpringAiChatAssistantActionsOptions,
+  SpringAiChatIdFactory,
+  SpringAiChatSessionIdOptions,
+  SpringAiChatUserMessageOptions,
+  SpringAiProtocolOptions,
+  SpringAiSseTransportOptions,
   RunSurfaceOptions
 };

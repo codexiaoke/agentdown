@@ -18,7 +18,7 @@ interface Props {
 const props = defineProps<Props>();
 
 /**
- * 把内部工具状态收敛成三种面向用户的状态文案。
+ * 把内部工具状态收敛成更直观的用户态文案。
  */
 const statusLabel = computed(() => {
   switch (props.status) {
@@ -26,11 +26,13 @@ const statusLabel = computed(() => {
     case 'completed':
     case 'success':
       return '调用成功';
-    case 'error':
-    case 'failed':
     case 'rejected':
+      return '已拒绝';
     case 'cancelled':
     case 'canceled':
+      return '已取消';
+    case 'error':
+    case 'failed':
       return '调用失败';
     case 'pending':
     case 'waiting':
@@ -47,6 +49,7 @@ const statusTone = computed(() => {
   switch (statusLabel.value) {
     case '调用成功':
       return 'success';
+    case '已拒绝':
     case '调用失败':
       return 'danger';
     default:

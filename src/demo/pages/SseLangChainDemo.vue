@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import {
   defineLangChainToolComponents,
   RunSurface,
@@ -10,9 +10,17 @@ import WeatherToolCard from '../components/WeatherToolCard.vue';
 
 const DEFAULT_PROMPT = '帮我查一下北京天气，并说明工具调用过程。';
 const DEMO_CONVERSATION_ID = 'session:demo:langchain-weather';
+const SPRING_BACKEND_BASE_URL = 'http://127.0.0.1:8080';
+const FASTAPI_BACKEND_BASE_URL = 'http://127.0.0.1:8000';
 const hitlStatus = ref('尚未触发自定义 HITL 逻辑');
 const hitlPayloadPreview = ref('尚未提交自定义 interrupt payload');
 const hitlTrace = ref<string[]>([]);
+const editedCity = ref('上海');
+
+/**
+ * LangChain demo 当前支持的后端预设。
+ */
+type LangChainDemoBackendPreset = 'spring' | 'fastapi' | 'custom';
 
 /**
  * 去掉 URL 末尾多余的 `/`，方便后面安全拼接路径。
@@ -22,20 +30,69 @@ function trimTrailingSlash(value: string): string {
 }
 
 /**
- * 解析 demo 当前应连接的后端根地址。
+ * 读取 demo 的默认后端根地址。
+ *
+ * 优先级：
+ * 1. `VITE_AGENTDOWN_API_BASE`
+ * 2. Spring Boot LangChain demo 默认地址
  */
-function resolveBackendBaseUrl(): string {
+function resolveConfiguredBackendBaseUrl(): string {
   const configured = import.meta.env.VITE_AGENTDOWN_API_BASE;
+
   return trimTrailingSlash(configured && configured.length > 0
     ? configured
-    : 'http://127.0.0.1:8000');
+    : SPRING_BACKEND_BASE_URL);
+}
+
+/**
+ * 根据初始地址推断当前应该默认选中哪个后端预设。
+ */
+function resolveInitialBackendPreset(baseUrl: string): LangChainDemoBackendPreset {
+  if (baseUrl === SPRING_BACKEND_BASE_URL) {
+    return 'spring';
+  }
+
+  if (baseUrl === FASTAPI_BACKEND_BASE_URL) {
+    return 'fastapi';
+  }
+
+  return 'custom';
+}
+
+/**
+ * 根据当前预设和自定义地址，解析最终要连接的后端根地址。
+ */
+function resolveSelectedBackendBaseUrl(
+  preset: LangChainDemoBackendPreset,
+  customBaseUrl: string
+): string {
+  if (preset === 'spring') {
+    return SPRING_BACKEND_BASE_URL;
+  }
+
+  if (preset === 'fastapi') {
+    return FASTAPI_BACKEND_BASE_URL;
+  }
+
+  return trimTrailingSlash(customBaseUrl);
 }
 
 /**
  * 按统一规则拼出真实 LangChain SSE endpoint。
  */
-function buildLangChainEndpoint(): string {
-  return `${resolveBackendBaseUrl()}/api/stream/langchain`;
+function buildLangChainEndpoint(baseUrl: string): string {
+  return `${trimTrailingSlash(baseUrl)}/api/stream/langchain`;
+}
+
+/**
+ * 从未知值里尽量读取普通对象，方便继续复用原始 tool args。
+ */
+function readRecord(value: unknown): Record<string, unknown> | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return undefined;
+  }
+
+  return value as Record<string, unknown>;
 }
 
 /**
@@ -55,8 +112,26 @@ function updateHitlPayloadPreview(payload: Record<string, unknown>): void {
   hitlPayloadPreview.value = JSON.stringify(payload, null, 2);
 }
 
+/**
+ * 在切换后端时重置 demo 状态，避免把旧 sessionId 带到新后端。
+ */
+function resetHitlDemoState(): void {
+  hitlStatus.value = '尚未触发自定义 HITL 逻辑';
+  hitlPayloadPreview.value = '尚未提交自定义 interrupt payload';
+  hitlTrace.value = [];
+}
+
 const prompt = ref(DEFAULT_PROMPT);
-const endpoint = buildLangChainEndpoint();
+const configuredBackendBaseUrl = resolveConfiguredBackendBaseUrl();
+const backendPreset = ref<LangChainDemoBackendPreset>(
+  resolveInitialBackendPreset(configuredBackendBaseUrl)
+);
+const customBackendBaseUrl = ref(configuredBackendBaseUrl);
+const backendBaseUrl = computed(() => resolveSelectedBackendBaseUrl(
+  backendPreset.value,
+  customBackendBaseUrl.value
+));
+const endpoint = computed(() => buildLangChainEndpoint(backendBaseUrl.value));
 
 const {
   runtime,
@@ -65,7 +140,8 @@ const {
   busy,
   statusLabel,
   transportError,
-  sessionId: backendSessionId
+  sessionId: backendSessionId,
+  reset
 } = useLangChainChatSession<string>({
   source: endpoint,
   input: prompt,
@@ -92,17 +168,25 @@ const {
         await context.submitDecision();
       },
       changes_requested: async (context) => {
-        const resolvedMessage = context.reason?.trim() || 'demo 自定义修改意见：请补充工具调用过程，并简化最终总结。';
+        const resolvedCity = editedCity.value.trim() || '上海';
+        const toolArgs = readRecord(context.target.toolArgs) ?? {};
         const decision = {
-          ...context.defaultDecision,
-          message: resolvedMessage
+          type: 'edit' as const,
+          message: `demo 自定义修改意见：请改查 ${resolvedCity}，并说明这是一次前端人工修正。`,
+          edited_action: {
+            name: context.target.toolName || 'lookup_weather',
+            args: {
+              ...toolArgs,
+              city: resolvedCity
+            }
+          }
         };
 
         hitlStatus.value = '命中自定义 changes_requested handler';
         updateHitlPayloadPreview({
           decisions: [decision]
         });
-        pushHitlTrace(`changes_requested handler 已写入 message：${resolvedMessage}`);
+        pushHitlTrace(`changes_requested handler 已把工具参数改成 city=${resolvedCity}，并提交官方 edit 决策。`);
 
         await context.submitDecision(decision);
       },
@@ -133,6 +217,18 @@ const {
   }
 });
 
+let hasInitializedBackendWatcher = false;
+
+watch(backendBaseUrl, () => {
+  if (!hasInitializedBackendWatcher) {
+    hasInitializedBackendWatcher = true;
+    return;
+  }
+
+  reset();
+  resetHitlDemoState();
+});
+
 onMounted(() => {
   send().catch(() => {
     // demo 页面里失败只需要保持当前状态，不需要再额外抛错。
@@ -144,7 +240,7 @@ onMounted(() => {
   <section class="demo-page">
     <header class="demo-page__header">
       <h1>LangChain 真实 SSE</h1>
-      <p>启动 FastAPI backend 后，这个页面会直接请求真实 `/api/stream/langchain`，默认启用 `mode=hitl`，先展示 LangChain 官方 interrupt 审批，再继续执行工具并回写最终答案。这个 demo 现在已经改成使用 `useLangChainChatSession({ hitl: { handlers } })` 的自定义写法。</p>
+      <p>这个页面会直接请求真实 `/api/stream/langchain`。现在默认优先接 Spring Boot 版 LangChain backend，你也可以切回 FastAPI。demo 会完整演示 LangChain interrupt 的 approve / edit / reject 接入方式，其中“需修改”已经改成提交官方 `edit` 决策，而不是只传一段文本说明。</p>
     </header>
 
     <form
@@ -166,6 +262,64 @@ onMounted(() => {
         placeholder="帮我查一下北京天气，并说明工具调用过程。"
       />
 
+      <div class="demo-form__backend-panel">
+        <span class="demo-form__label demo-form__label--inline">后端</span>
+
+        <div class="demo-form__backend-switch">
+          <button
+            type="button"
+            class="demo-form__backend-button"
+            :data-active="backendPreset === 'spring'"
+            @click="backendPreset = 'spring'"
+          >
+            Spring Boot
+          </button>
+
+          <button
+            type="button"
+            class="demo-form__backend-button"
+            :data-active="backendPreset === 'fastapi'"
+            @click="backendPreset = 'fastapi'"
+          >
+            FastAPI
+          </button>
+
+          <button
+            type="button"
+            class="demo-form__backend-button"
+            :data-active="backendPreset === 'custom'"
+            @click="backendPreset = 'custom'"
+          >
+            自定义
+          </button>
+        </div>
+      </div>
+
+      <input
+        v-if="backendPreset === 'custom'"
+        v-model="customBackendBaseUrl"
+        class="demo-form__input demo-form__input--single-line"
+        type="text"
+        placeholder="http://127.0.0.1:8080"
+      >
+
+      <div class="demo-form__backend-panel">
+        <label
+          class="demo-form__label demo-form__label--inline"
+          for="langchain-edited-city"
+        >
+          需修改时改成城市
+        </label>
+
+        <input
+          id="langchain-edited-city"
+          v-model="editedCity"
+          class="demo-form__input demo-form__input--single-line"
+          type="text"
+          placeholder="上海"
+        >
+      </div>
+
       <div class="demo-form__meta">
         <span class="demo-form__status">{{ statusLabel }}</span>
         <code class="demo-form__endpoint">{{ endpoint }}</code>
@@ -185,7 +339,7 @@ onMounted(() => {
       <div class="demo-form__hitl-panel">
         <div class="demo-form__hitl-card">
           <strong>自定义 payload</strong>
-          <p>approve 会沿用默认 official decision；changes_requested / reject 会把说明写入 `message` 再提交。</p>
+          <p>approve 会沿用默认 official decision；changes_requested 会提交官方 `edit` 决策并真正改 tool args；reject 会把拒绝原因写回 `message`。</p>
           <pre>{{ hitlPayloadPreview }}</pre>
         </div>
 
@@ -269,6 +423,10 @@ onMounted(() => {
   font-weight: 600;
 }
 
+.demo-form__label--inline {
+  margin-bottom: 0;
+}
+
 .demo-form__input {
   width: 100%;
   min-height: 72px;
@@ -280,6 +438,40 @@ onMounted(() => {
   color: #0f172a;
   font: inherit;
   line-height: 1.7;
+}
+
+.demo-form__input--single-line {
+  min-height: 0;
+  margin-top: 12px;
+}
+
+.demo-form__backend-panel {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.demo-form__backend-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.demo-form__backend-button {
+  border: 1px solid #dbe3ee;
+  background: #f8fafc;
+  color: #334155;
+  border-radius: 999px;
+  padding: 8px 12px;
+  font: inherit;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.demo-form__backend-button[data-active='true'] {
+  background: #0f172a;
+  border-color: #0f172a;
+  color: #ffffff;
 }
 
 .demo-form__meta {

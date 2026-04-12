@@ -1,0 +1,28 @@
+spring:
+  application:
+    name: spring-backend
+  config:
+    import: optional:file:.env.properties
+
+server:
+  port: ${SERVER_PORT:8080}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+agentdown:
+  deepseek:
+    base-url: ${DEEPSEEK_BASE_URL:https://api.deepseek.com/v1}
+    api-key: ${DEEPSEEK_API_KEY:}
+    model: ${DEEPSEEK_MODEL:deepseek-chat}
+    temperature: ${DEEPSEEK_TEMPERATURE:0.3}
+    max-tokens: ${DEEPSEEK_MAX_TOKENS:1024}
+    completions-path: ${DEEPSEEK_COMPLETIONS_PATH:/chat/completions}
+
+logging:
+  level:
+    root: INFO
+    com.xiaoke.springbackend: INFO

@@ -12,6 +12,7 @@ import {
   normalizeAgentChatEventComponentDefinitions,
   normalizeAgentChatToolDefinitions,
   resolveAgentChatFrameworkDriver,
+  springAiChatFramework,
   type AgentChatEventActionMap,
   type AgentChatEventComponentMap,
   type AgentChatFrameworkRegistry,
@@ -23,6 +24,7 @@ import type { AgnoEvent } from '../adapters/agno';
 import type { LangChainEvent } from '../adapters/langchain';
 import type { AutoGenEvent } from '../adapters/autogen';
 import type { CrewAIEvent } from '../adapters/crewai';
+import type { SpringAiEvent } from '../adapters/springai';
 
 /**
  * 判断一个类型是否被污染成 `any`。
@@ -114,6 +116,27 @@ function createCrewAISseResponse(events: CrewAIEvent[]): Response {
   });
 }
 
+/**
+ * 把一组 Spring AI 事件包装成最小可用的 SSE Response。
+ */
+function createSpringAiSseResponse(events: SpringAiEvent[]): Response {
+  const encoder = new TextEncoder();
+
+  return new Response(new ReadableStream({
+    start(controller) {
+      for (const event of events) {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+      }
+
+      controller.close();
+    }
+  }), {
+    headers: {
+      'Content-Type': 'text/event-stream'
+    }
+  });
+}
+
 describe('useAgentChat', () => {
   it('resolves built-in framework ids through the shared registry', () => {
     const registry = createAgentChatFrameworkRegistry({
@@ -122,7 +145,9 @@ describe('useAgentChat', () => {
 
     expectTypeOf(registry).toMatchTypeOf<AgentChatFrameworkRegistry>();
     expect(builtinAgentChatFrameworks.agno).toBe(agnoChatFramework);
+    expect(builtinAgentChatFrameworks.springai).toBe(springAiChatFramework);
     expect(resolveAgentChatFrameworkDriver('agno')).toBe(agnoChatFramework);
+    expect(resolveAgentChatFrameworkDriver('springai')).toBe(springAiChatFramework);
   });
 
   it('accepts simple Agno tool/event/action maps through the unified API', async () => {
@@ -311,6 +336,163 @@ describe('useAgentChat', () => {
     expect(seenSessions).toEqual(['session-langchain-1']);
     expect(sessionState.sessionId.value).toBe('session-langchain-1');
     expect(toolBlock?.renderer).toBe('lookup_weather');
+
+    scope.stop();
+  });
+
+  it('routes Spring AI through the unified API and keeps approval side effects outside UI blocks', async () => {
+    const scope = effectScope();
+    const prompt = ref('帮我查一下北京天气');
+    const seenSessions: string[] = [];
+    const WeatherToolCard = {} as Component;
+    const sessionState = scope.run(() => useAgentChat<string>({
+      framework: 'springai',
+      source: 'http://springai.test/api/stream',
+      input: prompt,
+      conversationId: 'session:demo:agent-chat-springai',
+      title: 'Spring AI 助手',
+      tools: {
+        lookup_weather: WeatherToolCard
+      },
+      eventActions: {
+        session_created({ event }) {
+          const payload = event as SpringAiEvent;
+          const metadata = payload.metadata as Record<string, unknown> | undefined;
+          seenSessions.push((metadata?.session_id as string) ?? '');
+        }
+      },
+      transport: {
+        fetch: (async () => createSpringAiSseResponse([
+          {
+            event: 'session.created',
+            metadata: {
+              session_id: 'session-springai-1',
+              conversation_id: 'session-springai-1'
+            },
+            data: {
+              session_id: 'session-springai-1',
+              conversation_id: 'session-springai-1'
+            }
+          },
+          {
+            event: 'run.started',
+            metadata: {
+              session_id: 'session-springai-1',
+              conversation_id: 'session-springai-1',
+              run_id: 'run-springai-1',
+              turn_id: 'turn:session-springai-1:1',
+              group_id: 'turn:session-springai-1:1'
+            },
+            data: {
+              mode: 'hitl',
+              group_id: 'turn:session-springai-1:1'
+            }
+          },
+          {
+            event: 'response.started',
+            metadata: {
+              session_id: 'session-springai-1',
+              conversation_id: 'session-springai-1',
+              run_id: 'run-springai-1',
+              turn_id: 'turn:session-springai-1:1',
+              group_id: 'turn:session-springai-1:1',
+              message_id: 'message:assistant:turn:session-springai-1:1:0'
+            },
+            data: {
+              role: 'assistant',
+              step: 0
+            }
+          },
+          {
+            event: 'response.delta',
+            metadata: {
+              session_id: 'session-springai-1',
+              conversation_id: 'session-springai-1',
+              run_id: 'run-springai-1',
+              turn_id: 'turn:session-springai-1:1',
+              group_id: 'turn:session-springai-1:1',
+              message_id: 'message:assistant:turn:session-springai-1:1:0'
+            },
+            data: {
+              content: '我来帮您查询北京天气。'
+            }
+          },
+          {
+            event: 'approval.required',
+            metadata: {
+              session_id: 'session-springai-1',
+              conversation_id: 'session-springai-1',
+              run_id: 'run-springai-1',
+              turn_id: 'turn:session-springai-1:1',
+              group_id: 'turn:session-springai-1:1',
+              message_id: 'message:assistant:turn:session-springai-1:1:0'
+            },
+            data: {
+              interrupt_id: 'run-springai-1',
+              assistant_text: '我来帮您查询北京天气。',
+              action_requests: [
+                {
+                  requirement_id: 'requirement-springai-1',
+                  tool_call_id: 'call-springai-1',
+                  name: 'lookup_weather',
+                  args: {
+                    city: '北京'
+                  },
+                  allowed_decisions: ['approve', 'edit', 'reject']
+                }
+              ],
+              reason_required_decisions: ['edit', 'reject']
+            }
+          },
+          {
+            event: 'response.completed',
+            metadata: {
+              session_id: 'session-springai-1',
+              conversation_id: 'session-springai-1',
+              run_id: 'run-springai-1',
+              turn_id: 'turn:session-springai-1:1',
+              group_id: 'turn:session-springai-1:1',
+              message_id: 'message:assistant:turn:session-springai-1:1:0'
+            },
+            data: {
+              status: 'paused',
+              content: '我来帮您查询北京天气。'
+            }
+          },
+          {
+            event: 'run.completed',
+            metadata: {
+              session_id: 'session-springai-1',
+              conversation_id: 'session-springai-1',
+              run_id: 'run-springai-1',
+              turn_id: 'turn:session-springai-1:1',
+              group_id: 'turn:session-springai-1:1'
+            },
+            data: {
+              status: 'paused'
+            }
+          }
+        ])) as typeof fetch
+      }
+    }));
+
+    expectTypeOf<IsAny<typeof sessionState>>().toEqualTypeOf<false>();
+
+    if (!sessionState) {
+      throw new Error('Failed to create unified Spring AI chat session.');
+    }
+
+    await sessionState.send();
+    await nextTick();
+
+    const snapshot = sessionState.runtime.snapshot();
+    const toolBlock = snapshot.blocks.find((block: any) => block.nodeId === 'call-springai-1');
+    const approvalBlock = snapshot.blocks.find((block: any) => block.type === 'approval');
+
+    expect(seenSessions).toEqual(['session-springai-1']);
+    expect(sessionState.sessionId.value).toBe('session-springai-1');
+    expect(toolBlock?.renderer).toBe('lookup_weather');
+    expect(approvalBlock?.data.requirementId).toBe('requirement-springai-1');
 
     scope.stop();
   });

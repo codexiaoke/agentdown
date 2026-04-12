@@ -13,6 +13,7 @@ import ReplayTranscriptDemo from './pages/ReplayTranscriptDemo.vue';
 import SseAutoGenDemo from './pages/SseAutoGenDemo.vue';
 import SseCrewAIDemo from './pages/SseCrewAIDemo.vue';
 import SseLangChainDemo from './pages/SseLangChainDemo.vue';
+import SseSpringAiDemo from './pages/SseSpringAiDemo.vue';
 import SseWeatherDemo from './pages/SseWeatherDemo.vue';
 import StreamingBenchmarkDemo from './pages/StreamingBenchmarkDemo.vue';
 import StreamingMarkdownDemo from './pages/StreamingMarkdownDemo.vue';
@@ -92,8 +93,14 @@ const routes: DemoRoute[] = [
   {
     path: '/sse-langchain',
     title: 'LangChain 真实 SSE',
-    description: '直接请求真实 /api/stream/langchain，并附带 raw event / trace / diff devtools。',
+    description: '直接请求真实 /api/stream/langchain，支持 Spring Boot / FastAPI 切换，并演示官方 HITL approve / edit / reject。',
     component: SseLangChainDemo
+  },
+  {
+    path: '/sse-springai',
+    title: 'Spring AI 真实 SSE',
+    description: '直接请求真实 /api/stream/springai，演示 approval 的 approve / edit / reject，以及 useSpringAiChatSession() 的接入方式。',
+    component: SseSpringAiDemo
   },
   {
     path: '/sse-crewai',

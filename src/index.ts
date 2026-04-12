@@ -45,6 +45,7 @@ export {
   crewAIChatFramework,
   defineAgentChatFramework,
   langChainChatFramework,
+  springAiChatFramework,
   normalizeAgentChatEventActionDefinitions,
   normalizeAgentChatEventComponentDefinitions,
   normalizeAgentChatToolDefinitions,
@@ -110,6 +111,17 @@ export {
   defineLangChainToolComponents,
   useLangChainChatSession
 } from './adapters/langchain';
+export {
+  createSpringAiAdapter,
+  createSpringAiChatIds,
+  createSpringAiProtocol,
+  createSpringAiSseTransport,
+  defineSpringAiEventActions,
+  defineSpringAiEventComponents,
+  defineSpringAiPreset,
+  defineSpringAiToolComponents,
+  useSpringAiChatSession
+} from './adapters/springai';
 export { createEventComponentRegistry, eventToBlock } from './adapters/eventComponentRegistry';
 export { createToolNameRegistry, toolByName } from './adapters/toolNameRegistry';
 export {
