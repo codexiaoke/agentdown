@@ -30,12 +30,13 @@ interface Props {
 }
 
 /**
- * handoff 卡片最终可渲染的动作按钮结构。
+ * handoff 最终可渲染的动作按钮结构。
  */
 interface ResolvedHandoffAction {
   key: string;
   label: string;
   title: string;
+  tone: 'primary' | 'neutral';
   disabled: boolean;
   loading: boolean;
   success: boolean;
@@ -112,9 +113,29 @@ const statusLabel = computed(() => {
 });
 
 /**
+ * 显示 handoff 目标摘要。
+ */
+const targetSummary = computed(() => {
+  const assignee = resolvedAssignee.value?.trim();
+
+  if (assignee) {
+    return `交给 ${assignee}`;
+  }
+
+  switch (resolvedTargetType.value) {
+    case 'team':
+      return '交给团队';
+    case 'agent':
+      return '交给 Agent';
+    case 'system':
+      return '交给系统';
+    default:
+      return '交给人工';
+  }
+});
+
+/**
  * 收敛 RunSurface 里传入的 handoff actions 配置。
- *
- * 独立 MarkdownRenderer 场景下拿不到 RunSurface 上下文，此时自然退化成纯展示卡片。
  */
 const resolvedHandoffActions = computed<RunSurfaceHandoffActionsOptions | undefined>(() => {
   const options = runSurfaceContext?.handoffActions.value;
@@ -204,6 +225,13 @@ function resolveActionLabel(action: RunSurfaceHandoffActionDefinition): string {
  */
 function resolveActionTitle(action: RunSurfaceHandoffActionDefinition): string {
   return action.title ?? resolveActionLabel(action);
+}
+
+/**
+ * 给 handoff 动作分配轻量视觉语义。
+ */
+function resolveActionTone(action: RunSurfaceHandoffActionDefinition): ResolvedHandoffAction['tone'] {
+  return action.key === 'submit' ? 'primary' : 'neutral';
 }
 
 /**
@@ -330,7 +358,7 @@ async function executeHandoffAction(
 }
 
 /**
- * 生成当前 handoff 卡片真正会渲染的动作按钮列表。
+ * 生成当前 handoff 真正会渲染的动作按钮列表。
  */
 const actions = computed<ResolvedHandoffAction[]>(() => {
   const context = actionContext.value;
@@ -345,6 +373,7 @@ const actions = computed<ResolvedHandoffAction[]>(() => {
       key: action.key,
       label: pendingActionKey.value === action.key ? '处理中...' : resolveActionLabel(action),
       title: resolveActionTitle(action),
+      tone: resolveActionTone(action),
       disabled: resolveDefaultActionDisabled(action, context),
       loading: pendingActionKey.value === action.key,
       success: successActionKey.value === action.key,
@@ -413,38 +442,23 @@ async function submitPrimaryInputAction() {
   <section
     class="agentdown-handoff-block"
     :data-status="resolvedStatus"
-    :data-target="resolvedTargetType"
   >
     <div class="agentdown-handoff-head">
       <div class="agentdown-handoff-copy">
-        <span class="agentdown-handoff-eyebrow">Handoff</span>
         <strong>{{ title }}</strong>
+        <p class="agentdown-handoff-meta">
+          {{ targetSummary }}
+        </p>
+        <p
+          v-if="message"
+          class="agentdown-handoff-message"
+        >
+          {{ message }}
+        </p>
       </div>
 
-      <div class="agentdown-handoff-badges">
-        <span class="agentdown-handoff-target">{{ resolvedTargetType }}</span>
-        <span class="agentdown-handoff-status">{{ statusLabel }}</span>
-      </div>
+      <span class="agentdown-handoff-status">{{ statusLabel }}</span>
     </div>
-
-    <p
-      v-if="message"
-      class="agentdown-handoff-message"
-    >
-      {{ message }}
-    </p>
-
-    <dl class="agentdown-handoff-meta">
-      <div v-if="assignee">
-        <dt>To</dt>
-        <dd>{{ assignee }}</dd>
-      </div>
-
-      <div v-if="handoffId">
-        <dt>ID</dt>
-        <dd>{{ handoffId }}</dd>
-      </div>
-    </dl>
 
     <form
       v-if="primaryInputAction"
@@ -473,6 +487,7 @@ async function submitPrimaryInputAction() {
       <button
         type="submit"
         class="agentdown-handoff-form__submit"
+        data-tone="primary"
         :title="primaryInputAction.title"
         :disabled="primaryInputAction.disabled"
       >
@@ -489,6 +504,7 @@ async function submitPrimaryInputAction() {
         :key="action.key"
         type="button"
         class="agentdown-handoff-actions__button"
+        :data-tone="action.tone"
         :title="action.title"
         :disabled="action.disabled"
         :data-success="action.success ? 'true' : 'false'"
@@ -509,149 +525,158 @@ async function submitPrimaryInputAction() {
 
 <style scoped>
 .agentdown-handoff-block {
-  display: flex;
+  display: inline-flex;
   flex-direction: column;
-  gap: 0.9rem;
-  width: fit-content;
+  gap: 0.72rem;
+  width: min(100%, 42rem);
   max-width: 100%;
   min-width: 0;
   box-sizing: border-box;
-  border: 1px solid var(--agentdown-border-color);
-  border-radius: calc(var(--agentdown-radius) + 2px);
-  padding: 1rem 1.05rem;
-  background:
-    radial-gradient(circle at top right, rgba(245, 158, 11, 0.1), transparent 34%),
-    var(--agentdown-elevated-surface);
-  box-shadow: var(--agentdown-shadow);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 1.35rem;
+  padding: 0.84rem 0.92rem;
+  background: rgba(255, 255, 255, 0.96);
 }
 
-.agentdown-handoff-head,
-.agentdown-handoff-meta,
-.agentdown-handoff-meta div,
-.agentdown-handoff-badges {
-  display: flex;
-  align-items: center;
+.agentdown-handoff-block[data-status='accepted'],
+.agentdown-handoff-block[data-status='completed'] {
+  border-color: rgba(124, 178, 156, 0.24);
+}
+
+.agentdown-handoff-block[data-status='declined'] {
+  border-color: rgba(216, 121, 121, 0.26);
 }
 
 .agentdown-handoff-head {
+  display: flex;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 0.9rem;
 }
 
 .agentdown-handoff-copy {
   display: flex;
-  flex-direction: column;
-  gap: 0.22rem;
   min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0.2rem;
 }
 
 .agentdown-handoff-copy strong {
-  font-size: 1rem;
-  letter-spacing: -0.02em;
+  color: #2f343b;
+  font-size: 0.95rem;
+  font-weight: 540;
+  letter-spacing: -0.025em;
+  line-height: 1.28;
   overflow-wrap: anywhere;
 }
 
-.agentdown-handoff-eyebrow {
-  color: var(--agentdown-muted-color);
-  font-size: 0.74rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.agentdown-handoff-badges {
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 0.45rem;
-}
-
-.agentdown-handoff-target,
-.agentdown-handoff-status {
-  border-radius: 999px;
-  padding: 0.3rem 0.66rem;
-  font-size: 0.79rem;
-  font-weight: 600;
-  text-transform: capitalize;
-}
-
-.agentdown-handoff-target {
-  background: rgba(245, 158, 11, 0.12);
-  color: #b45309;
-}
-
-.agentdown-handoff-status {
-  background: rgba(148, 163, 184, 0.14);
-  color: #475569;
+.agentdown-handoff-meta {
+  margin: 0;
+  color: #8b929c;
+  font-size: 0.8rem;
+  line-height: 1.5;
 }
 
 .agentdown-handoff-message {
   margin: 0;
-  color: var(--agentdown-text-color);
-  line-height: 1.7;
+  color: #7b8490;
+  font-size: 0.84rem;
+  line-height: 1.58;
 }
 
-.agentdown-handoff-meta {
-  flex-wrap: wrap;
-  gap: 0.9rem;
+.agentdown-handoff-status {
+  flex-shrink: 0;
+  border-radius: 999px;
+  padding: 0.24rem 0.56rem;
+  background: rgba(226, 232, 240, 0.58);
+  color: #64748b;
+  font-size: 0.74rem;
+  font-weight: 550;
+  white-space: nowrap;
 }
 
-.agentdown-handoff-meta div {
-  gap: 0.42rem;
+.agentdown-handoff-block[data-status='accepted'] .agentdown-handoff-status,
+.agentdown-handoff-block[data-status='completed'] .agentdown-handoff-status {
+  background: rgba(111, 199, 174, 0.16);
+  color: #537f6b;
 }
 
-.agentdown-handoff-meta dt {
-  color: var(--agentdown-muted-color);
-  font-size: 0.8rem;
-}
-
-.agentdown-handoff-meta dd {
-  margin: 0;
-  color: var(--agentdown-text-color);
-  font-family:
-    'SFMono-Regular',
-    'JetBrains Mono',
-    'Fira Code',
-    'Menlo',
-    monospace;
-  font-size: 0.82rem;
+.agentdown-handoff-block[data-status='declined'] .agentdown-handoff-status {
+  background: rgba(234, 157, 149, 0.18);
+  color: #9f5f59;
 }
 
 .agentdown-handoff-form {
   display: flex;
   flex-direction: column;
-  gap: 0.72rem;
+  gap: 0.58rem;
+  border-top: 1px dashed rgba(203, 213, 225, 0.9);
+  padding-top: 0.72rem;
 }
 
 .agentdown-handoff-form__label {
-  color: var(--agentdown-text-color);
-  font-size: 0.84rem;
+  color: #475569;
+  font-size: 0.8rem;
   font-weight: 600;
 }
 
 .agentdown-handoff-form__input {
   width: 100%;
-  min-height: 92px;
+  min-height: 84px;
   resize: vertical;
-  border: 1px solid rgba(148, 163, 184, 0.28);
-  border-radius: 14px;
-  padding: 0.8rem 0.92rem;
-  background: rgba(255, 255, 255, 0.82);
-  color: var(--agentdown-text-color);
+  border: 1px solid rgba(203, 213, 225, 0.92);
+  border-radius: 1rem;
+  padding: 0.72rem 0.82rem;
+  background: #fff;
+  color: #0f172a;
   font: inherit;
-  line-height: 1.65;
+  font-size: 0.84rem;
+  line-height: 1.62;
   box-sizing: border-box;
+}
+
+.agentdown-handoff-form__input:focus {
+  outline: 2px solid rgba(100, 116, 139, 0.14);
+  outline-offset: 1px;
+  border-color: rgba(148, 163, 184, 0.72);
 }
 
 .agentdown-handoff-form__submit,
 .agentdown-handoff-actions__button {
   align-self: flex-start;
-  border: 0;
+  border: 1px solid rgba(203, 213, 225, 0.88);
   border-radius: 999px;
-  padding: 0.58rem 1rem;
-  background: #0f172a;
-  color: #ffffff;
+  padding: 0.42rem 0.76rem;
+  background: #fff;
+  color: #475569;
   font: inherit;
+  font-size: 0.79rem;
+  font-weight: 560;
   cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    color 160ms ease;
+}
+
+.agentdown-handoff-form__submit[data-tone='primary'],
+.agentdown-handoff-actions__button[data-tone='primary'] {
+  border-color: #1f2937;
+  background: #1f2937;
+  color: #fff;
+}
+
+.agentdown-handoff-form__submit:hover:not(:disabled),
+.agentdown-handoff-actions__button:hover:not(:disabled) {
+  border-color: rgba(148, 163, 184, 0.58);
+  background: #f8fafc;
+}
+
+.agentdown-handoff-form__submit[data-tone='primary']:hover:not(:disabled),
+.agentdown-handoff-actions__button[data-tone='primary']:hover:not(:disabled) {
+  border-color: #111827;
+  background: #111827;
 }
 
 .agentdown-handoff-form__submit:disabled,
@@ -663,18 +688,20 @@ async function submitPrimaryInputAction() {
 .agentdown-handoff-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.6rem;
+  gap: 0.46rem;
 }
 
 .agentdown-handoff-actions__button[data-success='true'] {
-  background: #0f766e;
+  border-color: rgba(100, 116, 139, 0.28);
+  background: rgba(241, 245, 249, 0.96);
+  color: #334155;
 }
 
 .agentdown-handoff-form__error,
 .agentdown-handoff-error {
   margin: 0;
-  color: #b91c1c;
-  font-size: 0.84rem;
+  color: #b65f5f;
+  font-size: 0.82rem;
   line-height: 1.6;
 }
 </style>

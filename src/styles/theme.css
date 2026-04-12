@@ -24,6 +24,10 @@
   --agentdown-thought-body-link-color: #9098a6;
   --agentdown-thought-body-code-color: #7f8794;
   --agentdown-thought-line-color: rgba(148, 163, 184, 0.28);
+  --agentdown-tool-surface-bg: rgba(247, 249, 252, 0.92);
+  --agentdown-tool-surface-border-color: rgba(148, 163, 184, 0.22);
+  --agentdown-tool-surface-shadow: 0 0 0 rgba(0, 0, 0, 0);
+  --agentdown-tool-shimmer-color: rgba(255, 255, 255, 0.84);
   --agentdown-tool-title-color: #475569;
   --agentdown-tool-status-pending-bg: #f8fafc;
   --agentdown-tool-status-pending-color: #64748b;
@@ -685,6 +689,68 @@
 .agentdown-lightbox-transition-enter-from,
 .agentdown-lightbox-transition-leave-to {
   opacity: 0;
+}
+
+.agentdown-file-preview-shell {
+  width: min(1120px, 100%);
+}
+
+.agentdown-file-preview-open-link {
+  text-decoration: none;
+}
+
+.agentdown-file-preview-stage {
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 1.2rem;
+  background: rgba(17, 24, 39, 0.58);
+}
+
+.agentdown-file-preview-frame {
+  display: block;
+  width: 100%;
+  height: calc(100vh - 8.5rem);
+  border: 0;
+  background: #fff;
+}
+
+.agentdown-file-preview-text {
+  overflow: auto;
+  margin: 0;
+  padding: 1.25rem 1.35rem;
+  max-height: calc(100vh - 8.5rem);
+  color: #e5e7eb;
+  font-family:
+    "SFMono-Regular",
+    "JetBrains Mono",
+    "Fira Code",
+    "Menlo",
+    monospace;
+  font-size: 0.83rem;
+  line-height: 1.72;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.agentdown-file-preview-empty {
+  display: flex;
+  min-height: 14rem;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  color: rgba(255, 255, 255, 0.86);
+  text-align: center;
+}
+
+.agentdown-file-preview-empty--error {
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.agentdown-file-preview-empty--error strong,
+.agentdown-file-preview-empty--error p {
+  margin: 0;
 }
 
 .agentdown-code-block {

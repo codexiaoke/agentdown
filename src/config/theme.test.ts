@@ -62,6 +62,7 @@ describe('agentdown theme config', () => {
           lineColor: '#dddddd'
         },
         tool: {
+          surfaceBackground: '#fafafa',
           dangerColor: '#cc0000'
         }
       },
@@ -73,6 +74,7 @@ describe('agentdown theme config', () => {
       '--agentdown-radius': '20px',
       '--agentdown-thought-title-color': '#aaaaaa',
       '--agentdown-thought-line-color': '#dddddd',
+      '--agentdown-tool-surface-bg': '#fafafa',
       '--agentdown-tool-status-danger-color': '#cc0000',
       '--agentdown-custom-demo': '#f0f0f0'
     });

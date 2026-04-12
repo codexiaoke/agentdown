@@ -169,6 +169,10 @@ export function resolveAgentdownThemeCssVars(theme?: AgentdownTheme): CSSPropert
   assignVar('--agentdown-thought-body-code-color', theme.components?.thought?.bodyCodeColor);
   assignVar('--agentdown-thought-line-color', theme.components?.thought?.lineColor);
 
+  assignVar('--agentdown-tool-surface-bg', theme.components?.tool?.surfaceBackground);
+  assignVar('--agentdown-tool-surface-border-color', theme.components?.tool?.surfaceBorderColor);
+  assignVar('--agentdown-tool-surface-shadow', theme.components?.tool?.surfaceShadow);
+  assignVar('--agentdown-tool-shimmer-color', theme.components?.tool?.shimmerColor);
   assignVar('--agentdown-tool-title-color', theme.components?.tool?.titleColor);
   assignVar('--agentdown-tool-status-pending-bg', theme.components?.tool?.pendingBackground);
   assignVar('--agentdown-tool-status-pending-color', theme.components?.tool?.pendingColor);

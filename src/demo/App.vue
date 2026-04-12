@@ -32,8 +32,8 @@ interface DemoRoute {
 const routes: DemoRoute[] = [
   {
     path: '/blocks',
-    title: '内置块总览',
-    description: '把 text / thought / code / agui / artifact / approval / attachment / branch / handoff 走一遍。',
+    title: '内置组件展厅',
+    description: '把默认 markdown block、tool、shell、message actions 和状态面全部摊开看。',
     component: BuiltinBlocksDemo
   },
   {

@@ -36,6 +36,7 @@ interface ResolvedApprovalAction {
   key: string;
   label: string;
   title: string;
+  tone: 'primary' | 'danger' | 'warning' | 'neutral';
   disabled: boolean;
   loading: boolean;
   success: boolean;
@@ -225,6 +226,24 @@ function resolveActionTitle(action: RunSurfaceApprovalActionDefinition): string 
 }
 
 /**
+ * 给动作按钮分配默认的轻量视觉语义。
+ */
+function resolveActionTone(action: RunSurfaceApprovalActionDefinition): ResolvedApprovalAction['tone'] {
+  switch (action.key) {
+    case 'approve':
+    case 'resume':
+      return 'primary';
+    case 'reject':
+    case 'interrupt':
+      return 'danger';
+    case 'changes_requested':
+      return 'warning';
+    default:
+      return 'neutral';
+  }
+}
+
+/**
  * 读取某个动作的原因输入标题。
  */
 function resolveReasonLabel(action: RunSurfaceApprovalActionDefinition): string {
@@ -393,6 +412,7 @@ const actions = computed<ResolvedApprovalAction[]>(() => {
       key: action.key,
       label: pendingActionKey.value === action.key ? '处理中...' : resolveActionLabel(action),
       title: resolveActionTitle(action),
+      tone: resolveActionTone(action),
       disabled: resolveDefaultActionDisabled(action, context),
       loading: pendingActionKey.value === action.key,
       success: successActionKey.value === action.key,
@@ -460,18 +480,17 @@ async function submitReasonPrompt() {
   >
     <div class="agentdown-approval-head">
       <div class="agentdown-approval-copy">
-        <span class="agentdown-approval-eyebrow">Approval</span>
         <strong>{{ resolvedTitle }}</strong>
+        <p
+          v-if="resolvedMessage"
+          class="agentdown-approval-message"
+        >
+          {{ resolvedMessage }}
+        </p>
       </div>
+
       <span class="agentdown-approval-badge">{{ statusLabel }}</span>
     </div>
-
-    <p
-      v-if="resolvedMessage"
-      class="agentdown-approval-message"
-    >
-      {{ resolvedMessage }}
-    </p>
 
     <div
       v-if="actions.length > 0"
@@ -482,6 +501,7 @@ async function submitReasonPrompt() {
         :key="action.key"
         type="button"
         class="agentdown-approval-action"
+        :data-tone="action.tone"
         :data-loading="action.loading ? 'true' : 'false'"
         :data-success="action.success ? 'true' : 'false'"
         :disabled="action.disabled"
@@ -546,116 +566,105 @@ async function submitReasonPrompt() {
 
 <style scoped>
 .agentdown-approval-block {
-  display: flex;
+  display: inline-flex;
   flex-direction: column;
-  gap: 0.9rem;
-  width: fit-content;
+  gap: 0.72rem;
+  width: min(100%, 42rem);
   max-width: 100%;
   min-width: 0;
   box-sizing: border-box;
-  border: 1px solid var(--agentdown-border-color);
-  border-radius: calc(var(--agentdown-radius) + 2px);
-  padding: 1rem 1.05rem;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.98)),
-    var(--agentdown-surface);
-  box-shadow: var(--agentdown-shadow);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 1.35rem;
+  padding: 0.84rem 0.92rem;
+  background: rgba(255, 255, 255, 0.96);
 }
 
 .agentdown-approval-block[data-status='approved'] {
-  border-color: rgba(5, 150, 105, 0.22);
+  border-color: rgba(110, 170, 136, 0.24);
 }
 
 .agentdown-approval-block[data-status='rejected'] {
-  border-color: rgba(220, 38, 38, 0.22);
+  border-color: rgba(216, 121, 121, 0.26);
 }
 
 .agentdown-approval-block[data-status='changes_requested'] {
-  border-color: rgba(217, 119, 6, 0.22);
+  border-color: rgba(214, 170, 94, 0.28);
 }
 
 .agentdown-approval-head {
   display: flex;
-  align-items: center;
-}
-
-.agentdown-approval-head {
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 0.9rem;
 }
 
 .agentdown-approval-copy {
   display: flex;
   flex-direction: column;
-  gap: 0.22rem;
+  gap: 0.2rem;
   min-width: 0;
 }
 
 .agentdown-approval-copy strong {
-  font-size: 1rem;
-  letter-spacing: -0.02em;
+  color: #2f343b;
+  font-size: 0.95rem;
+  font-weight: 540;
+  letter-spacing: -0.025em;
+  line-height: 1.28;
   overflow-wrap: anywhere;
 }
 
-.agentdown-approval-eyebrow {
-  color: var(--agentdown-muted-color);
-  font-size: 0.74rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
 .agentdown-approval-badge {
+  flex-shrink: 0;
   border-radius: 999px;
-  padding: 0.32rem 0.68rem;
-  background: rgba(59, 130, 246, 0.08);
-  color: #1d4ed8;
-  font-size: 0.8rem;
-  font-weight: 600;
+  padding: 0.24rem 0.56rem;
+  background: rgba(226, 232, 240, 0.58);
+  color: #64748b;
+  font-size: 0.74rem;
+  font-weight: 550;
   white-space: nowrap;
 }
 
 .agentdown-approval-block[data-status='approved'] .agentdown-approval-badge {
-  background: rgba(5, 150, 105, 0.12);
-  color: #047857;
+  background: rgba(111, 199, 174, 0.16);
+  color: #537f6b;
 }
 
 .agentdown-approval-block[data-status='rejected'] .agentdown-approval-badge {
-  background: rgba(220, 38, 38, 0.1);
-  color: #b91c1c;
+  background: rgba(234, 157, 149, 0.18);
+  color: #9f5f59;
 }
 
 .agentdown-approval-block[data-status='changes_requested'] .agentdown-approval-badge {
-  background: rgba(217, 119, 6, 0.12);
-  color: #b45309;
+  background: rgba(245, 193, 109, 0.2);
+  color: #8e6a31;
 }
 
 .agentdown-approval-message {
   margin: 0;
-  color: var(--agentdown-text-color);
-  line-height: 1.7;
+  color: #7b8490;
+  font-size: 0.84rem;
+  line-height: 1.58;
 }
 
 .agentdown-approval-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.55rem;
+  gap: 0.46rem;
 }
 
 .agentdown-approval-reason {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 0.7rem;
-  border: 1px solid rgba(226, 232, 240, 0.92);
-  border-radius: 14px;
-  padding: 0.85rem;
-  background: rgba(248, 250, 252, 0.9);
+  gap: 0.58rem;
+  border-top: 1px dashed rgba(203, 213, 225, 0.9);
+  padding-top: 0.72rem;
 }
 
 .agentdown-approval-reason__label {
-  color: #334155;
-  font-size: 0.84rem;
+  color: #475569;
+  font-size: 0.8rem;
   font-weight: 600;
 }
 
@@ -664,27 +673,27 @@ async function submitReasonPrompt() {
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
-  min-height: 88px;
-  border: 1px solid #cbd5e1;
-  border-radius: 12px;
-  padding: 0.72rem 0.82rem;
+  min-height: 80px;
+  border: 1px solid rgba(203, 213, 225, 0.92);
+  border-radius: 1rem;
+  padding: 0.7rem 0.8rem;
   resize: vertical;
   background: #fff;
   color: #0f172a;
   font: inherit;
-  font-size: 0.88rem;
-  line-height: 1.65;
+  font-size: 0.84rem;
+  line-height: 1.62;
 }
 
 .agentdown-approval-reason__textarea:focus {
-  outline: 2px solid rgba(59, 130, 246, 0.18);
+  outline: 2px solid rgba(100, 116, 139, 0.14);
   outline-offset: 1px;
-  border-color: #93c5fd;
+  border-color: rgba(148, 163, 184, 0.72);
 }
 
 .agentdown-approval-reason__error {
   margin: 0;
-  color: #b91c1c;
+  color: #b65f5f;
   font-size: 0.8rem;
   line-height: 1.6;
 }
@@ -697,42 +706,72 @@ async function submitReasonPrompt() {
 }
 
 .agentdown-approval-action {
-  border: 1px solid rgba(203, 213, 225, 0.92);
+  border: 1px solid rgba(203, 213, 225, 0.88);
   border-radius: 999px;
-  padding: 0.5rem 0.82rem;
+  padding: 0.42rem 0.76rem;
   background: #fff;
-  color: #0f172a;
+  color: #475569;
   font: inherit;
-  font-size: 0.82rem;
-  font-weight: 600;
+  font-size: 0.79rem;
+  font-weight: 560;
   cursor: pointer;
   transition:
     border-color 160ms ease,
     background-color 160ms ease,
-    color 160ms ease,
-    transform 160ms ease;
+    color 160ms ease;
+}
+
+.agentdown-approval-action[data-tone='primary'] {
+  border-color: #1f2937;
+  background: #1f2937;
+  color: #fff;
+}
+
+.agentdown-approval-action[data-tone='danger'] {
+  border-color: rgba(234, 157, 149, 0.26);
+  background: rgba(255, 247, 247, 0.96);
+  color: #9f5f59;
+}
+
+.agentdown-approval-action[data-tone='warning'] {
+  border-color: rgba(245, 193, 109, 0.3);
+  background: rgba(255, 250, 240, 0.98);
+  color: #8e6a31;
 }
 
 .agentdown-approval-action:hover:not(:disabled) {
-  border-color: #cbd5e1;
+  border-color: rgba(148, 163, 184, 0.58);
   background: #f8fafc;
-  transform: translateY(-1px);
+}
+
+.agentdown-approval-action[data-tone='primary']:hover:not(:disabled) {
+  border-color: #111827;
+  background: #111827;
+}
+
+.agentdown-approval-action[data-tone='danger']:hover:not(:disabled) {
+  border-color: rgba(234, 157, 149, 0.4);
+  background: rgba(255, 243, 243, 0.98);
+}
+
+.agentdown-approval-action[data-tone='warning']:hover:not(:disabled) {
+  border-color: rgba(245, 193, 109, 0.4);
+  background: rgba(255, 248, 233, 0.98);
 }
 
 .agentdown-approval-action[data-success='true'] {
-  border-color: rgba(5, 150, 105, 0.24);
-  background: rgba(5, 150, 105, 0.08);
-  color: #047857;
+  border-color: rgba(100, 116, 139, 0.28);
+  background: rgba(241, 245, 249, 0.96);
+  color: #334155;
 }
 
 .agentdown-approval-action[data-loading='true'] {
-  color: #334155;
+  color: inherit;
 }
 
 .agentdown-approval-action:disabled {
   cursor: not-allowed;
   opacity: 0.58;
-  transform: none;
 }
 
 .agentdown-approval-action--secondary {
@@ -742,7 +781,7 @@ async function submitReasonPrompt() {
 
 .agentdown-approval-error {
   margin: 0;
-  color: #b91c1c;
+  color: #b65f5f;
   font-size: 0.82rem;
   line-height: 1.6;
 }

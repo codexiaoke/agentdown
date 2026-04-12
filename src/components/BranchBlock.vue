@@ -18,9 +18,27 @@ interface Props {
 const props = defineProps<Props>();
 
 /**
- * 收敛 branch 状态标签，缺省时回退到“pending”。
+ * 收敛 branch 状态，缺省时回退到 pending。
  */
 const resolvedStatus = computed(() => props.status ?? 'pending');
+
+/**
+ * 把 branch 状态映射成更自然的中文文案。
+ */
+const statusLabel = computed(() => {
+  switch (resolvedStatus.value) {
+    case 'running':
+      return '进行中';
+    case 'done':
+      return '已完成';
+    case 'merged':
+      return '已合并';
+    case 'rejected':
+      return '已放弃';
+    default:
+      return '待开始';
+  }
+});
 </script>
 
 <template>
@@ -30,132 +48,94 @@ const resolvedStatus = computed(() => props.status ?? 'pending');
   >
     <div class="agentdown-branch-head">
       <div class="agentdown-branch-copy">
-        <span class="agentdown-branch-eyebrow">Branch</span>
         <strong>{{ title }}</strong>
+        <p
+          v-if="message"
+          class="agentdown-branch-message"
+        >
+          {{ message }}
+        </p>
       </div>
 
-      <span class="agentdown-branch-badge">{{ resolvedStatus }}</span>
+      <span class="agentdown-branch-badge">{{ statusLabel }}</span>
     </div>
-
-    <p
-      v-if="message"
-      class="agentdown-branch-message"
-    >
-      {{ message }}
-    </p>
-
-    <dl class="agentdown-branch-meta">
-      <div v-if="label">
-        <dt>Label</dt>
-        <dd>{{ label }}</dd>
-      </div>
-
-      <div v-if="branchId">
-        <dt>Branch</dt>
-        <dd>{{ branchId }}</dd>
-      </div>
-
-      <div v-if="sourceRunId">
-        <dt>From</dt>
-        <dd>{{ sourceRunId }}</dd>
-      </div>
-
-      <div v-if="targetRunId">
-        <dt>To</dt>
-        <dd>{{ targetRunId }}</dd>
-      </div>
-    </dl>
   </section>
 </template>
 
 <style scoped>
 .agentdown-branch-block {
-  display: flex;
-  flex-direction: column;
-  gap: 0.9rem;
-  width: fit-content;
+  display: inline-flex;
+  width: min(100%, 42rem);
   max-width: 100%;
   min-width: 0;
   box-sizing: border-box;
-  border: 1px solid var(--agentdown-border-color);
-  border-radius: calc(var(--agentdown-radius) + 2px);
-  padding: 1rem 1.05rem;
-  background:
-    radial-gradient(circle at top right, rgba(16, 185, 129, 0.08), transparent 34%),
-    var(--agentdown-elevated-surface);
-  box-shadow: var(--agentdown-shadow);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 1.35rem;
+  padding: 0.84rem 0.92rem;
+  background: rgba(255, 255, 255, 0.96);
 }
 
-.agentdown-branch-head,
-.agentdown-branch-meta,
-.agentdown-branch-meta div {
-  display: flex;
-  align-items: center;
+.agentdown-branch-block[data-status='running'],
+.agentdown-branch-block[data-status='merged'] {
+  border-color: rgba(124, 178, 156, 0.24);
+}
+
+.agentdown-branch-block[data-status='rejected'] {
+  border-color: rgba(216, 121, 121, 0.26);
 }
 
 .agentdown-branch-head {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 0.9rem;
 }
 
 .agentdown-branch-copy {
   display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
   flex-direction: column;
-  gap: 0.22rem;
+  gap: 0.2rem;
 }
 
 .agentdown-branch-copy strong {
-  font-size: 1rem;
-  letter-spacing: -0.02em;
-}
-
-.agentdown-branch-eyebrow {
-  color: var(--agentdown-muted-color);
-  font-size: 0.74rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.agentdown-branch-badge {
-  border-radius: 999px;
-  padding: 0.3rem 0.66rem;
-  background: rgba(16, 185, 129, 0.1);
-  color: #047857;
-  font-size: 0.79rem;
-  font-weight: 600;
-  text-transform: capitalize;
+  color: #2f343b;
+  font-size: 0.95rem;
+  font-weight: 540;
+  letter-spacing: -0.025em;
+  line-height: 1.28;
+  overflow-wrap: anywhere;
 }
 
 .agentdown-branch-message {
   margin: 0;
-  color: var(--agentdown-text-color);
-  line-height: 1.7;
+  color: #7b8490;
+  font-size: 0.84rem;
+  line-height: 1.58;
 }
 
-.agentdown-branch-meta {
-  flex-wrap: wrap;
-  gap: 0.9rem;
+.agentdown-branch-badge {
+  flex-shrink: 0;
+  border-radius: 999px;
+  padding: 0.24rem 0.56rem;
+  background: rgba(226, 232, 240, 0.58);
+  color: #64748b;
+  font-size: 0.74rem;
+  font-weight: 550;
+  white-space: nowrap;
 }
 
-.agentdown-branch-meta div {
-  gap: 0.42rem;
+.agentdown-branch-block[data-status='running'] .agentdown-branch-badge,
+.agentdown-branch-block[data-status='merged'] .agentdown-branch-badge {
+  background: rgba(111, 199, 174, 0.16);
+  color: #537f6b;
 }
 
-.agentdown-branch-meta dt {
-  color: var(--agentdown-muted-color);
-  font-size: 0.8rem;
-}
-
-.agentdown-branch-meta dd {
-  margin: 0;
-  color: var(--agentdown-text-color);
-  font-family:
-    'SFMono-Regular',
-    'JetBrains Mono',
-    'Fira Code',
-    'Menlo',
-    monospace;
-  font-size: 0.82rem;
+.agentdown-branch-block[data-status='rejected'] .agentdown-branch-badge {
+  background: rgba(234, 157, 149, 0.18);
+  color: #9f5f59;
 }
 </style>

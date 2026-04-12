@@ -76,6 +76,14 @@ export interface AgentdownThoughtThemeTokens {
  * 默认工具调用行可覆盖的细粒度主题 token。
  */
 export interface AgentdownToolThemeTokens {
+  /** 工具整体表面背景色。 */
+  surfaceBackground?: string;
+  /** 工具整体表面边框色。 */
+  surfaceBorderColor?: string;
+  /** 工具整体表面阴影。 */
+  surfaceShadow?: string;
+  /** 运行态扫光高光色。 */
+  shimmerColor?: string;
   /** 工具名称颜色。 */
   titleColor?: string;
   /** 调用中状态背景色。 */
