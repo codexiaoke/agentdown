@@ -18,6 +18,7 @@ import {
   type FrameworkChatReconnectOptions,
   type FrameworkChatSessionIdOptions,
   type FrameworkChatSessionResult,
+  type FrameworkChatTransportContext,
   type FrameworkChatUserMessageOptions,
   useFrameworkChatSession
 } from '../shared/chatFactory';
@@ -27,6 +28,7 @@ import {
   type LangChainResumeRequestBody,
   type LangChainSseTransportOptions
 } from './transport';
+import type { FrameworkJsonTransportResolvable } from '../shared/jsonSseTransportFactory';
 import type {
   LangChainAdapterOptions,
   LangChainEvent,
@@ -147,7 +149,7 @@ export interface UseLangChainChatSessionOptions<
   /** 直接传给 RunSurface 的静态 surface 配置。 */
   surface?: RunSurfaceOptions;
   /** 透传给 LangChain SSE transport 的配置。 */
-  transport?: Omit<LangChainSseTransportOptions<TSource>, 'message'>;
+  transport?: Omit<LangChainSseTransportOptions<TSource, FrameworkChatTransportContext>, 'message'>;
   /** 自定义 turn / message 语义 id 的生成规则。 */
   createIds?: LangChainChatIdFactory;
   /** 额外桥接生命周期 hooks。 */
@@ -204,14 +206,18 @@ interface LangChainInterruptTarget {
  */
 async function resolveLangChainTransportValue<TSource, TValue>(
   source: TSource,
-  value: ((source: TSource) => Promise<TValue> | TValue) | TValue | undefined
+  context: FrameworkChatTransportContext | undefined,
+  value: FrameworkJsonTransportResolvable<TSource, TValue, FrameworkChatTransportContext> | undefined
 ): Promise<TValue | undefined> {
   if (value === undefined) {
     return undefined;
   }
 
   if (typeof value === 'function') {
-    return (value as (source: TSource) => Promise<TValue> | TValue)(source);
+    return (value as (source: TSource, context: FrameworkChatTransportContext | undefined) => Promise<TValue> | TValue)(
+      source,
+      context
+    );
   }
 
   return value;
@@ -632,15 +638,15 @@ export function useLangChainChatSession<
     LangChainChatIds,
     LangChainProtocolOptions,
     LangChainAdapterOptions<TSource>,
-    LangChainSseTransportOptions<TSource>
+    LangChainSseTransportOptions<TSource, FrameworkChatTransportContext>
   >({
     frameworkName: 'LangChain',
     options: {
       ...options,
       transport: {
         ...(options.transport ?? {}),
-        body: async (source: TSource) => {
-          const resolvedBody = await resolveLangChainTransportValue(source, options.transport?.body);
+        body: async (source: TSource, context) => {
+          const resolvedBody = await resolveLangChainTransportValue(source, context, options.transport?.body);
           const mode = toValue(options.mode);
 
           return {

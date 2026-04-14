@@ -37,6 +37,7 @@ const variant = computed(() => {
   <div
     class="agentdown-run-surface-user-bubble"
     :data-variant="variant"
+    :data-block-kind="blockKind ?? undefined"
   >
     <slot />
   </div>
@@ -61,6 +62,12 @@ const variant = computed(() => {
 
 .agentdown-run-surface-user-bubble[data-variant='bare'] {
   width: 100%;
+  max-width: 100%;
+}
+
+.agentdown-run-surface-user-bubble[data-variant='bare'][data-block-kind='attachment'],
+.agentdown-run-surface-user-bubble[data-variant='bare'][data-block-kind='artifact'] {
+  width: auto;
   max-width: 100%;
 }
 

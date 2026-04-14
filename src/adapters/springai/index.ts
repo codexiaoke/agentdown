@@ -15,6 +15,13 @@ export { createSpringAiProtocol, defineSpringAiPreset } from './protocol';
 export { createSpringAiSseTransport } from './transport';
 export { defineSpringAiToolComponents } from './toolComponents';
 export type {
+  SpringAiApprovalRecordContent,
+  SpringAiRecordsAdapter,
+  SpringAiRenderArchive,
+  SpringAiRenderRecord,
+  SpringAiToolRecordContent
+} from './archive';
+export type {
   SpringAiChatAssistantActionsOptions,
   SpringAiChatHitlActionContext,
   SpringAiChatHitlActionKey,

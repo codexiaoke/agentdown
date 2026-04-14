@@ -15,6 +15,13 @@ export { createLangChainSseTransport } from './transport';
 export { defineLangChainEventComponents } from './eventComponents';
 export { defineLangChainToolComponents } from './toolComponents';
 export type {
+  LangChainApprovalRecordContent,
+  LangChainRecordsAdapter,
+  LangChainRenderArchive,
+  LangChainRenderRecord,
+  LangChainToolRecordContent
+} from './archive';
+export type {
   LangChainChatAssistantActionsOptions,
   LangChainChatHitlActionContext,
   LangChainChatHitlActionKey,

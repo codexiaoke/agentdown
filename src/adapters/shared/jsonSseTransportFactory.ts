@@ -2,17 +2,33 @@ import { createJsonSseTransport, type FetchTransportSource, type JsonRequestOpti
 import type { RuntimeData } from '../../runtime/types';
 
 /**
+ * 共享 JSON SSE transport 支持的可解析配置值。
+ *
+ * 除了沿用原本只接收 `source` 的 resolver，也额外支持读取当前请求上下文。
+ */
+export type FrameworkJsonTransportResolvable<
+  TSource = FetchTransportSource,
+  TValue = unknown,
+  TContext = undefined
+> =
+  | TransportResolvable<TSource, TValue>
+  | ((source: TSource, context: TContext | undefined) => Promise<TValue> | TValue);
+
+/**
  * 四套官方 SSE helper 共享的最小 transport 配置结构。
  */
 export interface FrameworkJsonSseTransportOptionsLike<
   TRawPacket = unknown,
   TSource = FetchTransportSource,
-  TBody extends RuntimeData = RuntimeData
+  TBody extends RuntimeData = RuntimeData,
+  TContext = undefined
 > extends Omit<JsonSseTransportOptions<TRawPacket, TSource, TBody>, 'request'> {
   /** 当前请求的用户输入，会自动落到 body.message。 */
-  message?: TransportResolvable<TSource, string | undefined>;
+  message?: FrameworkJsonTransportResolvable<TSource, string | undefined, TContext>;
   /** 需要额外合并到 JSON 请求体里的字段。 */
-  body?: TransportResolvable<TSource, RuntimeData | undefined>;
+  body?: FrameworkJsonTransportResolvable<TSource, RuntimeData | undefined, TContext>;
+  /** 当前请求可选的附加上下文。 */
+  resolveContext?: () => TContext | undefined;
   /** 少数场景下覆写 method / headers 等请求细节。 */
   request?: Omit<JsonRequestOptions<TSource, TBody>, 'body'>;
 }
@@ -24,7 +40,8 @@ export interface CreateFrameworkJsonSseTransportOptions<
   TRawPacket = unknown,
   TSource = FetchTransportSource,
   TBody extends RuntimeData = RuntimeData,
-  TOptions extends FrameworkJsonSseTransportOptionsLike<TRawPacket, TSource, TBody> = FrameworkJsonSseTransportOptionsLike<TRawPacket, TSource, TBody>
+  TContext = undefined,
+  TOptions extends FrameworkJsonSseTransportOptionsLike<TRawPacket, TSource, TBody, TContext> = FrameworkJsonSseTransportOptionsLike<TRawPacket, TSource, TBody, TContext>
 > {
   /** 当前框架传入的 transport options。 */
   options: TOptions;
@@ -35,16 +52,20 @@ export interface CreateFrameworkJsonSseTransportOptions<
 /**
  * 解析一个可直接传值或按 source 延迟求值的 transport 配置项。
  */
-async function resolveFrameworkTransportValue<TSource, TValue>(
+async function resolveFrameworkTransportValue<TSource, TValue, TContext>(
   source: TSource,
-  value: TransportResolvable<TSource, TValue> | undefined
+  value: FrameworkJsonTransportResolvable<TSource, TValue, TContext> | undefined,
+  context: TContext | undefined
 ): Promise<TValue | undefined> {
   if (value === undefined) {
     return undefined;
   }
 
   if (typeof value === 'function') {
-    return (value as (source: TSource) => Promise<TValue> | TValue)(source);
+    return (value as (source: TSource, context: TContext | undefined) => Promise<TValue> | TValue)(
+      source,
+      context
+    );
   }
 
   return value;
@@ -66,9 +87,10 @@ export function createFrameworkJsonSseTransport<
   TRawPacket = unknown,
   TSource = FetchTransportSource,
   TBody extends RuntimeData = RuntimeData,
-  TOptions extends FrameworkJsonSseTransportOptionsLike<TRawPacket, TSource, TBody> = FrameworkJsonSseTransportOptionsLike<TRawPacket, TSource, TBody>
+  TContext = undefined,
+  TOptions extends FrameworkJsonSseTransportOptionsLike<TRawPacket, TSource, TBody, TContext> = FrameworkJsonSseTransportOptionsLike<TRawPacket, TSource, TBody, TContext>
 >(
-  config: CreateFrameworkJsonSseTransportOptions<TRawPacket, TSource, TBody, TOptions>
+  config: CreateFrameworkJsonSseTransportOptions<TRawPacket, TSource, TBody, TContext, TOptions>
  ) {
   return createJsonSseTransport<TRawPacket, TSource, TBody>({
     ...(config.options.fetch ? { fetch: config.options.fetch } : {}),
@@ -82,8 +104,9 @@ export function createFrameworkJsonSseTransport<
       method: config.options.request?.method ?? 'POST',
       ...(config.options.request?.headers ? { headers: config.options.request.headers } : {}),
       body: async (source: TSource) => {
-        const resolvedBody = await resolveFrameworkTransportValue(source, config.options.body);
-        const resolvedMessage = await resolveFrameworkTransportValue(source, config.options.message);
+        const context = config.options.resolveContext?.();
+        const resolvedBody = await resolveFrameworkTransportValue(source, config.options.body, context);
+        const resolvedMessage = await resolveFrameworkTransportValue(source, config.options.message, context);
 
         if (resolvedBody === undefined && resolvedMessage === undefined) {
           return undefined;

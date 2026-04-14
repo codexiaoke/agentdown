@@ -186,6 +186,28 @@ export interface FrameworkChatStructuredInput {
 export type FrameworkChatInputValue = string | FrameworkChatStructuredInput;
 
 /**
+ * chat helper 归一化后的最终提交结构。
+ *
+ * 它代表“真正这一轮 send / retry / regenerate 会沿用的输入”。
+ */
+export interface FrameworkChatResolvedSubmission {
+  /** 当前轮真正发给后端的文本。 */
+  requestText: string;
+  /** 当前轮要预插入到 UI 的结构化 blocks。 */
+  blocks: FrameworkChatUserMessageBlockInput[];
+}
+
+/**
+ * transport resolver 可读取的本次聊天提交上下文。
+ */
+export interface FrameworkChatTransportContext {
+  /** 当前 transport 最终会发送的 message 文本。 */
+  requestText: string;
+  /** 当前轮完整的结构化提交内容。 */
+  submission: FrameworkChatResolvedSubmission | null;
+}
+
+/**
  * 共享 chat helper 的 assistant 操作栏配置。
  */
 export interface FrameworkChatAssistantActionsOptions {
@@ -237,7 +259,12 @@ export interface FrameworkChatAdapterOptionsLike<
 export interface FrameworkChatTransportOptionsLike<
   TRawPacket = unknown,
   TSource = unknown
-> extends FrameworkJsonSseTransportOptionsLike<TRawPacket, TSource> {}
+> extends FrameworkJsonSseTransportOptionsLike<
+  TRawPacket,
+  TSource,
+  RuntimeData,
+  FrameworkChatTransportContext
+> {}
 
 /**
  * 共享 chat helper 的输入配置结构。
@@ -399,12 +426,7 @@ function resolveFrameworkChatIdFactory<TChatIds extends FrameworkChatIds>(
 /**
  * 共享 chat helper 内部使用的归一化输入结构。
  */
-interface ResolvedFrameworkChatInput {
-  /** 当前轮真正发给后端的文本。 */
-  requestText: string;
-  /** 当前轮要预插入到 UI 的结构化 blocks。 */
-  blocks: FrameworkChatUserMessageBlockInput[];
-}
+type ResolvedFrameworkChatInput = FrameworkChatResolvedSubmission;
 
 /**
  * 把空值统一收敛成真正可用的消息文本。
@@ -1046,7 +1068,11 @@ export function useFrameworkChatSession<
   const createIds = resolveFrameworkChatIdFactory(config.options.createIds);
   const transport = config.createTransport({
     ...(config.options.transport ?? {}),
-    message: () => requestInput.value
+    message: () => requestInput.value,
+    resolveContext: () => ({
+      requestText: requestInput.value,
+      submission: lastSubmission.value
+    })
   } as unknown as TTransportOptions);
   const sessionIdResolver = resolveFrameworkChatSessionIdResolver(
     config.options.sessionId,

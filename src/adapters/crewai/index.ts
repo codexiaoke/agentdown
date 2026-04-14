@@ -21,6 +21,12 @@ export { createCrewAISseTransport } from './transport';
 export { defineCrewAIEventComponents } from './eventComponents';
 export { defineCrewAIToolComponents } from './toolComponents';
 export type {
+  CrewAIRecordsAdapter,
+  CrewAIRenderArchive,
+  CrewAIRenderRecord,
+  CrewAIToolRecordContent
+} from './archive';
+export type {
   CrewAIChatAssistantActionsOptions,
   CrewAIChatIdFactory,
   CrewAIChatIds,

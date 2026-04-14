@@ -15,6 +15,13 @@ export { createAutoGenSseTransport } from './transport';
 export { defineAutoGenEventComponents } from './eventComponents';
 export { defineAutoGenToolComponents } from './toolComponents';
 export type {
+  AutoGenHandoffRecordContent,
+  AutoGenRecordsAdapter,
+  AutoGenRenderArchive,
+  AutoGenRenderRecord,
+  AutoGenToolRecordContent
+} from './archive';
+export type {
   AutoGenChatAssistantActionsOptions,
   AutoGenChatHandoffResolutionInput,
   AutoGenChatHitlActionContext,

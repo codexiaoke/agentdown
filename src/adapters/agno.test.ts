@@ -600,7 +600,7 @@ describe('createAgnoProtocol', () => {
           }
         });
       },
-      message(source) {
+      message(source: string) {
         return `ask:${source}`;
       },
       body: {
@@ -797,6 +797,85 @@ describe('useAgnoChatSession', () => {
     expect(capturedBodies[1]).toEqual({
       message: '请根据我上传的附件，再帮我查一下北京天气。'
     });
+
+    scope.stop();
+  });
+
+  it('passes structured attachment ids into transport body resolvers for send and retry', async () => {
+    const scope = effectScope();
+    const capturedBodies: Array<Record<string, unknown>> = [];
+    let requestCount = 0;
+    const sessionState = scope.run(() => useAgnoChatSession<string>({
+      source: 'http://agno.test/api/stream',
+      conversationId: 'session:demo:agno-file-id-body',
+      transport: {
+        body: (_source, context) => {
+          const fileIds = (context?.submission?.blocks ?? []).flatMap((block) => {
+            if (block.kind !== 'attachment') {
+              return [];
+            }
+
+            return typeof block.attachmentId === 'string' && block.attachmentId.length > 0
+              ? [block.attachmentId]
+              : [];
+          });
+
+          return fileIds.length > 0
+            ? {
+                file_ids: fileIds
+              }
+            : undefined;
+        },
+        fetch: (async (_input, init) => {
+          requestCount += 1;
+          capturedBodies.push(JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>);
+
+          return createAgnoSseResponse([
+            {
+              event: 'RunStarted',
+              run_id: `run-file-id-body-${requestCount}`
+            },
+            {
+              event: 'RunCompleted',
+              run_id: `run-file-id-body-${requestCount}`
+            }
+          ]);
+        }) as typeof fetch
+      }
+    }));
+
+    if (!sessionState) {
+      throw new Error('Failed to create Agno file id transport chat session.');
+    }
+
+    await sessionState.send({
+      text: '请根据上传文件查北京天气',
+      requestText: '请根据 file-weather-1 查北京天气',
+      blocks: [
+        {
+          kind: 'attachment',
+          title: 'cities.txt',
+          attachmentKind: 'file',
+          attachmentId: 'file-weather-1',
+          label: 'cities.txt'
+        }
+      ]
+    });
+    await nextTick();
+
+    await sessionState.retry();
+    await nextTick();
+
+    expect(capturedBodies).toEqual([
+      {
+        message: '请根据 file-weather-1 查北京天气',
+        file_ids: ['file-weather-1']
+      },
+      {
+        message: '请根据 file-weather-1 查北京天气',
+        file_ids: ['file-weather-1']
+      }
+    ]);
 
     scope.stop();
   });

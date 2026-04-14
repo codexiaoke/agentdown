@@ -255,15 +255,15 @@ function closeFilePreview() {
 .agentdown-attachment-block {
   display: inline-flex;
   align-items: center;
-  gap: 0.92rem;
-  width: min(100%, 35rem);
+  gap: 0.72rem;
+  width: min(100%, 30rem);
   max-width: 100%;
   min-width: 0;
   box-sizing: border-box;
   appearance: none;
   border: 1px solid rgba(148, 163, 184, 0.24);
-  border-radius: 1.45rem;
-  padding: 1rem 1.1rem;
+  border-radius: 1.2rem;
+  padding: 0.78rem 0.88rem;
   background: #fff;
   color: inherit;
   font: inherit;
@@ -289,13 +289,13 @@ function closeFilePreview() {
 
 .agentdown-attachment-visual {
   display: inline-flex;
-  width: 3.2rem;
-  height: 3.2rem;
+  width: 2.7rem;
+  height: 2.7rem;
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  border-radius: 0.95rem;
+  border-radius: 0.82rem;
   background: #d1d5db;
   color: #fff;
 }
@@ -327,8 +327,8 @@ function closeFilePreview() {
 }
 
 .agentdown-attachment-icon {
-  width: 1.72rem;
-  height: 1.72rem;
+  width: 1.42rem;
+  height: 1.42rem;
   flex-shrink: 0;
 }
 
@@ -337,13 +337,13 @@ function closeFilePreview() {
   min-width: 0;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: 0.18rem;
+  gap: 0.12rem;
 }
 
 .agentdown-attachment-copy strong {
   overflow: hidden;
   color: #2f343b;
-  font-size: 0.98rem;
+  font-size: 0.88rem;
   font-weight: 520;
   letter-spacing: -0.03em;
   line-height: 1.28;
@@ -355,7 +355,7 @@ function closeFilePreview() {
 .agentdown-attachment-description {
   overflow: hidden;
   color: #8b929c;
-  font-size: 0.82rem;
+  font-size: 0.75rem;
   line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;

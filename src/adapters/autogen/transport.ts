@@ -1,6 +1,6 @@
-import type { FetchTransportSource, JsonRequestOptions, JsonSseTransportOptions, TransportResolvable } from '../../runtime/transports';
+import type { FetchTransportSource, JsonRequestOptions, JsonSseTransportOptions } from '../../runtime/transports';
 import type { RuntimeData } from '../../runtime/types';
-import { createFrameworkJsonSseTransport } from '../shared/jsonSseTransportFactory';
+import { createFrameworkJsonSseTransport, type FrameworkJsonTransportResolvable } from '../shared/jsonSseTransportFactory';
 import type { AutoGenEvent } from './types';
 
 /**
@@ -29,12 +29,15 @@ export interface AutoGenResumeRequestBody extends RuntimeData {
  * AutoGen SSE transport 的快捷配置。
  */
 export interface AutoGenSseTransportOptions<
-  TSource = FetchTransportSource
+  TSource = FetchTransportSource,
+  TContext = undefined
 > extends Omit<JsonSseTransportOptions<AutoGenEvent, TSource, AutoGenRequestBody>, 'request'> {
   /** 当前请求的用户输入，会自动落到 body.message。 */
-  message?: TransportResolvable<TSource, string | undefined>;
+  message?: FrameworkJsonTransportResolvable<TSource, string | undefined, TContext>;
   /** 需要额外合并到 AutoGen 请求体里的字段。 */
-  body?: TransportResolvable<TSource, RuntimeData | undefined>;
+  body?: FrameworkJsonTransportResolvable<TSource, RuntimeData | undefined, TContext>;
+  /** 当前请求可选的附加上下文。 */
+  resolveContext?: () => TContext | undefined;
   /** 少数场景下覆写 method / headers 等请求细节。 */
   request?: Omit<JsonRequestOptions<TSource, AutoGenRequestBody>, 'body'>;
 }
@@ -43,9 +46,10 @@ export interface AutoGenSseTransportOptions<
  * 创建一个更贴近 AutoGen backend 请求习惯的 SSE transport。
  */
 export function createAutoGenSseTransport<
-  TSource = FetchTransportSource
->(options: AutoGenSseTransportOptions<TSource> = {}) {
-  return createFrameworkJsonSseTransport<AutoGenEvent, TSource, AutoGenRequestBody, AutoGenSseTransportOptions<TSource>>({
+  TSource = FetchTransportSource,
+  TContext = undefined
+>(options: AutoGenSseTransportOptions<TSource, TContext> = {}) {
+  return createFrameworkJsonSseTransport<AutoGenEvent, TSource, AutoGenRequestBody, TContext, AutoGenSseTransportOptions<TSource, TContext>>({
     options
   });
 }

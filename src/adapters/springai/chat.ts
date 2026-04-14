@@ -18,6 +18,7 @@ import {
   type FrameworkChatReconnectOptions,
   type FrameworkChatSessionIdOptions,
   type FrameworkChatSessionResult,
+  type FrameworkChatTransportContext,
   type FrameworkChatUserMessageOptions,
   useFrameworkChatSession
 } from '../shared/chatFactory';
@@ -27,6 +28,7 @@ import {
   type SpringAiResumeRequestBody,
   type SpringAiSseTransportOptions
 } from './transport';
+import type { FrameworkJsonTransportResolvable } from '../shared/jsonSseTransportFactory';
 import type {
   SpringAiAdapterOptions,
   SpringAiEvent,
@@ -144,7 +146,7 @@ export interface UseSpringAiChatSessionOptions<
   /** 直接传给 RunSurface 的静态 surface 配置。 */
   surface?: RunSurfaceOptions;
   /** 透传给 Spring AI SSE transport 的配置。 */
-  transport?: Omit<SpringAiSseTransportOptions<TSource>, 'message'>;
+  transport?: Omit<SpringAiSseTransportOptions<TSource, FrameworkChatTransportContext>, 'message'>;
   /** 自定义 turn / message 语义 id 的生成规则。 */
   createIds?: SpringAiChatIdFactory;
   /** 额外桥接生命周期 hooks。 */
@@ -207,14 +209,18 @@ interface SpringAiInterruptTarget {
  */
 async function resolveSpringAiTransportValue<TSource, TValue>(
   source: TSource,
-  value: ((source: TSource) => Promise<TValue> | TValue) | TValue | undefined
+  context: FrameworkChatTransportContext | undefined,
+  value: FrameworkJsonTransportResolvable<TSource, TValue, FrameworkChatTransportContext> | undefined
 ): Promise<TValue | undefined> {
   if (value === undefined) {
     return undefined;
   }
 
   if (typeof value === 'function') {
-    return (value as (source: TSource) => Promise<TValue> | TValue)(source);
+    return (value as (source: TSource, context: FrameworkChatTransportContext | undefined) => Promise<TValue> | TValue)(
+      source,
+      context
+    );
   }
 
   return value;
@@ -715,15 +721,15 @@ export function useSpringAiChatSession<
     SpringAiChatIds,
     SpringAiProtocolOptions,
     SpringAiAdapterOptions<TSource>,
-    SpringAiSseTransportOptions<TSource>
+    SpringAiSseTransportOptions<TSource, FrameworkChatTransportContext>
   >({
     frameworkName: 'Spring AI',
     options: {
       ...options,
       transport: {
         ...(options.transport ?? {}),
-        body: async (source: TSource) => {
-          const resolvedBody = await resolveSpringAiTransportValue(source, options.transport?.body);
+        body: async (source: TSource, context) => {
+          const resolvedBody = await resolveSpringAiTransportValue(source, context, options.transport?.body);
           const mode = toValue(options.mode);
 
           return {

@@ -14,6 +14,13 @@ export { createAgnoSseTransport } from './transport';
 export { defineAgnoEventComponents } from './eventComponents';
 export { defineAgnoToolComponents } from './toolComponents';
 export type {
+  AgnoApprovalRecordContent,
+  AgnoRecordsAdapter,
+  AgnoRenderArchive,
+  AgnoRenderRecord,
+  AgnoToolRecordContent
+} from './archive';
+export type {
   AgnoChatAssistantActionsOptions,
   AgnoChatHitlActionContext,
   AgnoChatHitlActionKey,

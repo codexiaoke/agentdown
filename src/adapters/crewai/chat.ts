@@ -12,9 +12,11 @@ import {
   type FrameworkChatReconnectOptions,
   type FrameworkChatSessionIdOptions,
   type FrameworkChatSessionResult,
+  type FrameworkChatTransportContext,
   type FrameworkChatUserMessageOptions,
   useFrameworkChatSession
 } from '../shared/chatFactory';
+import type { FrameworkJsonTransportResolvable } from '../shared/jsonSseTransportFactory';
 import { createCrewAIAdapter } from './adapter';
 import { createCrewAISseTransport, type CrewAISseTransportOptions } from './transport';
 import type {
@@ -86,7 +88,7 @@ export interface UseCrewAIChatSessionOptions<
   /** 直接传给 RunSurface 的静态 surface 配置。 */
   surface?: RunSurfaceOptions;
   /** 透传给 CrewAI SSE transport 的配置。 */
-  transport?: Omit<CrewAISseTransportOptions<TSource>, 'message'>;
+  transport?: Omit<CrewAISseTransportOptions<TSource, FrameworkChatTransportContext>, 'message'>;
   /** 自定义 turn / message 语义 id 的生成规则。 */
   createIds?: CrewAIChatIdFactory;
   /** 额外桥接生命周期 hooks。 */
@@ -117,14 +119,18 @@ export interface UseCrewAIChatSessionResult<
  */
 async function resolveCrewAITransportValue<TSource, TValue>(
   source: TSource,
-  value: ((source: TSource) => Promise<TValue> | TValue) | TValue | undefined
+  context: FrameworkChatTransportContext | undefined,
+  value: FrameworkJsonTransportResolvable<TSource, TValue, FrameworkChatTransportContext> | undefined
 ): Promise<TValue | undefined> {
   if (value === undefined) {
     return undefined;
   }
 
   if (typeof value === 'function') {
-    return (value as (source: TSource) => Promise<TValue> | TValue)(source);
+    return (value as (source: TSource, context: FrameworkChatTransportContext | undefined) => Promise<TValue> | TValue)(
+      source,
+      context
+    );
   }
 
   return value;
@@ -196,15 +202,15 @@ export function useCrewAIChatSession<
     CrewAIChatIds,
     CrewAIProtocolOptions,
     CrewAIAdapterOptions<TSource>,
-    CrewAISseTransportOptions<TSource>
+    CrewAISseTransportOptions<TSource, FrameworkChatTransportContext>
   >({
     frameworkName: 'CrewAI',
     options: {
       ...options,
       transport: {
         ...(options.transport ?? {}),
-        body: async (source: TSource) => {
-          const resolvedBody = await resolveCrewAITransportValue(source, options.transport?.body);
+        body: async (source: TSource, context) => {
+          const resolvedBody = await resolveCrewAITransportValue(source, context, options.transport?.body);
           const mode = toValue(options.mode);
 
           return {

@@ -34,6 +34,13 @@ export {
 export { mergeAgentdownConfigs, useAgentdownConfig } from './config/context';
 export { createMarkdownEngine } from './core/createMarkdownEngine';
 export { parseMarkdown } from './core/parseMarkdown';
+export { defineAgentdownRecordsAdapter } from './persisted/adapter';
+export {
+  isAgentdownRenderArchive,
+  isAgentdownRenderRecord,
+  normalizeAgentdownRenderRecords,
+  parseAgentdownRenderArchive
+} from './persisted/types';
 export { useAdapterSession } from './composables/useAdapterSession';
 export { useAgentDevtools } from './composables/useAgentDevtools';
 export { useAgentDevtoolsReproductionPlayer } from './composables/useAgentDevtoolsReproductionPlayer';
@@ -232,6 +239,14 @@ export {
 } from './runtime/defineProtocol';
 export { createAgentRuntime } from './runtime/createAgentRuntime';
 export type {
+  AgentdownRecordsAdapter
+} from './persisted/adapter';
+export type {
+  AgentdownRenderArchive,
+  AgentdownRenderRecord,
+  AgentdownRenderRole
+} from './persisted/types';
+export type {
   AguiComponentMap,
   AguiComponentRegistration,
   MarkdownAguiBlock,
@@ -290,7 +305,9 @@ export type {
 export type {
   FrameworkChatInputValue,
   FrameworkChatReconnectOptions,
+  FrameworkChatResolvedSubmission,
   FrameworkChatStructuredInput,
+  FrameworkChatTransportContext,
   FrameworkChatUserArtifactBlockInput,
   FrameworkChatUserAttachmentBlockInput,
   FrameworkChatUserCustomBlockInput,
@@ -360,6 +377,7 @@ export type {
   UseRuntimeTranscriptResult as UseAgentRuntimeTranscriptResult
 } from './composables/useRuntimeTranscript';
 export type {
+  AgnoApprovalRecordContent,
   AgnoAdapterOptions,
   AgnoChatAssistantActionsOptions,
   AgnoChatHitlActionContext,
@@ -377,7 +395,10 @@ export type {
   AgnoMessageIdResolver,
   AgnoPresetOptions,
   AgnoProtocolOptions,
+  AgnoRecordsAdapter,
   AgnoRequestBody,
+  AgnoRenderArchive,
+  AgnoRenderRecord,
   AgnoRequirementPayload,
   AgnoResumeRequestBody,
   AgnoRunTitleResolver,
@@ -385,6 +406,7 @@ export type {
   AgnoStreamIdResolver,
   AgnoTurnIdResolver,
   AgnoToolExecutionPayload,
+  AgnoToolRecordContent,
   AgnoToolPayload,
   AgnoToolRendererContext,
   AgnoToolRendererResolver,
@@ -466,13 +488,17 @@ export type {
   CrewAIMessageToolFunction,
   CrewAIPresetOptions,
   CrewAIProtocolOptions,
+  CrewAIRecordsAdapter,
   CrewAIRequestBody,
+  CrewAIRenderArchive,
+  CrewAIRenderRecord,
   CrewAIRunTitleResolver,
   CrewAISseTransportOptions,
   CrewAIStreamIdResolver,
   CrewAITurnIdResolver,
   CrewAIStreamingToolCall,
   CrewAITaskOutput,
+  CrewAIToolRecordContent,
   CrewAIToolPayload,
   CrewAIToolRendererContext,
   CrewAIToolRendererResolver,
@@ -483,6 +509,7 @@ export type {
   AutoGenAdapterOptions,
   AutoGenBlockIdResolver,
   AutoGenChatAssistantActionsOptions,
+  AutoGenHandoffRecordContent,
   AutoGenChatHandoffResolutionInput,
   AutoGenChatHitlActionContext,
   AutoGenChatHitlActionKey,
@@ -498,13 +525,17 @@ export type {
   AutoGenMessageIdResolver,
   AutoGenPresetOptions,
   AutoGenProtocolOptions,
+  AutoGenRecordsAdapter,
   AutoGenRequestBody,
+  AutoGenRenderArchive,
+  AutoGenRenderRecord,
   AutoGenResumeRequestBody,
   AutoGenRunTitleResolver,
   AutoGenSseTransportOptions,
   AutoGenStreamIdResolver,
   AutoGenTurnIdResolver,
   AutoGenToolCall,
+  AutoGenToolRecordContent,
   AutoGenToolPayload,
   AutoGenToolRendererContext,
   AutoGenToolRendererResolver,
@@ -514,6 +545,7 @@ export type {
 } from './adapters/autogen';
 export type {
   LangChainAdapterOptions,
+  LangChainApprovalRecordContent,
   LangChainBlockIdResolver,
   LangChainChatAssistantActionsOptions,
   LangChainChatHitlActionContext,
@@ -536,18 +568,62 @@ export type {
   LangChainMessageIdResolver,
   LangChainPresetOptions,
   LangChainProtocolOptions,
+  LangChainRecordsAdapter,
   LangChainRequestBody,
+  LangChainRenderArchive,
+  LangChainRenderRecord,
   LangChainResumeRequestBody,
   LangChainRunTitleResolver,
   LangChainSseTransportOptions,
   LangChainStreamIdResolver,
   LangChainTurnIdResolver,
+  LangChainToolRecordContent,
   LangChainToolPayload,
   LangChainToolRendererContext,
   LangChainToolRendererResolver,
   UseLangChainChatSessionOptions,
   UseLangChainChatSessionResult
 } from './adapters/langchain';
+export type {
+  SpringAiAdapterOptions,
+  SpringAiApprovalActionRequest,
+  SpringAiApprovalPayload,
+  SpringAiApprovalRecordContent,
+  SpringAiBlockIdResolver,
+  SpringAiChatAssistantActionsOptions,
+  SpringAiChatHitlActionContext,
+  SpringAiChatHitlActionKey,
+  SpringAiChatHitlOptions,
+  SpringAiChatIdFactory,
+  SpringAiChatIds,
+  SpringAiChatReconnectOptions,
+  SpringAiChatSessionIdOptions,
+  SpringAiChatUserMessageOptions,
+  SpringAiConversationIdResolver,
+  SpringAiEditedAction,
+  SpringAiEvent,
+  SpringAiEventMetadata,
+  SpringAiGroupIdResolver,
+  SpringAiHumanDecision,
+  SpringAiMessageIdResolver,
+  SpringAiPresetOptions,
+  SpringAiProtocolOptions,
+  SpringAiRecordsAdapter,
+  SpringAiRenderArchive,
+  SpringAiRenderRecord,
+  SpringAiRequestBody,
+  SpringAiResumeRequestBody,
+  SpringAiRunTitleResolver,
+  SpringAiSseTransportOptions,
+  SpringAiStreamIdResolver,
+  SpringAiToolPayload,
+  SpringAiToolRecordContent,
+  SpringAiToolRendererContext,
+  SpringAiToolRendererResolver,
+  SpringAiTurnIdResolver,
+  UseSpringAiChatSessionOptions,
+  UseSpringAiChatSessionResult
+} from './adapters/springai';
 export type {
   UseRuntimeReplayPlayerResult,
   UseRuntimeReplayPlayerResult as UseAgentRuntimeReplayPlayerResult

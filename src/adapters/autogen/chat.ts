@@ -18,6 +18,7 @@ import {
   type FrameworkChatReconnectOptions,
   type FrameworkChatSessionIdOptions,
   type FrameworkChatSessionResult,
+  type FrameworkChatTransportContext,
   type FrameworkChatUserMessageOptions,
   useFrameworkChatSession
 } from '../shared/chatFactory';
@@ -27,6 +28,7 @@ import {
   type AutoGenResumeRequestBody,
   type AutoGenSseTransportOptions
 } from './transport';
+import type { FrameworkJsonTransportResolvable } from '../shared/jsonSseTransportFactory';
 import type {
   AutoGenAdapterOptions,
   AutoGenEvent,
@@ -155,7 +157,7 @@ export interface UseAutoGenChatSessionOptions<
   /** 直接传给 RunSurface 的静态 surface 配置。 */
   surface?: RunSurfaceOptions;
   /** 透传给 AutoGen SSE transport 的配置。 */
-  transport?: Omit<AutoGenSseTransportOptions<TSource>, 'message'>;
+  transport?: Omit<AutoGenSseTransportOptions<TSource, FrameworkChatTransportContext>, 'message'>;
   /** 自定义 turn / message 语义 id 的生成规则。 */
   createIds?: AutoGenChatIdFactory;
   /** 额外桥接生命周期 hooks。 */
@@ -303,14 +305,18 @@ function resolveAutoGenChatIdFactory(
  */
 async function resolveAutoGenTransportValue<TSource, TValue>(
   source: TSource,
-  value: ((source: TSource) => Promise<TValue> | TValue) | TValue | undefined
+  context: FrameworkChatTransportContext | undefined,
+  value: FrameworkJsonTransportResolvable<TSource, TValue, FrameworkChatTransportContext> | undefined
 ): Promise<TValue | undefined> {
   if (value === undefined) {
     return undefined;
   }
 
   if (typeof value === 'function') {
-    return (value as (source: TSource) => Promise<TValue> | TValue)(source);
+    return (value as (source: TSource, context: FrameworkChatTransportContext | undefined) => Promise<TValue> | TValue)(
+      source,
+      context
+    );
   }
 
   return value;
@@ -572,15 +578,15 @@ export function useAutoGenChatSession<
     AutoGenChatIds,
     AutoGenProtocolOptions,
     AutoGenAdapterOptions<TSource>,
-    AutoGenSseTransportOptions<TSource>
+    AutoGenSseTransportOptions<TSource, FrameworkChatTransportContext>
   >({
     frameworkName: 'AutoGen',
     options: {
       ...options,
       transport: {
         ...(options.transport ?? {}),
-        body: async (source: TSource) => {
-          const resolvedBody = await resolveAutoGenTransportValue(source, options.transport?.body);
+        body: async (source: TSource, context) => {
+          const resolvedBody = await resolveAutoGenTransportValue(source, context, options.transport?.body);
           const mode = toValue(options.mode);
 
           return {

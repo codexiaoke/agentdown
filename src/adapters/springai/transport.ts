@@ -1,6 +1,6 @@
-import type { FetchTransportSource, JsonRequestOptions, JsonSseTransportOptions, TransportResolvable } from '../../runtime/transports';
+import type { FetchTransportSource, JsonRequestOptions, JsonSseTransportOptions } from '../../runtime/transports';
 import type { RuntimeData } from '../../runtime/types';
-import { createFrameworkJsonSseTransport } from '../shared/jsonSseTransportFactory';
+import { createFrameworkJsonSseTransport, type FrameworkJsonTransportResolvable } from '../shared/jsonSseTransportFactory';
 import type { SpringAiEvent, SpringAiHumanDecision } from './types';
 
 /**
@@ -29,12 +29,15 @@ export interface SpringAiRequestBody extends RuntimeData {
  * Spring AI SSE transport 的快捷配置。
  */
 export interface SpringAiSseTransportOptions<
-  TSource = FetchTransportSource
+  TSource = FetchTransportSource,
+  TContext = undefined
 > extends Omit<JsonSseTransportOptions<SpringAiEvent, TSource, SpringAiRequestBody>, 'request'> {
   /** 当前请求的用户输入，会自动落到 body.message。 */
-  message?: TransportResolvable<TSource, string | undefined>;
+  message?: FrameworkJsonTransportResolvable<TSource, string | undefined, TContext>;
   /** 需要额外合并到 Spring AI 请求体里的字段。 */
-  body?: TransportResolvable<TSource, RuntimeData | undefined>;
+  body?: FrameworkJsonTransportResolvable<TSource, RuntimeData | undefined, TContext>;
+  /** 当前请求可选的附加上下文。 */
+  resolveContext?: () => TContext | undefined;
   /** 少数场景下覆写 method / headers 等请求细节。 */
   request?: Omit<JsonRequestOptions<TSource, SpringAiRequestBody>, 'body'>;
 }
@@ -43,9 +46,10 @@ export interface SpringAiSseTransportOptions<
  * 创建一个更贴近 Spring AI backend 请求习惯的 SSE transport。
  */
 export function createSpringAiSseTransport<
-  TSource = FetchTransportSource
->(options: SpringAiSseTransportOptions<TSource> = {}) {
-  return createFrameworkJsonSseTransport<SpringAiEvent, TSource, SpringAiRequestBody, SpringAiSseTransportOptions<TSource>>({
+  TSource = FetchTransportSource,
+  TContext = undefined
+>(options: SpringAiSseTransportOptions<TSource, TContext> = {}) {
+  return createFrameworkJsonSseTransport<SpringAiEvent, TSource, SpringAiRequestBody, TContext, SpringAiSseTransportOptions<TSource, TContext>>({
     options
   });
 }

@@ -1,6 +1,6 @@
-import type { FetchTransportSource, JsonRequestOptions, JsonSseTransportOptions, TransportResolvable } from '../../runtime/transports';
+import type { FetchTransportSource, JsonRequestOptions, JsonSseTransportOptions } from '../../runtime/transports';
 import type { RuntimeData } from '../../runtime/types';
-import { createFrameworkJsonSseTransport } from '../shared/jsonSseTransportFactory';
+import { createFrameworkJsonSseTransport, type FrameworkJsonTransportResolvable } from '../shared/jsonSseTransportFactory';
 import type { LangChainEvent } from './types';
 import type { LangChainHumanDecision } from './types';
 
@@ -35,12 +35,15 @@ export interface LangChainRequestBody extends RuntimeData {
  * - `{ message: string }`
  */
 export interface LangChainSseTransportOptions<
-  TSource = FetchTransportSource
+  TSource = FetchTransportSource,
+  TContext = undefined
 > extends Omit<JsonSseTransportOptions<LangChainEvent, TSource, LangChainRequestBody>, 'request'> {
   /** 当前请求的用户输入，会自动落到 body.message。 */
-  message?: TransportResolvable<TSource, string | undefined>;
+  message?: FrameworkJsonTransportResolvable<TSource, string | undefined, TContext>;
   /** 需要额外合并到 LangChain 请求体里的字段。 */
-  body?: TransportResolvable<TSource, RuntimeData | undefined>;
+  body?: FrameworkJsonTransportResolvable<TSource, RuntimeData | undefined, TContext>;
+  /** 当前请求可选的附加上下文。 */
+  resolveContext?: () => TContext | undefined;
   /** 少数场景下覆写 method / headers 等请求细节。 */
   request?: Omit<JsonRequestOptions<TSource, LangChainRequestBody>, 'body'>;
 }
@@ -49,9 +52,10 @@ export interface LangChainSseTransportOptions<
  * 创建一个更贴近 LangChain backend 请求习惯的 SSE transport。
  */
 export function createLangChainSseTransport<
-  TSource = FetchTransportSource
->(options: LangChainSseTransportOptions<TSource> = {}) {
-  return createFrameworkJsonSseTransport<LangChainEvent, TSource, LangChainRequestBody, LangChainSseTransportOptions<TSource>>({
+  TSource = FetchTransportSource,
+  TContext = undefined
+>(options: LangChainSseTransportOptions<TSource, TContext> = {}) {
+  return createFrameworkJsonSseTransport<LangChainEvent, TSource, LangChainRequestBody, TContext, LangChainSseTransportOptions<TSource, TContext>>({
     options
   });
 }

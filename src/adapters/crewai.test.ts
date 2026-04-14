@@ -557,7 +557,7 @@ describe('createCrewAIProtocol', () => {
           }
         });
       },
-      message(source) {
+      message(source: string) {
         return `ask:${source}`;
       },
       body: {
