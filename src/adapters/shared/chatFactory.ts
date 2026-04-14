@@ -9,6 +9,7 @@ import {
   type UseAgentDevtoolsOptions,
   type UseAgentDevtoolsResult
 } from '../../composables/useAgentDevtools';
+import AgentChatLoadingDots from '../../components/AgentChatLoadingDots.vue';
 import type { AgentdownAdapter, AgentdownAdapterSessionOptions } from '../../runtime/defineAdapter';
 import { cmd } from '../../runtime/defineProtocol';
 import type {
@@ -329,6 +330,8 @@ export interface FrameworkChatSessionResult<
   surface: ComputedRef<RunSurfaceOptions>;
   /** 当前是否仍在消费 SSE。 */
   busy: ComputedRef<boolean>;
+  /** 当前是否正在提交 HITL 决策并等待恢复执行。 */
+  resolvingHumanInput: ComputedRef<boolean>;
   /** 当前是否正在等待人工确认 / 审批继续。 */
   awaitingHumanInput: ComputedRef<boolean>;
   /** 适合直接展示在 demo 里的简短状态文本。 */
@@ -357,6 +360,8 @@ export interface FrameworkChatSessionResult<
   interrupt: () => void;
   /** 在不重置 runtime 的前提下，尝试继续连接当前 source。 */
   resume: (source?: TSource) => Promise<void>;
+  /** 在执行 HITL 决策恢复流程时，临时暴露“处理中”状态。 */
+  withPendingHumanResolution: <TResult>(task: () => Promise<TResult>) => Promise<TResult>;
 }
 
 /**
@@ -1017,15 +1022,38 @@ function resolveFrameworkChatAssistantActions(
 }
 
 /**
+ * 为 chat helper 补上默认的 draft loading 占位。
+ *
+ * 用户只要没有显式传入 `draftPlaceholder`，
+ * 就自动得到一个极简的三点思考态；
+ * 如果传了自定义占位，或明确传 `false`，这里都不覆盖。
+ */
+function resolveFrameworkChatSurfaceDefaults(surface: RunSurfaceOptions): RunSurfaceOptions {
+  if (surface.draftPlaceholder !== undefined) {
+    return surface;
+  }
+
+  return {
+    ...surface,
+    draftPlaceholder: AgentChatLoadingDots
+  };
+}
+
+/**
  * 读取当前 bridge 状态对应的简短状态文案。
  */
 function resolveFrameworkStatusLabel(
   phase: UseAdapterSessionResult['status']['value']['phase'],
   reconnecting: boolean,
+  resolvingHumanInput: boolean,
   awaitingHumanInput: boolean
 ): string {
   if (reconnecting) {
     return '重连中';
+  }
+
+  if (resolvingHumanInput) {
+    return '处理中';
   }
 
   if (awaitingHumanInput) {
@@ -1063,6 +1091,7 @@ export function useFrameworkChatSession<
   const sessionId = shallowRef('');
   const initialSource = resolveFrameworkChatInitialSource(config.options.source);
   const interrupted = shallowRef(false);
+  const pendingHumanResolutionCount = shallowRef(0);
   const activeSource = shallowRef<TSource | undefined>(initialSource);
   const chatIds: ShallowRef<TChatIds | null> = shallowRef<TChatIds | null>(null);
   const createIds = resolveFrameworkChatIdFactory(config.options.createIds);
@@ -1163,10 +1192,19 @@ export function useFrameworkChatSession<
       : {})
   });
   devtools.attachRuntime(sessionState.runtime);
+  const resolvingHumanInput = computed(() => pendingHumanResolutionCount.value > 0);
   const busy = computed(() => {
-    return sessionState.status.value.phase === 'consuming' || sessionState.reconnecting.value;
+    return (
+      sessionState.status.value.phase === 'consuming'
+      || sessionState.reconnecting.value
+      || resolvingHumanInput.value
+    );
   });
   const awaitingHumanInput = computed(() => {
+    if (resolvingHumanInput.value) {
+      return false;
+    }
+
     const activeConversationId = chatIds.value?.conversationId ?? toValue(config.options.conversationId);
 
     return hasFrameworkPendingHumanInput(
@@ -1177,6 +1215,7 @@ export function useFrameworkChatSession<
   const statusLabel = computed(() => resolveFrameworkStatusLabel(
     sessionState.status.value.phase,
     sessionState.reconnecting.value,
+    resolvingHumanInput.value,
     awaitingHumanInput.value
   ));
   const transportError = computed(() => {
@@ -1311,6 +1350,21 @@ export function useFrameworkChatSession<
   }
 
   /**
+   * 包裹一次 HITL 决策恢复流程，在真正恢复执行前先暴露统一的“处理中”状态。
+   */
+  async function withPendingHumanResolution<TResult>(
+    task: () => Promise<TResult>
+  ): Promise<TResult> {
+    pendingHumanResolutionCount.value += 1;
+
+    try {
+      return await task();
+    } finally {
+      pendingHumanResolutionCount.value = Math.max(0, pendingHumanResolutionCount.value - 1);
+    }
+  }
+
+  /**
    * 基于当前 session surface 再叠一层更顺手的聊天默认值。
    */
   const surface = computed<RunSurfaceOptions>(() => {
@@ -1326,9 +1380,10 @@ export function useFrameworkChatSession<
     const handleInterrupt = () => {
       interrupt();
     };
+    const baseSurface = resolveFrameworkChatSurfaceDefaults(sessionState.surface);
 
     return resolveFrameworkChatAssistantActions(
-      sessionState.surface,
+      baseSurface,
       busy,
       interrupted,
       handleRegenerate,
@@ -1343,6 +1398,7 @@ export function useFrameworkChatSession<
     ...sessionState,
     surface,
     busy,
+    resolvingHumanInput,
     awaitingHumanInput,
     statusLabel,
     transportError,
@@ -1356,6 +1412,7 @@ export function useFrameworkChatSession<
     regenerate,
     retry,
     interrupt,
-    resume
+    resume,
+    withPendingHumanResolution
   };
 }

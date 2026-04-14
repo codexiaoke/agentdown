@@ -678,7 +678,9 @@ export function useAutoGenChatSession<
     }
 
     try {
-      await sessionState.connect(source);
+      await sessionState.withPendingHumanResolution(async () => {
+        await sessionState.connect(source);
+      });
     } catch (error) {
       if (pendingApprovalBlock) {
         patchAutoGenApprovalBlock(

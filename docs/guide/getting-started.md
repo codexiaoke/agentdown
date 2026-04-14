@@ -119,6 +119,64 @@ const session = useAgnoChatSession<string>({
 </template>
 ```
 
+### 推荐：直接用 `AgentChatWorkspace` 起完整聊天页
+
+如果你要的不是“一个渲染面板”，而是完整聊天工作区，直接用 `AgentChatWorkspace` 会更顺手。
+
+它默认已经带上：
+
+- `RunSurface`
+- 输入框与附件上传
+- 会话尾部 loading dots
+- 跟随到底部与悬浮回底按钮
+- 首次加载 / 回放恢复时直接同步到底部
+- 右侧悬浮 panel 容器
+
+```vue
+<script setup lang="ts">
+import { ref } from 'vue';
+import {
+  AgentChatWorkspace,
+  useAgnoChatSession,
+  type AgentChatComposerSendPayload
+} from 'agentdown';
+
+const prompt = ref('');
+const uploads = ref([]);
+
+const session = useAgnoChatSession({
+  source: 'http://127.0.0.1:8000/api/stream/agno',
+  input: prompt,
+  conversationId: 'session:workspace-demo',
+  title: 'Agno 助手',
+  mode: 'hitl'
+});
+
+async function handleSend(payload: AgentChatComposerSendPayload) {
+  await session.send(payload.input);
+}
+</script>
+
+<template>
+  <AgentChatWorkspace
+    :runtime="session.runtime"
+    :surface="session.surface"
+    v-model="prompt"
+    v-model:uploads="uploads"
+    :busy="session.busy"
+    :awaiting-human-input="session.awaitingHumanInput"
+    :transport-error="session.transportError"
+    @send="handleSend"
+  />
+</template>
+```
+
+这里最重要的一点是：
+
+- `@send` 拿到的 `payload.input` 已经把文本和附件合并好了，直接传给 `session.send(payload.input)` 即可
+- 如果用户手动滚离底部，新内容到来时不会强制把用户拉回去，而是显示悬浮回底按钮
+- 默认 `conversation-tail` 会在请求已发出但正文还没开始 append 时显示 3 个 loading dots
+
 ## 3. 如果后端不是内置框架
 
 那就直接写一层自己的 protocol。
@@ -177,6 +235,50 @@ const session = useSseBridge<Packet>({
 
 await session.connect();
 ```
+
+## 4. 回放已完成会话
+
+如果后端在 run 结束后已经把会话存成 JSON，就不必重新连 SSE，可以直接恢复成可渲染的 runtime。
+
+```vue
+<script setup lang="ts">
+import { AgentdownRenderArchiveSurface } from 'agentdown';
+
+const archive = {
+  format: 'agentdown.session/v1',
+  framework: 'agno',
+  status: 'completed',
+  updated_at: 1770000000200,
+  records: [
+    {
+      event: 'message',
+      role: 'user',
+      content: '帮我查一下北京天气',
+      created_at: 1770000000000
+    },
+    {
+      event: 'message',
+      role: 'assistant',
+      content: {
+        text: '我来帮你查询北京今天的天气情况。',
+        kind: 'markdown'
+      },
+      created_at: 1770000000100
+    }
+  ]
+};
+</script>
+
+<template>
+  <AgentdownRenderArchiveSurface :input="archive" />
+</template>
+```
+
+如果你要自己控制恢复流程，也可以直接用：
+
+- `useAgentdownRenderArchive()`
+- `restoreAgentdownRenderArchive()`
+- `defineAgentdownRecordsAdapter()`
 
 ## 下一步
 

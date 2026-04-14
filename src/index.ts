@@ -1,6 +1,11 @@
 import './styles/theme.css';
 
 export { default as DefaultMarkdownApprovalBlock } from './components/ApprovalBlock.vue';
+export { default as DefaultAgentChatLoadingDots } from './components/AgentChatLoadingDots.vue';
+export { default as AgentChatComposer } from './components/AgentChatComposer.vue';
+export { default as AgentChatFloatingPanel } from './components/AgentChatFloatingPanel.vue';
+export { default as AgentChatWorkspace } from './components/AgentChatWorkspace.vue';
+export { default as AgentdownRenderArchiveSurface } from './components/AgentdownRenderArchiveSurface.vue';
 export { default as AgentdownProvider } from './components/AgentdownProvider.vue';
 export { default as DefaultMarkdownAttachmentBlock } from './components/AttachmentBlock.vue';
 export { default as AgentDevtoolsOverlay } from './components/AgentDevtoolsOverlay.vue';
@@ -36,12 +41,20 @@ export { createMarkdownEngine } from './core/createMarkdownEngine';
 export { parseMarkdown } from './core/parseMarkdown';
 export { defineAgentdownRecordsAdapter } from './persisted/adapter';
 export {
+  createDefaultAgentdownRecordsAdapter,
+  defaultAgentdownRecordsAdapter,
+  resolveBuiltinAgentdownLastUserMessage,
+  resolveBuiltinAgentdownMessageText
+} from './persisted/builtin';
+export { restoreAgentdownRenderArchive } from './persisted/restore';
+export {
   isAgentdownRenderArchive,
   isAgentdownRenderRecord,
   normalizeAgentdownRenderRecords,
   parseAgentdownRenderArchive
 } from './persisted/types';
 export { useAdapterSession } from './composables/useAdapterSession';
+export { useAgentdownRenderArchive } from './composables/useAgentdownRenderArchive';
 export { useAgentDevtools } from './composables/useAgentDevtools';
 export { useAgentDevtoolsReproductionPlayer } from './composables/useAgentDevtoolsReproductionPlayer';
 export {
@@ -238,14 +251,68 @@ export {
   when
 } from './runtime/defineProtocol';
 export { createAgentRuntime } from './runtime/createAgentRuntime';
+export {
+  buildAgentChatInputValue,
+  buildAgentChatRequestText,
+  createAgentChatComposerSendPayload,
+  createAgentChatLocalFileId,
+  createAgentChatPendingAttachment,
+  createAgentChatUploadId,
+  formatAgentChatFileSize,
+  hasAgentChatAppendedConversationContent,
+  inferAgentChatAttachmentKind,
+  revokeAgentChatPendingAttachment,
+  revokeAgentChatPendingAttachments
+} from './components/agentChat';
 export type {
   AgentdownRecordsAdapter
 } from './persisted/adapter';
+export type {
+  BuiltinAgentdownRenderApprovalContent,
+  BuiltinAgentdownRenderApprovalStatus,
+  BuiltinAgentdownRenderArchive,
+  BuiltinAgentdownRenderArtifactContent,
+  BuiltinAgentdownRenderArtifactKind,
+  BuiltinAgentdownRenderAttachmentContent,
+  BuiltinAgentdownRenderAttachmentKind,
+  BuiltinAgentdownRenderBranchContent,
+  BuiltinAgentdownRenderErrorContent,
+  BuiltinAgentdownRenderHandoffContent,
+  BuiltinAgentdownRenderHandoffStatus,
+  BuiltinAgentdownRenderMessageContent,
+  BuiltinAgentdownRenderMessageKind,
+  BuiltinAgentdownRenderRecord,
+  BuiltinAgentdownRenderRole,
+  BuiltinAgentdownRenderThoughtContent,
+  BuiltinAgentdownRenderToolContent,
+  BuiltinAgentdownRenderToolStatus,
+  BuiltinAgentdownRecordsAdapter,
+  CreateDefaultAgentdownRecordsAdapterOptions
+} from './persisted/builtin';
+export type {
+  AgentChatComposerSendPayload,
+  AgentChatPendingAttachment,
+  AgentChatUploadResolver,
+  AgentChatUploadResolverContext,
+  AgentChatUploadResolverResult
+} from './components/agentChat';
+export type {
+  AgentChatWorkspaceExposed
+} from './components/agentChatWorkspace.types';
 export type {
   AgentdownRenderArchive,
   AgentdownRenderRecord,
   AgentdownRenderRole
 } from './persisted/types';
+export type {
+  AgentdownRenderInput,
+  RestoredAgentdownRenderArchiveResult,
+  RestoreAgentdownRenderArchiveOptions
+} from './persisted/restore';
+export type {
+  UseAgentdownRenderArchiveOptions,
+  UseAgentdownRenderArchiveResult
+} from './composables/useAgentdownRenderArchive';
 export type {
   AguiComponentMap,
   AguiComponentRegistration,

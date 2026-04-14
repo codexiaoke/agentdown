@@ -628,6 +628,41 @@ describe('createAgnoProtocol', () => {
 });
 
 describe('useAgnoChatSession', () => {
+  it('provides a default three-dots draft placeholder when surface is omitted', () => {
+    const scope = effectScope();
+    const sessionState = scope.run(() => useAgnoChatSession<string>({
+      source: 'http://agno.test/api/stream',
+      conversationId: 'session:demo:agno-default-draft-placeholder'
+    }));
+
+    if (!sessionState) {
+      throw new Error('Failed to create Agno chat session with default surface.');
+    }
+
+    expect(sessionState.surface.value.draftPlaceholder).toBeTruthy();
+
+    scope.stop();
+  });
+
+  it('allows users to disable the default draft placeholder explicitly', () => {
+    const scope = effectScope();
+    const sessionState = scope.run(() => useAgnoChatSession<string>({
+      source: 'http://agno.test/api/stream',
+      conversationId: 'session:demo:agno-disable-draft-placeholder',
+      surface: {
+        draftPlaceholder: false
+      }
+    }));
+
+    if (!sessionState) {
+      throw new Error('Failed to create Agno chat session with draft placeholder disabled.');
+    }
+
+    expect(sessionState.surface.value.draftPlaceholder).toBe(false);
+
+    scope.stop();
+  });
+
   it('seeds a user message, captures sessionId and exposes a shorter send API', async () => {
     const scope = effectScope();
     const prompt = ref('帮我查一下北京天气');
@@ -1201,6 +1236,153 @@ describe('useAgnoChatSession', () => {
     expect(finalToolNode?.status).toBe('done');
     expect(resumedTextBlock?.messageId).toBe(sessionState.chatIds.value?.assistantMessageId);
     expect(finalSnapshot.blocks.some((block) => block.messageId === sessionState.chatIds.value?.userMessageId)).toBe(true);
+
+    scope.stop();
+  });
+
+  it('shows a loading state immediately while an Agno approval resume request is in flight', async () => {
+    const scope = effectScope();
+    const prompt = ref('帮我查一下北京天气');
+    const capturedBodies: Array<Record<string, unknown>> = [];
+    let requestCount = 0;
+    let releaseResumeResponse: (() => void) | undefined;
+    let resumeResponseReadyResolve: (() => void) | undefined;
+    const resumeResponseReady = new Promise<void>((resolve) => {
+      resumeResponseReadyResolve = resolve;
+    });
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      requestCount += 1;
+      capturedBodies.push(JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>);
+
+      if (requestCount === 1) {
+        return createAgnoSseResponse([
+          {
+            event: 'RunStarted',
+            run_id: 'run-hitl-loading-1',
+            session_id: 'backend-session-hitl-loading-1'
+          },
+          {
+            event: 'RunPaused',
+            run_id: 'run-hitl-loading-1',
+            session_id: 'backend-session-hitl-loading-1',
+            content: '查询前需要确认是否执行工具。',
+            tools: [
+              {
+                tool_call_id: 'tool-hitl-loading-1',
+                tool_name: 'lookup_weather',
+                tool_args: {
+                  city: '北京'
+                },
+                requires_confirmation: true
+              }
+            ],
+            requirements: [
+              {
+                id: 'requirement-hitl-loading-1',
+                tool_execution: {
+                  tool_call_id: 'tool-hitl-loading-1',
+                  tool_name: 'lookup_weather',
+                  tool_args: {
+                    city: '北京'
+                  }
+                }
+              }
+            ]
+          }
+        ]);
+      }
+
+      return new Response(new ReadableStream({
+        start(controller) {
+          releaseResumeResponse = () => {
+            const encoder = new TextEncoder();
+
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+              event: 'RunCompleted',
+              run_id: 'run-hitl-loading-1'
+            })}\n\n`));
+            controller.close();
+          };
+          resumeResponseReadyResolve?.();
+        }
+      }), {
+        headers: {
+          'Content-Type': 'text/event-stream'
+        }
+      });
+    });
+    const sessionState = scope.run(() => useAgnoChatSession<string>({
+      source: 'http://agno.test/api/stream/agno',
+      input: prompt,
+      conversationId: 'session:demo:agno-hitl-loading',
+      mode: 'hitl',
+      transport: {
+        fetch: fetchMock as typeof fetch
+      }
+    }));
+
+    if (!sessionState) {
+      throw new Error('Failed to create Agno loading HITL session.');
+    }
+
+    await sessionState.send();
+    await nextTick();
+
+    const pausedSnapshot = sessionState.runtime.snapshot();
+    const approvalBlock = pausedSnapshot.blocks.find((block) => block.type === 'approval');
+    const approvalHandler = sessionState.surface.value.approvalActions !== false
+      ? sessionState.surface.value.approvalActions?.builtinHandlers?.approve
+      : undefined;
+
+    if (!approvalBlock || !approvalHandler) {
+      throw new Error('Failed to resolve Agno approval loading test wiring.');
+    }
+
+    const context: RunSurfaceApprovalActionContext = {
+      title: String(approvalBlock.data.title ?? '等待人工确认'),
+      status: 'pending',
+      ...(typeof approvalBlock.data.message === 'string'
+        ? {
+            message: approvalBlock.data.message
+          }
+        : {}),
+      ...(typeof approvalBlock.data.approvalId === 'string'
+        ? {
+            approvalId: approvalBlock.data.approvalId
+          }
+        : {}),
+      ...(typeof approvalBlock.data.refId === 'string'
+        ? {
+            refId: approvalBlock.data.refId
+          }
+        : {}),
+      block: approvalBlock,
+      role: 'assistant',
+      runtime: sessionState.runtime,
+      snapshot: pausedSnapshot,
+      emitIntent: () => {
+        throw new Error('emitIntent should not be called in this test.');
+      }
+    };
+
+    const pendingResume = approvalHandler(context);
+    await resumeResponseReady;
+    await nextTick();
+
+    expect(sessionState.resolvingHumanInput.value).toBe(true);
+    expect(sessionState.busy.value).toBe(true);
+    expect(sessionState.awaitingHumanInput.value).toBe(false);
+    expect(sessionState.statusLabel.value).toBe('处理中');
+
+    if (!releaseResumeResponse) {
+      throw new Error('Failed to capture Agno resume response release handler.');
+    }
+
+    releaseResumeResponse();
+    await pendingResume;
+    await nextTick();
+
+    expect(sessionState.resolvingHumanInput.value).toBe(false);
 
     scope.stop();
   });

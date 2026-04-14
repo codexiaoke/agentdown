@@ -12,7 +12,11 @@ export function compactObject<T extends object>(value: T): T {
  */
 export function cloneValue<T>(value: T): T {
   if (typeof structuredClone === 'function') {
-    return structuredClone(value);
+    try {
+      return structuredClone(value);
+    } catch {
+      // Vue reactive proxy 等值无法直接 structuredClone，这里回退到 JSON clone。
+    }
   }
 
   return JSON.parse(JSON.stringify(value)) as T;

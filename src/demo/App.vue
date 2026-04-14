@@ -1,10 +1,14 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch, type Ref } from 'vue';
+import { computed, onBeforeUnmount, ref, type Ref } from 'vue';
 import {
-  type FrameworkChatInputValue,
+  AgentChatWorkspace,
+  createAgentChatComposerSendPayload,
+  restoreAgentdownRenderArchive,
+  type AgentChatComposerSendPayload,
+  type AgentChatPendingAttachment,
+  type AgentChatUploadResolver,
+  type AgentChatUploadResolverResult,
   type FrameworkChatTransportContext,
-  RunSurface,
-  type MarkdownAttachmentKind,
   useAgnoChatSession,
   useAutoGenChatSession,
   useCrewAIChatSession,
@@ -13,6 +17,13 @@ import {
   type UseAgnoChatSessionResult
 } from '../index';
 import DemoThinkingBubble from './components/DemoThinkingBubble.vue';
+import {
+  demoReplayPresetsByProvider,
+  resolveDemoReplayPresetRecordsCount
+} from './replayRecords.mock';
+import type {
+  DemoReplayPreset
+} from './replayRecords.mock';
 
 type DemoFrameworkId = 'agno' | 'springai' | 'langchain' | 'autogen' | 'crewai';
 type ProviderStatusTone = 'idle' | 'busy' | 'waiting' | 'error';
@@ -23,6 +34,7 @@ interface DemoChatSessionLike extends Pick<
   | 'busy'
   | 'lastInput'
   | 'regenerate'
+  | 'resolvingHumanInput'
   | 'reset'
   | 'runtime'
   | 'runtimeState'
@@ -39,41 +51,32 @@ interface DemoProviderState {
   subtitle: string;
   suggestions: string[];
   prompt: Ref<string>;
+  pendingUploads: Ref<AgentChatPendingAttachment[]>;
   session: DemoChatSessionLike;
 }
 
-interface DemoPendingUpload {
-  id: string;
-  fileId: string;
-  name: string;
-  size: number;
-  sizeText: string;
-  mimeType: string;
-  attachmentKind: MarkdownAttachmentKind;
-  href: string;
-  localObjectUrl: string;
-  previewSrc?: string;
+interface DemoSidePanelSection {
+  label: string;
+  value: string;
 }
 
-interface DemoUploadResolverContext {
-  providerId: DemoFrameworkId;
-  localObjectUrl: string;
+interface DemoSidePanelState {
+  title: string;
+  summary: string;
+  badge: string;
+  sections: DemoSidePanelSection[];
 }
-
-interface DemoUploadResolverResult {
-  fileId: string;
-  href?: string;
-  previewSrc?: string;
-}
-
-type DemoUploadResolver = (
-  file: File,
-  context: DemoUploadResolverContext
-) => Promise<DemoUploadResolverResult> | DemoUploadResolverResult;
 
 const FASTAPI_BASE_URL = resolveConfiguredBaseUrl('http://127.0.0.1:8000');
 const SPRING_BASE_URL = resolveConfiguredBaseUrl('http://127.0.0.1:8080');
 const DEFAULT_EDITED_CITY = '上海';
+const providerOrder: DemoFrameworkId[] = [
+  'agno',
+  'springai',
+  'langchain',
+  'autogen',
+  'crewai'
+];
 
 function trimTrailingSlash(value: string): string {
   return value.replace(/\/+$/, '');
@@ -82,11 +85,11 @@ function trimTrailingSlash(value: string): string {
 function resolveConfiguredBaseUrl(fallback: string): string {
   const configured = import.meta.env.VITE_AGENTDOWN_API_BASE;
 
-  return trimTrailingSlash(
-    configured && configured.length > 0
-      ? configured
-      : fallback
-  );
+  if (configured && configured.length > 0) {
+    return trimTrailingSlash(configured);
+  }
+
+  return trimTrailingSlash(fallback);
 }
 
 function createConversationId(provider: DemoFrameworkId): string {
@@ -112,9 +115,11 @@ function resolveSubmissionFileIds(context: FrameworkChatTransportContext | undef
       return [];
     }
 
-    return typeof block.attachmentId === 'string' && block.attachmentId.length > 0
-      ? [block.attachmentId]
-      : [];
+    if (typeof block.attachmentId !== 'string' || block.attachmentId.length === 0) {
+      return [];
+    }
+
+    return [block.attachmentId];
   });
 }
 
@@ -138,16 +143,39 @@ function readRecord(value: unknown): Record<string, unknown> | undefined {
   return value as Record<string, unknown>;
 }
 
+function isDemoFrameworkId(value: unknown): value is DemoFrameworkId {
+  return value === 'agno'
+    || value === 'springai'
+    || value === 'langchain'
+    || value === 'autogen'
+    || value === 'crewai';
+}
+
+function resolveUploadProviderId(value: unknown): DemoFrameworkId | null {
+  if (isDemoFrameworkId(value)) {
+    return value;
+  }
+
+  const record = readRecord(value);
+  const providerId = record?.providerId;
+
+  if (!isDemoFrameworkId(providerId)) {
+    return null;
+  }
+
+  return providerId;
+}
+
 const agnoPrompt = ref('');
 const springAiPrompt = ref('');
 const langChainPrompt = ref('');
 const autoGenPrompt = ref('');
 const crewAiPrompt = ref('');
-const agnoPendingUploads = ref<DemoPendingUpload[]>([]);
-const springAiPendingUploads = ref<DemoPendingUpload[]>([]);
-const langChainPendingUploads = ref<DemoPendingUpload[]>([]);
-const autoGenPendingUploads = ref<DemoPendingUpload[]>([]);
-const crewAiPendingUploads = ref<DemoPendingUpload[]>([]);
+const agnoPendingUploads = ref<AgentChatPendingAttachment[]>([]);
+const springAiPendingUploads = ref<AgentChatPendingAttachment[]>([]);
+const langChainPendingUploads = ref<AgentChatPendingAttachment[]>([]);
+const autoGenPendingUploads = ref<AgentChatPendingAttachment[]>([]);
+const crewAiPendingUploads = ref<AgentChatPendingAttachment[]>([]);
 
 const agnoSession = useAgnoChatSession<string>({
   source: `${FASTAPI_BASE_URL}/api/stream/agno`,
@@ -176,7 +204,7 @@ const agnoSession = useAgnoChatSession<string>({
       }
     }
   },
-  surface: createThinkingPlaceholder('Agno 正在思考')
+  // surface: createThinkingPlaceholder('Agno 正在思考')
 });
 
 const springAiSession = useSpringAiChatSession<string>({
@@ -301,20 +329,9 @@ const crewAiSession = useCrewAIChatSession<string>({
 });
 
 const currentProviderId = ref<DemoFrameworkId>('agno');
-const promptByProvider: Record<DemoFrameworkId, Ref<string>> = {
-  agno: agnoPrompt,
-  springai: springAiPrompt,
-  langchain: langChainPrompt,
-  autogen: autoGenPrompt,
-  crewai: crewAiPrompt
-};
-const pendingUploadsByProvider: Record<DemoFrameworkId, Ref<DemoPendingUpload[]>> = {
-  agno: agnoPendingUploads,
-  springai: springAiPendingUploads,
-  langchain: langChainPendingUploads,
-  autogen: autoGenPendingUploads,
-  crewai: crewAiPendingUploads
-};
+const panelOpen = ref(false);
+const panelState = ref<DemoSidePanelState | null>(null);
+
 const objectUrlsByProvider: Record<DemoFrameworkId, Set<string>> = {
   agno: new Set<string>(),
   springai: new Set<string>(),
@@ -334,6 +351,7 @@ const providerStateMap: Record<DemoFrameworkId, DemoProviderState> = {
       '先查一下深圳天气，结果要先给结论再解释过程'
     ],
     prompt: agnoPrompt,
+    pendingUploads: agnoPendingUploads,
     session: agnoSession
   },
   springai: {
@@ -346,6 +364,7 @@ const providerStateMap: Record<DemoFrameworkId, DemoProviderState> = {
       '查一下广州天气，如果工具需要执行先暂停让我决定'
     ],
     prompt: springAiPrompt,
+    pendingUploads: springAiPendingUploads,
     session: springAiSession
   },
   langchain: {
@@ -358,6 +377,7 @@ const providerStateMap: Record<DemoFrameworkId, DemoProviderState> = {
       '请查询成都天气，如果参数不对我再手动改'
     ],
     prompt: langChainPrompt,
+    pendingUploads: langChainPendingUploads,
     session: langChainSession
   },
   autogen: {
@@ -370,6 +390,7 @@ const providerStateMap: Record<DemoFrameworkId, DemoProviderState> = {
       '查一下苏州天气，并像一个多代理系统一样拆解过程'
     ],
     prompt: autoGenPrompt,
+    pendingUploads: autoGenPendingUploads,
     session: autoGenSession
   },
   crewai: {
@@ -382,45 +403,36 @@ const providerStateMap: Record<DemoFrameworkId, DemoProviderState> = {
       '请查询重庆天气，并补充这次工具执行过程'
     ],
     prompt: crewAiPrompt,
+    pendingUploads: crewAiPendingUploads,
     session: crewAiSession
   }
 };
 
-const providerOrder: DemoFrameworkId[] = [
-  'agno',
-  'springai',
-  'langchain',
-  'autogen',
-  'crewai'
-];
-
-const providers = computed(() => {
-  return providerOrder.map((providerId) => providerStateMap[providerId]);
-});
-
-const activeProvider = computed(() => {
-  return providerStateMap[currentProviderId.value];
-});
-
+const providers = computed(() => providerOrder.map((providerId) => providerStateMap[providerId]));
+const activeProvider = computed(() => providerStateMap[currentProviderId.value]);
 const activeSurface = computed(() => activeProvider.value.session.surface.value);
 const activeRuntime = computed(() => activeProvider.value.session.runtime);
-const activePendingUploads = computed(() => {
-  return pendingUploadsByProvider[currentProviderId.value].value;
+const activeReplayPresets = computed(() => demoReplayPresetsByProvider[currentProviderId.value]);
+const composerDisabled = computed(() => {
+  return activeProvider.value.session.busy.value || activeProvider.value.session.awaitingHumanInput.value;
 });
+const replayDisabled = computed(() => {
+  return activeProvider.value.session.busy.value || activeProvider.value.session.resolvingHumanInput.value;
+});
+const replayingPresetId = ref<string | null>(null);
+
 const activePrompt = computed({
-  get: () => promptByProvider[currentProviderId.value].value,
+  get: () => activeProvider.value.prompt.value,
   set: (value: string) => {
-    promptByProvider[currentProviderId.value].value = value;
+    activeProvider.value.prompt.value = value;
   }
 });
 
-const hasConversation = computed(() => {
-  return activeProvider.value.session.runtimeState.blocks.value.length > 0;
-});
-
-const composerDisabled = computed(() => {
-  return activeProvider.value.session.busy.value
-    || activeProvider.value.session.awaitingHumanInput.value;
+const activeUploads = computed({
+  get: () => activeProvider.value.pendingUploads.value,
+  set: (value: AgentChatPendingAttachment[]) => {
+    activeProvider.value.pendingUploads.value = value;
+  }
 });
 
 const composerPlaceholder = computed(() => {
@@ -435,106 +447,17 @@ const composerPlaceholder = computed(() => {
   return `问 ${activeProvider.value.label} 一个容易触发工具调用的问题`;
 });
 
-const sendLabel = computed(() => {
-  if (activeProvider.value.session.awaitingHumanInput.value) {
-    return '等待确认';
-  }
-
-  if (activeProvider.value.session.busy.value) {
-    return '发送中...';
-  }
-
-  return '发送';
+const emptyTitle = computed(() => {
+  return `今天想让 ${activeProvider.value.label} 做什么？`;
 });
 
-const composerInputRef = ref<HTMLTextAreaElement | null>(null);
-const composerFileInputRef = ref<HTMLInputElement | null>(null);
-const COMPOSER_MAX_HEIGHT = 220;
-
-const uploadFileByProvider: Record<DemoFrameworkId, DemoUploadResolver> = {
+const uploadFileByProvider: Record<DemoFrameworkId, AgentChatUploadResolver> = {
   agno: resolveDemoUpload,
   springai: resolveDemoUpload,
   langchain: resolveDemoUpload,
   autogen: resolveDemoUpload,
   crewai: resolveDemoUpload
 };
-
-function createUploadId() {
-  return `upload:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function formatFileSize(size: number): string {
-  if (size >= 1024 * 1024 * 1024) {
-    return `${(size / (1024 * 1024 * 1024)).toFixed(1)} GB`;
-  }
-
-  if (size >= 1024 * 1024) {
-    return `${(size / (1024 * 1024)).toFixed(1)} MB`;
-  }
-
-  if (size >= 1024) {
-    return `${Math.max(1, Math.round(size / 1024))} KB`;
-  }
-
-  return `${size} B`;
-}
-
-function inferAttachmentKind(file: File): MarkdownAttachmentKind {
-  if (file.type.startsWith('image/')) {
-    return 'image';
-  }
-
-  if (file.type.startsWith('audio/')) {
-    return 'audio';
-  }
-
-  if (file.type.startsWith('video/')) {
-    return 'video';
-  }
-
-  if (file.type === 'application/json' || file.name.toLowerCase().endsWith('.json')) {
-    return 'json';
-  }
-
-  return 'file';
-}
-
-function buildUploadRequestText(prompt: string, uploads: DemoPendingUpload[]): string {
-  const fileSummary = uploads.map((upload) => upload.name).join('、');
-
-  if (prompt.length > 0) {
-    return `${prompt}\n\n已上传文件：${fileSummary}`;
-  }
-
-  return `请先查看我上传的文件：${fileSummary}`;
-}
-
-function buildSendPayload(prompt: string, uploads: DemoPendingUpload[]): FrameworkChatInputValue {
-  if (uploads.length === 0) {
-    return prompt;
-  }
-
-  return {
-    ...(prompt.length > 0 ? { text: prompt } : {}),
-    requestText: buildUploadRequestText(prompt, uploads),
-    blocks: uploads.map((upload) => ({
-      kind: 'attachment' as const,
-      title: upload.name,
-      attachmentKind: upload.attachmentKind,
-      attachmentId: upload.fileId,
-      label: upload.name,
-      href: upload.href,
-      mimeType: upload.mimeType,
-      sizeText: upload.sizeText,
-      ...(upload.previewSrc ? { previewSrc: upload.previewSrc } : {})
-    }))
-  };
-}
-
-function revokeObjectUrl(providerId: DemoFrameworkId, objectUrl: string) {
-  URL.revokeObjectURL(objectUrl);
-  objectUrlsByProvider[providerId].delete(objectUrl);
-}
 
 function revokeProviderObjectUrls(providerId: DemoFrameworkId) {
   for (const objectUrl of objectUrlsByProvider[providerId]) {
@@ -544,16 +467,26 @@ function revokeProviderObjectUrls(providerId: DemoFrameworkId) {
   objectUrlsByProvider[providerId].clear();
 }
 
+function trackProviderObjectUrl(providerId: DemoFrameworkId, objectUrl: string) {
+  if (objectUrl.length === 0) {
+    return;
+  }
+
+  objectUrlsByProvider[providerId].add(objectUrl);
+}
+
 async function resolveDemoUpload(
   file: File,
-  context: DemoUploadResolverContext
-): Promise<DemoUploadResolverResult> {
+  context: Parameters<AgentChatUploadResolver>[1]
+): Promise<AgentChatUploadResolverResult> {
+  const providerId = resolveUploadProviderId(context.context);
   const stableSeed = `${Date.now()}:${Math.random().toString(36).slice(2, 8)}:${file.name}:${file.size}`;
+  const scopedPrefix = providerId ? `${providerId}:` : '';
 
   return {
-    fileId: `demo-file:${stableSeed}`,
+    fileId: `${scopedPrefix}demo-file:${stableSeed}`,
     href: context.localObjectUrl,
-    ...(file.type.startsWith('image/')
+    ...(context.attachmentKind === 'image'
       ? {
           previewSrc: context.localObjectUrl
         }
@@ -561,109 +494,39 @@ async function resolveDemoUpload(
   };
 }
 
-async function createPendingUpload(providerId: DemoFrameworkId, file: File): Promise<DemoPendingUpload> {
-  const localObjectUrl = URL.createObjectURL(file);
-  const attachmentKind = inferAttachmentKind(file);
-  let resolvedUpload: DemoUploadResolverResult;
-
-  try {
-    resolvedUpload = await uploadFileByProvider[providerId](file, {
-      providerId,
-      localObjectUrl
-    });
-  } catch (error) {
-    URL.revokeObjectURL(localObjectUrl);
-    throw error;
-  }
-
-  if (typeof resolvedUpload.fileId !== 'string' || resolvedUpload.fileId.length === 0) {
-    URL.revokeObjectURL(localObjectUrl);
-    throw new Error('上传回调必须返回非空的 fileId。');
-  }
-
-  objectUrlsByProvider[providerId].add(localObjectUrl);
-
-  return {
-    id: createUploadId(),
-    fileId: resolvedUpload.fileId,
-    name: file.name,
-    size: file.size,
-    sizeText: formatFileSize(file.size),
-    mimeType: file.type,
-    attachmentKind,
-    href: resolvedUpload.href ?? localObjectUrl,
-    localObjectUrl,
-    ...(resolvedUpload.previewSrc
-      ? {
-          previewSrc: resolvedUpload.previewSrc
-        }
-      : attachmentKind === 'image'
-        ? {
-            previewSrc: localObjectUrl
-          }
-        : {})
-  };
-}
-
-function openFilePicker() {
-  if (composerDisabled.value) {
-    return;
-  }
-
-  composerFileInputRef.value?.click();
-}
-
-async function handleFileSelection(event: Event) {
-  const input = event.target as HTMLInputElement | null;
-  const nextFiles = input?.files ? Array.from(input.files) : [];
-
-  if (nextFiles.length === 0) {
-    return;
-  }
-
-  const providerId = currentProviderId.value;
-  const uploads = pendingUploadsByProvider[providerId];
-  let createdUploads: DemoPendingUpload[];
-
-  try {
-    createdUploads = await Promise.all(
-      nextFiles.map((file) => createPendingUpload(providerId, file))
-    );
-  } catch (error) {
-    console.error('Failed to resolve uploaded files.', error);
-    if (input) {
-      input.value = '';
-    }
-    return;
-  }
-
-  uploads.value = [...uploads.value, ...createdUploads];
-
-  if (input) {
-    input.value = '';
-  }
-
-  nextTick(() => {
-    resizeComposerInput();
-    focusComposerInput();
-  });
-}
-
-function removePendingUpload(uploadId: string) {
-  const providerId = currentProviderId.value;
-  const uploads = pendingUploadsByProvider[providerId];
-  const target = uploads.value.find((upload) => upload.id === uploadId);
-
-  if (!target) {
-    return;
-  }
-
-  revokeObjectUrl(providerId, target.localObjectUrl);
-  uploads.value = uploads.value.filter((upload) => upload.id !== uploadId);
-}
-
 function switchProvider(providerId: DemoFrameworkId) {
   currentProviderId.value = providerId;
+}
+
+function openDemoPanelForTest() {
+  panelState.value = {
+    title: '顺丰速运',
+    summary: '这是一个 demo 面板示例。真实业务里，你可以在工具返回后把物流、订单、资料卡等详情放到这里。',
+    badge: '运输中',
+    sections: [
+      {
+        label: '运单号',
+        value: 'SF1234567890'
+      },
+      {
+        label: '最新节点',
+        value: '上海转运中心已发出，正在前往杭州滨江网点'
+      },
+      {
+        label: '预计送达',
+        value: '明天 14:00 - 18:00'
+      },
+      {
+        label: '收件信息',
+        value: '杭州市滨江区演示路 88 号'
+      }
+    ]
+  };
+  panelOpen.value = true;
+}
+
+function handleUploadResolved(attachment: AgentChatPendingAttachment) {
+  trackProviderObjectUrl(currentProviderId.value, attachment.localObjectUrl);
 }
 
 function resolveProviderPreview(provider: DemoProviderState): string {
@@ -676,7 +539,7 @@ function resolveProviderPreview(provider: DemoProviderState): string {
   }
 
   if (provider.session.busy.value) {
-    return '正在流式返回内容';
+    return '正在流式返回';
   }
 
   if (provider.session.lastInput.value.trim().length > 0) {
@@ -702,110 +565,81 @@ function resolveProviderStatusTone(provider: DemoProviderState): ProviderStatusT
   return 'idle';
 }
 
-async function sendActiveMessage(nextText?: string): Promise<void> {
-  const provider = activeProvider.value;
-  const prompt = (nextText ?? provider.prompt.value).trim();
-  const providerId = currentProviderId.value;
-  const uploads = [...pendingUploadsByProvider[providerId].value];
-
-  if ((prompt.length === 0 && uploads.length === 0) || composerDisabled.value) {
+async function sendActiveMessage(payload: AgentChatComposerSendPayload): Promise<void> {
+  if (composerDisabled.value) {
     return;
   }
 
+  if (payload.text.length === 0 && payload.attachments.length === 0) {
+    return;
+  }
+
+  const provider = activeProvider.value;
+  const prompt = payload.text;
+  const attachments = [...payload.attachments];
+  const normalizedPrompt = prompt.trim().toLowerCase();
+
+  if (normalizedPrompt === 'test') {
+    openDemoPanelForTest();
+  }
+
   provider.prompt.value = '';
-  pendingUploadsByProvider[providerId].value = [];
-  resizeComposerInput();
+  provider.pendingUploads.value = [];
 
   try {
-    await provider.session.send(buildSendPayload(prompt, uploads));
+    await provider.session.send(payload.input);
   } catch (error) {
     provider.prompt.value = prompt;
-    await nextTick();
-    resizeComposerInput();
+    provider.pendingUploads.value = attachments;
     throw error;
   }
 }
 
 async function submitSuggestion(suggestion: string): Promise<void> {
   activePrompt.value = suggestion;
-  await sendActiveMessage(suggestion);
+
+  await sendActiveMessage(createAgentChatComposerSendPayload(suggestion, []));
 }
 
 function clearActiveConversation() {
   const provider = activeProvider.value;
-  const providerId = currentProviderId.value;
 
   provider.session.reset();
   provider.session.sessionId.value = '';
   provider.session.lastInput.value = '';
   provider.prompt.value = '';
-  pendingUploadsByProvider[providerId].value = [];
-  revokeProviderObjectUrls(providerId);
+  provider.pendingUploads.value = [];
+  panelOpen.value = false;
+  panelState.value = null;
+  revokeProviderObjectUrls(currentProviderId.value);
 }
 
-function focusComposerInput() {
-  composerInputRef.value?.focus();
-}
-
-function resizeComposerInput() {
-  const element = composerInputRef.value;
-
-  if (!element) {
+function loadReplayPreset(preset: DemoReplayPreset) {
+  if (replayDisabled.value) {
     return;
   }
 
-  element.style.height = '0px';
-  const nextHeight = Math.min(element.scrollHeight, COMPOSER_MAX_HEIGHT);
-  element.style.height = `${Math.max(nextHeight, 24)}px`;
-  element.style.overflowY = element.scrollHeight > COMPOSER_MAX_HEIGHT
-    ? 'auto'
-    : 'hidden';
+  const provider = activeProvider.value;
+  replayingPresetId.value = preset.id;
+
+  try {
+    provider.session.reset();
+    provider.prompt.value = '';
+    provider.pendingUploads.value = [];
+    provider.session.lastInput.value = '';
+    provider.session.sessionId.value = '';
+    panelOpen.value = false;
+    panelState.value = null;
+    revokeProviderObjectUrls(currentProviderId.value);
+
+    const restored = restoreAgentdownRenderArchive(preset.archive);
+    provider.session.runtime.apply(restored.commands);
+    provider.session.sessionId.value = restored.metadata.sessionId;
+    provider.session.lastInput.value = restored.lastUserMessage;
+  } finally {
+    replayingPresetId.value = null;
+  }
 }
-
-function handleComposerKeydown(event: KeyboardEvent) {
-  if (event.key !== 'Enter' || event.shiftKey) {
-    return;
-  }
-
-  event.preventDefault();
-  sendActiveMessage().catch(() => {
-    // 对话区会自行展示失败状态，demo 这里不额外抛错。
-  });
-}
-
-watch(
-  activePrompt,
-  () => {
-    nextTick(resizeComposerInput);
-  },
-  {
-    flush: 'post'
-  }
-);
-
-watch(
-  currentProviderId,
-  () => {
-    nextTick(resizeComposerInput);
-  },
-  {
-    flush: 'post'
-  }
-);
-
-watch(
-  composerInputRef,
-  (element) => {
-    if (!element) {
-      return;
-    }
-
-    nextTick(resizeComposerInput);
-  },
-  {
-    flush: 'post'
-  }
-);
 
 onBeforeUnmount(() => {
   for (const providerId of providerOrder) {
@@ -816,199 +650,193 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="demo-app">
-    <aside class="demo-app__sidebar">
-      <div class="demo-app__sidebar-top">
-        <div class="demo-app__brand">
-          <div class="demo-app__brand-mark">
-            <span />
-          </div>
+    <aside class="demo-sidebar">
+      <div class="demo-sidebar__brand">
+        <div class="demo-sidebar__logo">A</div>
 
-          <div>
-            <p>Agentdown Demo</p>
-            <h1>Chat</h1>
-          </div>
+        <div class="demo-sidebar__copy">
+          <strong>Agentdown Demo</strong>
+          <span>真实 SSE 适配器演示</span>
         </div>
-
-        <button
-          type="button"
-          class="demo-app__new-chat"
-          @click="clearActiveConversation"
-        >
-          新建聊天
-        </button>
       </div>
 
-      <p class="demo-app__sidebar-label">适配器</p>
+      <button
+        type="button"
+        class="demo-sidebar__reset"
+        @click="clearActiveConversation"
+      >
+        新建聊天
+      </button>
 
-      <div class="demo-app__thread-list">
-        <button
-          v-for="provider in providers"
-          :key="provider.id"
-          type="button"
-          class="demo-thread"
-          :class="{ 'demo-thread--active': provider.id === activeProvider.id }"
-          @click="switchProvider(provider.id)"
-        >
-          <span class="demo-thread__copy">
-            <span class="demo-thread__title-row">
-              <strong>{{ provider.label }}</strong>
-              <em>{{ provider.subtitle }}</em>
-            </span>
+      <section class="demo-sidebar__section">
+        <h2>适配器</h2>
+
+        <div class="demo-sidebar__providers">
+          <button
+            v-for="provider in providers"
+            :key="provider.id"
+            type="button"
+            class="demo-sidebar__provider"
+            :class="{ 'demo-sidebar__provider--active': provider.id === activeProvider.id }"
+            @click="switchProvider(provider.id)"
+          >
+            <div class="demo-sidebar__provider-top">
+              <div class="demo-sidebar__provider-copy">
+                <strong>{{ provider.label }}</strong>
+                <span>{{ provider.subtitle }}</span>
+              </div>
+
+              <span
+                class="demo-sidebar__provider-status"
+                :data-tone="resolveProviderStatusTone(provider)"
+              />
+            </div>
+
             <small>{{ resolveProviderPreview(provider) }}</small>
-          </span>
+          </button>
+        </div>
+      </section>
 
-          <span
-            class="demo-thread__status"
-            :data-tone="resolveProviderStatusTone(provider)"
-          />
-        </button>
-      </div>
+      <section class="demo-sidebar__section">
+        <h2>回放 Records</h2>
+
+        <div class="demo-sidebar__replays">
+          <button
+            v-for="preset in activeReplayPresets"
+            :key="preset.id"
+            type="button"
+            class="demo-sidebar__replay"
+            :disabled="replayDisabled"
+            @click="loadReplayPreset(preset)"
+          >
+            <div class="demo-sidebar__replay-copy">
+              <strong>{{ preset.label }}</strong>
+              <span>{{ preset.description }}</span>
+            </div>
+
+            <small>
+              {{ resolveDemoReplayPresetRecordsCount(preset) }} 条 records
+              <span v-if="replayingPresetId === preset.id"> · 回放中</span>
+            </small>
+          </button>
+        </div>
+      </section>
+
+      <section class="demo-sidebar__section demo-sidebar__section--grow">
+        <h2>快捷提示</h2>
+
+        <div class="demo-sidebar__prompts">
+          <button
+            v-for="suggestion in activeProvider.suggestions"
+            :key="suggestion"
+            type="button"
+            class="demo-sidebar__prompt"
+            @click="submitSuggestion(suggestion).catch(() => {})"
+          >
+            {{ suggestion }}
+          </button>
+        </div>
+      </section>
     </aside>
 
     <main class="demo-stage">
-      <section class="demo-stage__body">
-        <div
-          v-if="activeProvider.session.transportError.value"
-          class="demo-stage__notice demo-stage__notice--error"
-        >
-          {{ activeProvider.session.transportError.value }}
-        </div>
-
-        <div
-          v-else-if="activeProvider.session.awaitingHumanInput.value"
-          class="demo-stage__notice demo-stage__notice--waiting"
-        >
-          等待人工确认
-        </div>
-
-        <div class="demo-stage__conversation">
-          <div
-            v-if="!hasConversation"
-            class="demo-empty"
-          >
-            <div class="demo-empty__hero">
-              <h3>今天想让 {{ activeProvider.label }} 做什么？</h3>
+      <AgentChatWorkspace
+        v-model="activePrompt"
+        v-model:uploads="activeUploads"
+        v-model:panelOpen="panelOpen"
+        :runtime="activeRuntime"
+        :surface="activeSurface"
+        :busy="activeProvider.session.busy.value"
+        :awaiting-human-input="activeProvider.session.awaitingHumanInput.value"
+        :transport-error="activeProvider.session.transportError.value"
+        :placeholder="composerPlaceholder"
+        :empty-title="emptyTitle"
+        :suggestions="activeProvider.suggestions"
+        :panel-title="panelState?.title ?? ''"
+        :panel-width="380"
+        :upload-file="uploadFileByProvider[currentProviderId]"
+        :upload-context="{ providerId: currentProviderId }"
+        @send="sendActiveMessage($event).catch(() => {})"
+        @suggestion-click="submitSuggestion($event).catch(() => {})"
+        @upload-resolved="handleUploadResolved"
+      >
+        <template #header>
+          <div class="demo-header">
+            <div class="demo-header__copy">
+              <strong>{{ activeProvider.label }}</strong>
+              <span>{{ activeProvider.subtitle }}</span>
             </div>
 
-            <div class="demo-empty__grid">
+            <button
+              type="button"
+              class="demo-header__reset"
+              @click="clearActiveConversation"
+            >
+              新建聊天
+            </button>
+          </div>
+        </template>
+
+        <template #empty>
+          <div class="demo-empty">
+            <div class="demo-empty__copy">
+              <h2>{{ emptyTitle }}</h2>
+              <p>{{ resolveProviderPreview(activeProvider) }}</p>
+            </div>
+
+            <div class="demo-empty__suggestions">
               <button
                 v-for="suggestion in activeProvider.suggestions"
                 :key="suggestion"
                 type="button"
-                class="demo-suggestion"
+                class="demo-empty__suggestion"
                 @click="submitSuggestion(suggestion).catch(() => {})"
               >
-                <span>{{ suggestion }}</span>
+                {{ suggestion }}
               </button>
             </div>
           </div>
+        </template>
 
+        <template #notice="{ transportError, awaitingHumanInput }">
           <div
-            v-else
-            class="demo-surface"
+            v-if="transportError.trim().length > 0"
+            class="demo-notice demo-notice--error"
           >
-            <RunSurface
-              :runtime="activeRuntime"
-              v-bind="activeSurface"
-            />
+            {{ transportError }}
           </div>
-        </div>
-      </section>
-
-      <form
-        class="demo-composer"
-        @submit.prevent="sendActiveMessage().catch(() => {})"
-      >
-        <input
-          ref="composerFileInputRef"
-          type="file"
-          hidden
-          multiple
-          @change="handleFileSelection"
-        >
-
-        <div class="demo-composer__bar">
-          <button
-            type="button"
-            class="demo-composer__plus"
-            :disabled="composerDisabled"
-            title="添加文件"
-            @click="openFilePicker"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.9"
-              stroke-linecap="round"
-              aria-hidden="true"
-            >
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-          </button>
 
           <div
-            class="demo-composer__main"
-            @click="focusComposerInput"
+            v-else-if="awaitingHumanInput"
+            class="demo-notice demo-notice--waiting"
           >
-            <div
-              v-if="activePendingUploads.length > 0"
-              class="demo-composer__uploads"
-            >
-              <div
-                v-for="upload in activePendingUploads"
-                :key="upload.id"
-                class="demo-composer__upload"
-              >
-                <div class="demo-composer__upload-copy">
-                  <strong :title="upload.name">{{ upload.name }}</strong>
-                  <span>{{ upload.sizeText }}</span>
-                </div>
+            请先处理当前人工确认
+          </div>
+        </template>
 
-                <button
-                  type="button"
-                  class="demo-composer__upload-remove"
-                  title="移除文件"
-                  @click.stop="removePendingUpload(upload.id)"
-                >
-                  ×
-                </button>
-              </div>
+        <template #panel>
+          <div
+            v-if="panelState"
+            class="demo-panel"
+          >
+            <div class="demo-panel__hero">
+              <span class="demo-panel__badge">{{ panelState.badge }}</span>
+              <p>{{ panelState.summary }}</p>
             </div>
 
-            <textarea
-              ref="composerInputRef"
-              v-model="activePrompt"
-              class="demo-composer__input"
-              rows="1"
-              :disabled="composerDisabled"
-              :placeholder="composerPlaceholder"
-              @input="resizeComposerInput"
-              @keydown="handleComposerKeydown"
-            />
+            <div class="demo-panel__sections">
+              <div
+                v-for="section in panelState.sections"
+                :key="section.label"
+                class="demo-panel__section"
+              >
+                <span>{{ section.label }}</span>
+                <strong>{{ section.value }}</strong>
+              </div>
+            </div>
           </div>
-
-          <button
-            type="submit"
-            class="demo-composer__send"
-            :disabled="composerDisabled || (activePrompt.trim().length === 0 && activePendingUploads.length === 0)"
-            :title="sendLabel"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M12 17V7" />
-              <path d="M8 11l4-4 4 4" />
-            </svg>
-          </button>
-        </div>
-      </form>
+        </template>
+      </AgentChatWorkspace>
     </main>
   </div>
 </template>
@@ -1024,710 +852,453 @@ onBeforeUnmount(() => {
 }
 
 .demo-app {
-  --demo-font-sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', 'Helvetica Neue', sans-serif;
-  --demo-font-mono: ui-monospace, 'SFMono-Regular', 'JetBrains Mono', monospace;
   width: 100%;
   height: 100vh;
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr);
-  background: #ffffff;
-  color: #1f1f1f;
-  font-family: var(--demo-font-sans);
+  grid-template-columns: 290px minmax(0, 1fr);
+  background:
+    radial-gradient(circle at top, rgba(244, 244, 245, 0.9), transparent 42%),
+    linear-gradient(180deg, #fbfbfc 0%, #f7f7f8 100%);
+  color: #111827;
+  font-family:
+    ui-sans-serif,
+    -apple-system,
+    BlinkMacSystemFont,
+    'SF Pro Text',
+    'PingFang SC',
+    'Helvetica Neue',
+    sans-serif;
   overflow: hidden;
 }
 
-.demo-app__sidebar {
-  display: flex;
-  height: 100vh;
-  min-height: 0;
-  flex-direction: column;
-  gap: 0.72rem;
-  padding: 0.8rem 0.75rem 0.75rem;
-  border-right: 1px solid #ececf1;
-  background: #f7f7f8;
-  box-sizing: border-box;
-  overflow: hidden;
-}
-
-.demo-app__sidebar-top {
-  display: flex;
-  flex-direction: column;
-  gap: 0.72rem;
-}
-
-.demo-app__brand {
-  display: flex;
-  align-items: center;
-  gap: 0.72rem;
-  padding: 0.2rem 0.35rem 0.35rem;
-}
-
-.demo-app__brand-mark {
-  display: inline-flex;
-  width: 2rem;
-  height: 2rem;
-  flex-shrink: 0;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  background: #111111;
-}
-
-.demo-app__brand-mark span {
-  width: 0.42rem;
-  height: 0.42rem;
-  border-radius: 999px;
-  background: #ffffff;
-  animation: none;
-}
-
-.demo-app__brand p,
-.demo-app__brand h1 {
-  margin: 0;
-}
-
-.demo-app__brand p {
-  color: #8b8b93;
-  font-size: 0.68rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.demo-app__brand h1 {
-  margin-top: 0.12rem;
-  font-size: 0.92rem;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-}
-
-.demo-app__new-chat {
-  width: 100%;
-  border: 1px solid #e5e5ea;
-  border-radius: 0.95rem;
-  padding: 0.8rem 0.9rem;
-  background: #ffffff;
-  color: #202123;
-  font: inherit;
-  font-size: 0.84rem;
-  font-weight: 560;
-  text-align: left;
-  cursor: pointer;
-  transition:
-    background-color 160ms ease,
-    border-color 160ms ease;
-}
-
-.demo-app__new-chat:hover {
-  border-color: #d8d8de;
-  background: #fbfbfc;
-}
-
-.demo-app__sidebar-label {
-  margin: 0;
-  padding: 0 0.35rem;
-  color: #8e8e96;
-  font-size: 0.68rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.demo-app__thread-list {
-  display: flex;
-  flex: 1 1 auto;
-  min-height: 0;
-  flex-direction: column;
-  gap: 0.22rem;
-  overflow-y: auto;
-}
-
-.demo-thread {
-  display: flex;
-  width: 100%;
-  align-items: flex-start;
-  gap: 0.6rem;
-  padding: 0.78rem 0.78rem 0.82rem;
-  border: none;
-  border-radius: 1rem;
-  background: transparent;
-  text-align: left;
-  color: inherit;
-  cursor: pointer;
-  transition:
-    background-color 160ms ease,
-    color 160ms ease,
-    box-shadow 160ms ease;
-  box-sizing: border-box;
-}
-
-.demo-thread:hover {
-  background: #efeff2;
-}
-
-.demo-thread--active {
-  background: #ffffff;
-  box-shadow: inset 0 0 0 1px #e6e6eb;
-}
-
-.demo-thread--active .demo-thread__copy strong {
-  color: #171717;
-}
-
-.demo-thread--active .demo-thread__copy small {
-  color: #6f6f77;
-}
-
-.demo-thread__copy {
-  display: flex;
-  min-width: 0;
-  flex: 1 1 auto;
-  flex-direction: column;
-  gap: 0.38rem;
-}
-
-.demo-thread__title-row {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 0.45rem;
-}
-
-.demo-thread__copy strong {
-  font-size: 0.88rem;
-  font-weight: 570;
-  letter-spacing: -0.02em;
-}
-
-.demo-thread__title-row,
-.demo-thread__copy small {
-  overflow: hidden;
-}
-
-.demo-thread__title-row em {
-  flex-shrink: 0;
-  border-radius: 999px;
-  padding: 0.14rem 0.4rem;
-  background: #f3f4f6;
-  color: #888891;
-  font-size: 0.62rem;
-  font-style: normal;
-  font-weight: 560;
-  letter-spacing: 0.01em;
-  box-shadow: inset 0 0 0 1px #e8e8ed;
-}
-
-.demo-thread__copy small {
-  color: #8f8f98;
-  font-size: 0.76rem;
-  line-height: 1.4;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.demo-thread__status {
-  width: 0.36rem;
-  height: 0.36rem;
-  flex-shrink: 0;
-  margin-top: 0.38rem;
-  border-radius: 999px;
-  background: #c7c7cf;
-}
-
-.demo-thread__status[data-tone='busy'] {
-  background: #10a37f;
-  box-shadow: 0 0 0 0 rgba(16, 163, 127, 0.18);
-  animation: demo-status-pulse 1.8s ease-in-out infinite;
-}
-
-.demo-thread__status[data-tone='waiting'] {
-  background: #c28a17;
-}
-
-.demo-thread__status[data-tone='error'] {
-  background: #d26a6a;
-}
-
-.demo-stage {
-  display: flex;
-  min-width: 0;
-  height: 100vh;
-  min-height: 0;
-  flex-direction: column;
-  padding: 0;
-  background: #ffffff;
-  overflow: hidden;
-}
-
-.demo-stage__body,
-.demo-composer {
-  margin: 0 auto;
-  width: min(100%, 880px);
-}
-
-.demo-stage__body {
-  flex: 1 1 auto;
+.demo-sidebar {
   display: flex;
   min-height: 0;
   flex-direction: column;
-  border: none;
-  border-radius: 0;
-  background: #ffffff;
-  box-shadow: none;
-  overflow: hidden;
-  width: min(100%, 880px);
-  box-sizing: border-box;
-}
-
-.demo-stage__notice {
-  margin: 0.9rem 0 0;
-  border-radius: 0.9rem;
-  padding: 0.8rem 0.92rem;
-  font-size: 0.82rem;
-  line-height: 1.6;
-}
-
-.demo-stage__notice--error {
-  background: #fff6f6;
-  color: #b35f5f;
-  box-shadow: inset 0 0 0 1px rgba(229, 162, 162, 0.28);
-}
-
-.demo-stage__notice--waiting {
-  background: #faf6eb;
-  color: #9a6d21;
-  box-shadow: inset 0 0 0 1px rgba(224, 193, 122, 0.3);
-}
-
-.demo-stage__conversation {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: auto;
-  padding: 1.35rem 0 1.8rem;
-}
-
-.demo-empty {
-  display: flex;
-  min-height: 100%;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
   gap: 1rem;
-  padding: 10vh 0 3rem;
-  text-align: center;
+  padding: 1rem 0.85rem 0.9rem;
+  border-right: 1px solid rgba(15, 23, 42, 0.06);
+  background: rgba(247, 247, 248, 0.9);
+  box-sizing: border-box;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 
-.demo-empty__hero {
-  max-width: 26rem;
-  margin-bottom: 20px;
-}
-
-.demo-empty__hero h3 {
-  margin: 0;
-  font-size: clamp(1.75rem, 2.4vw, 2.45rem);
-  font-weight: 580;
-  letter-spacing: -0.05em;
-  line-height: 1.04;
-}
-
-.demo-empty__grid {
-  display: grid;
-  width: min(100%, 44rem);
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.62rem;
-}
-
-.demo-suggestion {
-  display: flex;
-  min-height: 0;
-  align-items: center;
-  border: 1px solid #ebebef;
-  border-radius: 1.15rem;
-  padding: 0.5rem 0.7rem;
-  background: #ffffff;
-  text-align: left;
-  color: #2e2e33;
-  cursor: pointer;
-  transition:
-    background-color 160ms ease,
-    border-color 160ms ease,
-    transform 160ms ease;
-}
-
-.demo-suggestion:hover {
-  border-color: #d9d9df;
-  background: #f9f9fa;
-  transform: translateY(-1px);
-}
-
-.demo-suggestion span:last-child {
-  font-size: 0.84rem;
-  line-height: 1.52;
-  color: #4b5563;
-}
-
-.demo-surface {
-  min-height: 100%;
-  padding: 0.35rem 0 1rem;
-}
-
-.demo-composer {
-  margin-top: auto;
-  margin-bottom: 1rem;
-  padding: 0 0 0.1rem;
-  background: transparent;
-  box-shadow: none;
+.demo-sidebar > * {
   flex-shrink: 0;
-  box-sizing: border-box;
 }
 
-.demo-composer__bar {
+.demo-sidebar__brand {
   display: flex;
-  min-height: 3.5rem;
-  align-items: flex-end;
-  gap: 0.55rem;
-  padding: 0.72rem 0.78rem 0.72rem 0.74rem;
-  border: 1px solid #e5e7eb;
-  border-radius: 1.65rem;
-  background: #ffffff;
-  box-shadow:
-    0 1px 2px rgba(15, 23, 42, 0.04),
-    0 10px 28px rgba(15, 23, 42, 0.06);
-  transition:
-    border-color 160ms ease,
-    box-shadow 160ms ease;
-  box-sizing: border-box;
+  align-items: center;
+  gap: 0.8rem;
 }
 
-.demo-composer__bar:focus-within {
-  border-color: #d8dbe2;
-  box-shadow:
-    0 1px 2px rgba(15, 23, 42, 0.05),
-    0 14px 30px rgba(15, 23, 42, 0.08);
-}
-
-.demo-composer__plus,
-.demo-composer__send {
-  display: inline-flex;
-  width: 2.25rem;
-  height: 2.25rem;
+.demo-sidebar__logo {
+  display: flex;
+  width: 2.15rem;
+  height: 2.15rem;
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  border: none;
   border-radius: 999px;
-  padding: 0;
-  cursor: pointer;
-  transition:
-    background-color 160ms ease,
-    color 160ms ease,
-    transform 160ms ease,
-    box-shadow 160ms ease,
-    opacity 160ms ease;
+  background: #111827;
+  color: #ffffff;
+  font-size: 0.86rem;
+  font-weight: 700;
+  letter-spacing: -0.04em;
 }
 
-.demo-composer__plus {
-  background: #f3f4f6;
-  color: #6b7280;
-}
-
-.demo-composer__plus:hover:not(:disabled) {
-  background: #eceef2;
-  color: #26272b;
-}
-
-.demo-composer__plus svg,
-.demo-composer__send svg {
-  width: 1rem;
-  height: 1rem;
-}
-
-.demo-composer__plus:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-.demo-composer__main {
-  display: flex;
-  min-width: 0;
-  flex: 1 1 auto;
-  flex-direction: column;
-  justify-content: center;
-  gap: 0.48rem;
-  cursor: text;
-}
-
-.demo-composer__uploads {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.45rem;
-}
-
-.demo-composer__upload {
-  display: inline-flex;
-  min-width: 0;
-  max-width: min(100%, 16rem);
-  align-items: center;
-  gap: 0.45rem;
-  padding: 0.38rem 0.42rem 0.38rem 0.62rem;
-  border: 1px solid #e7e9ee;
-  border-radius: 0.95rem;
-  background: #f8f9fb;
-}
-
-.demo-composer__upload-copy {
+.demo-sidebar__copy {
   display: flex;
   min-width: 0;
   flex-direction: column;
   gap: 0.08rem;
 }
 
-.demo-composer__upload-copy strong,
-.demo-composer__upload-copy span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.demo-sidebar__copy strong {
+  color: #111827;
+  font-size: 0.96rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
 }
 
-.demo-composer__upload-copy strong {
-  color: #27272a;
-  font-size: 0.75rem;
-  font-weight: 560;
+.demo-sidebar__copy span {
+  color: #6b7280;
+  font-size: 0.78rem;
 }
 
-.demo-composer__upload-copy span {
-  color: #8b909a;
-  font-size: 0.68rem;
-}
-
-.demo-composer__upload-remove {
+.demo-sidebar__reset {
   display: inline-flex;
-  width: 1.35rem;
-  height: 1.35rem;
-  flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  border: none;
+  border: 1px solid rgba(15, 23, 42, 0.08);
   border-radius: 999px;
-  padding: 0;
-  background: transparent;
-  color: #7b818c;
+  padding: 0.62rem 0.9rem;
+  background: rgba(255, 255, 255, 0.86);
+  color: #111827;
   font: inherit;
-  font-size: 0.94rem;
-  line-height: 1;
+  font-size: 0.84rem;
+  font-weight: 600;
   cursor: pointer;
-  transition:
-    background-color 160ms ease,
-    color 160ms ease;
 }
 
-.demo-composer__upload-remove:hover {
-  background: #eceff3;
-  color: #24262b;
+.demo-sidebar__reset:hover {
+  background: #ffffff;
 }
 
-.demo-composer__input {
+.demo-sidebar__section {
+  display: flex;
+  min-height: 0;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 0.72rem;
+}
+
+.demo-sidebar__section--grow {
+  flex: 0 0 auto;
+}
+
+.demo-sidebar__section h2 {
+  margin: 0;
+  color: #6b7280;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.demo-sidebar__providers,
+.demo-sidebar__prompts,
+.demo-sidebar__replays {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.demo-sidebar__provider,
+.demo-sidebar__prompt,
+.demo-sidebar__replay {
+  display: flex;
   width: 100%;
   min-width: 0;
-  min-height: 1.6rem;
-  max-height: 220px;
-  resize: none;
-  border: none;
-  margin: 0;
-  padding: 0.43rem 0 0.35rem;
-  background: transparent;
-  color: #1f1f1f;
+  flex-direction: column;
+  gap: 0.35rem;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 18px;
+  padding: 0.78rem 0.88rem;
+  background: rgba(255, 255, 255, 0.86);
+  color: #111827;
   font: inherit;
-  font-size: 0.96rem;
-  line-height: 1.6;
-  outline: none;
-  overflow-y: hidden;
+  text-align: left;
+  cursor: pointer;
   box-sizing: border-box;
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
 }
 
-.demo-composer__input::placeholder {
-  color: #9a9aa3;
-}
-
-.demo-composer__input:disabled {
-  cursor: not-allowed;
-}
-
-.demo-composer__send {
-  background: #111111;
-  color: #ffffff;
-  box-shadow: 0 8px 18px rgba(17, 17, 17, 0.18);
-}
-
-.demo-composer__send:hover:not(:disabled) {
-  background: #000000;
+.demo-sidebar__provider:hover,
+.demo-sidebar__prompt:hover,
+.demo-sidebar__replay:hover {
+  border-color: rgba(15, 23, 42, 0.14);
+  background: #ffffff;
   transform: translateY(-1px);
 }
 
-.demo-composer__send:disabled {
-  background: #ebedf0;
-  color: #a0a4ab;
+.demo-sidebar__replay:disabled {
+  opacity: 0.58;
   cursor: not-allowed;
-  box-shadow: none;
+  transform: none;
 }
 
-.demo-surface :deep(.agentdown-run-surface) {
-  --agentdown-tool-surface-bg: #f7f7f8;
-  --agentdown-tool-surface-border-color: #ececf1;
-  --agentdown-tool-title-color: #3f3f46;
-  --agentdown-tool-shimmer-color: rgba(255, 255, 255, 0.75);
-  --agentdown-tool-status-pending-bg: #ffffff;
-  --agentdown-tool-status-pending-color: #6b7280;
-  --agentdown-tool-status-danger-bg: #fff4f4;
-  --agentdown-tool-status-danger-color: #ba6868;
-}
-
-.demo-surface :deep(.agentdown-run-surface-list) {
-  gap: 1.7rem;
-}
-
-.demo-surface :deep(.agentdown-run-surface-group-stack) {
-  gap: 0.56rem;
-}
-
-.demo-surface :deep(.agentdown-run-surface-group[data-role='assistant']) {
-  justify-content: flex-start;
-}
-
-.demo-surface :deep(.agentdown-run-surface-group[data-role='user']) {
-  justify-content: flex-end;
-}
-
-.demo-surface :deep(.agentdown-run-surface-assistant-shell[data-variant='plain']),
-.demo-surface :deep(.agentdown-run-surface-assistant-shell[data-variant='draft']) {
-  max-width: min(100%, 768px);
-}
-
-.demo-surface :deep(.agentdown-run-surface-user-bubble[data-variant='bubble']) {
-  border-radius: 1.2rem;
-  padding: 0.76rem 0.96rem;
-  background: #f4f4f4;
-  box-shadow: none;
-}
-
-.demo-surface :deep(.agentdown-run-surface-message-actions) {
-  margin-top: 0.28rem;
-}
-
-.demo-surface :deep(.agentdown-run-surface-message-action) {
-  border: none;
-  background: transparent;
-  color: #7d7d86;
-  box-shadow: none;
-}
-
-.demo-surface :deep(.agentdown-run-surface-message-action:hover:not(:disabled)) {
-  background: #f4f4f5;
-}
-
-.demo-surface :deep(.agentdown-tool-renderer) {
-  background: #f7f7f8;
-  box-shadow: inset 0 0 0 1px #ececf1;
-}
-
-.demo-surface :deep(.agentdown-tool-renderer__icon-shell) {
+.demo-sidebar__provider--active {
+  border-color: rgba(15, 23, 42, 0.18);
   background: #ffffff;
-  box-shadow: inset 0 0 0 1px #e5e7eb;
 }
 
-.demo-surface :deep(.agentdown-tool-renderer[data-running='true']::before) {
-  opacity: 0.45;
+.demo-sidebar__provider-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
 }
 
-.demo-surface :deep(.agentdown-approval-block),
-.demo-surface :deep(.agentdown-handoff-block) {
-  background: #fafafa;
-  box-shadow: inset 0 0 0 1px #ececf1;
+.demo-sidebar__provider-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.08rem;
 }
 
-.demo-surface :deep(.agentdown-approval-action),
-.demo-surface :deep(.agentdown-handoff-actions__button),
-.demo-surface :deep(.agentdown-handoff-form__submit) {
-  box-shadow: none;
+.demo-sidebar__provider-copy strong {
+  color: #111827;
+  font-size: 0.88rem;
+  font-weight: 700;
 }
 
-.demo-surface :deep(.agentdown-approval-action:not([data-tone='primary']):not([data-tone='danger']):not([data-tone='warning']):hover:not(:disabled)),
-.demo-surface :deep(.agentdown-handoff-actions__button:not([data-tone='primary']):hover:not(:disabled)),
-.demo-surface :deep(.agentdown-handoff-form__submit:not([data-tone='primary']):hover:not(:disabled)) {
-  background: #f3f4f6;
+.demo-sidebar__provider-copy span {
+  color: #9ca3af;
+  font-size: 0.72rem;
 }
 
-.demo-surface :deep(.agentdown-run-surface-markdown pre),
-.demo-surface :deep(.agentdown-run-surface-markdown table) {
+.demo-sidebar__provider small,
+.demo-sidebar__prompt,
+.demo-sidebar__replay span,
+.demo-sidebar__replay small {
+  color: #6b7280;
+  font-size: 0.79rem;
+  line-height: 1.45;
+}
+
+.demo-sidebar__provider small {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.demo-sidebar__replay-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.12rem;
+}
+
+.demo-sidebar__replay-copy strong {
+  color: #111827;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.demo-sidebar__provider-status {
+  width: 0.54rem;
+  height: 0.54rem;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: #d1d5db;
+}
+
+.demo-sidebar__provider-status[data-tone='busy'] {
+  background: #111827;
+}
+
+.demo-sidebar__provider-status[data-tone='waiting'] {
+  background: #f59e0b;
+}
+
+.demo-sidebar__provider-status[data-tone='error'] {
+  background: #ef4444;
+}
+
+.demo-stage {
+  min-width: 0;
+  min-height: 0;
+}
+
+.demo-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.demo-header__copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.08rem;
+}
+
+.demo-header__copy strong {
+  color: #111827;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.demo-header__copy span {
+  color: #6b7280;
+  font-size: 0.82rem;
+}
+
+.demo-header__reset {
+  display: none;
+}
+
+.demo-empty {
+  display: flex;
+  min-height: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem;
+  padding: 2rem 0 3rem;
+  box-sizing: border-box;
+}
+
+.demo-empty__copy {
+  display: flex;
+  max-width: 720px;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+  text-align: center;
+}
+
+.demo-empty__copy h2,
+.demo-empty__copy p {
+  margin: 0;
+}
+
+.demo-empty__copy h2 {
+  color: #111827;
+  font-size: clamp(2rem, 4vw, 2.9rem);
+  font-weight: 700;
+  letter-spacing: -0.05em;
+}
+
+.demo-empty__copy p {
+  color: #6b7280;
+  font-size: 0.94rem;
+  line-height: 1.6;
+}
+
+.demo-empty__suggestions {
+  display: grid;
+  width: min(100%, 760px);
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.75rem;
+}
+
+.demo-empty__suggestion {
+  display: flex;
+  min-height: 4.35rem;
+  align-items: center;
+  justify-content: flex-start;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 20px;
+  padding: 0.95rem 1rem;
+  background: rgba(255, 255, 255, 0.9);
+  color: #1f2937;
+  font: inherit;
+  font-size: 0.92rem;
+  line-height: 1.55;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 160ms ease, transform 160ms ease, background 160ms ease;
+}
+
+.demo-empty__suggestion:hover {
+  border-color: rgba(15, 23, 42, 0.16);
+  background: #ffffff;
+  transform: translateY(-1px);
+}
+
+.demo-panel {
+  display: flex;
+  min-height: 100%;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1rem;
+  box-sizing: border-box;
+}
+
+.demo-panel__hero {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  border-radius: 20px;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.demo-panel__hero p {
+  margin: 0;
+  color: #4b5563;
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+
+.demo-panel__badge {
+  display: inline-flex;
   width: fit-content;
-  max-width: 100%;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 0.36rem 0.68rem;
+  background: #ecfdf3;
+  color: #15803d;
+  font-size: 0.75rem;
+  font-weight: 700;
 }
 
-.demo-surface :deep(.agentdown-run-surface-markdown pre) {
-  border-radius: 0.9rem;
+.demo-panel__sections {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
 }
 
-@keyframes demo-status-pulse {
-  0% {
-    box-shadow: 0 0 0 0 rgba(16, 163, 127, 0.22);
-  }
-
-  70% {
-    box-shadow: 0 0 0 8px rgba(16, 163, 127, 0);
-  }
-
-  100% {
-    box-shadow: 0 0 0 0 rgba(16, 163, 127, 0);
-  }
+.demo-panel__section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+  padding-bottom: 0.75rem;
 }
 
-@media (max-width: 1180px) {
+.demo-panel__section:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.demo-panel__section span {
+  color: #9ca3af;
+  font-size: 0.74rem;
+  letter-spacing: 0.02em;
+}
+
+.demo-panel__section strong {
+  color: #111827;
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+
+.demo-notice {
+  width: min(100%, 720px);
+  margin: 0 auto 1rem;
+  border-radius: 16px;
+  padding: 0.8rem 0.95rem;
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.demo-notice--error {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.demo-notice--waiting {
+  background: #f5f7fb;
+  color: #475569;
+}
+
+@media (max-width: 720px) {
   .demo-app {
     grid-template-columns: 1fr;
   }
 
-  .demo-app__sidebar {
-    height: auto;
-    max-height: 36vh;
-    border-right: none;
-    border-bottom: 1px solid #ececf1;
+  .demo-sidebar {
+    display: none;
   }
 
-  .demo-app__thread-list {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 860px) {
-  .demo-stage {
-    padding: 0;
-  }
-
-  .demo-stage__body,
-  .demo-composer {
-    width: 100%;
-  }
-}
-
-@media (max-width: 680px) {
-  .demo-app__thread-list {
+  .demo-empty__suggestions {
     grid-template-columns: 1fr;
   }
 
-  .demo-empty__grid {
-    grid-template-columns: 1fr;
-    width: 100%;
-  }
-
-  .demo-stage__conversation {
-    padding-inline: 1rem;
-  }
-
-  .demo-composer {
-    margin-inline: 1rem;
-    margin-bottom: 1rem;
+  .demo-empty__copy h2 {
+    font-size: 1.85rem;
   }
 }
 </style>

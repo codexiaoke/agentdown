@@ -518,7 +518,9 @@ export function useAgnoChatSession<
     sessionState.requestInput.value = '';
 
     try {
-      await sessionState.connect(source);
+      await sessionState.withPendingHumanResolution(async () => {
+        await sessionState.connect(source);
+      });
     } finally {
       sessionState.requestInput.value = previousRequestInput;
       pendingResumeRequest.value = null;

@@ -374,6 +374,172 @@ const session = useAgnoChatSession<string>({
 - `createAgnoProtocol()`
 - `defineAgnoPreset()`
 
+## 更推荐的聊天页入口：`AgentChatWorkspace`
+
+如果你不是只想“把 runtime 渲染出来”，而是想直接做一个完整聊天工作区，优先用 `AgentChatWorkspace`。
+
+它把这些页面层能力合在了一起：
+
+- `RunSurface`
+- 内置输入框、附件上传和发送逻辑
+- 请求刚发出但对话区还没追加新内容时的默认 loading dots
+- 右侧悬浮 panel
+- 跟随到底部、脱离底部后的悬浮回底按钮
+- 首次进入 / 刷新回放时直接同步到底部，避免先闪一下再滚下来
+
+最短示例：
+
+```vue
+<script setup lang="ts">
+import { ref } from 'vue';
+import {
+  AgentChatWorkspace,
+  useAgnoChatSession,
+  type AgentChatComposerSendPayload,
+  type AgentChatWorkspaceExposed
+} from 'agentdown';
+
+const workspaceRef = ref<AgentChatWorkspaceExposed | null>(null);
+const prompt = ref('');
+const uploads = ref([]);
+
+const session = useAgnoChatSession({
+  source: 'http://127.0.0.1:8000/api/stream/agno',
+  input: prompt,
+  conversationId: 'session:workspace-demo',
+  title: 'Agno 助手',
+  mode: 'hitl'
+});
+
+async function handleSend(payload: AgentChatComposerSendPayload) {
+  await session.send(payload.input);
+}
+</script>
+
+<template>
+  <AgentChatWorkspace
+    ref="workspaceRef"
+    :runtime="session.runtime"
+    :surface="session.surface"
+    v-model="prompt"
+    v-model:uploads="uploads"
+    :busy="session.busy"
+    :awaiting-human-input="session.awaitingHumanInput"
+    :transport-error="session.transportError"
+    placeholder="给智能体发送消息"
+    :upload-file="async (file) => ({
+      fileId: `file:${file.name}`
+    })"
+    @send="handleSend"
+  >
+    <template #scroll-to-bottom="{ visible, unread, scrollToBottom }">
+      <button
+        v-if="visible"
+        type="button"
+        @click="scrollToBottom()"
+      >
+        回到底部<span v-if="unread"> •</span>
+      </button>
+    </template>
+  </AgentChatWorkspace>
+</template>
+```
+
+几个关键点：
+
+- `@send` 收到的 `payload.input` 已经把文本和附件合并好了，直接传给 `session.send(payload.input)` 即可
+- `uploadFile()` 返回的最小结果只需要 `fileId`；如果你已经有对象存储地址或图片预览，也可以继续返回 `href` / `previewSrc`
+- 默认自带 `conversation-tail`，当请求已经发出但新内容还没 append 到对话区时，会显示 3 个 loading dots
+- 默认开启跟随到底部；用户自己往上滚之后不会被强制拉回去，有新内容时只会显示一个悬浮回底按钮
+- 想手动控制时，可以通过 `ref` 调 `scrollToBottom()`、`scheduleScrollToBottom()`、`scheduleInitialBottomSync()`
+
+```ts
+import { ref } from 'vue';
+import type { AgentChatWorkspaceExposed } from 'agentdown';
+
+const workspaceRef = ref<AgentChatWorkspaceExposed | null>(null);
+
+workspaceRef.value?.scrollToBottom('smooth');
+```
+
+## 已完成对话的回放 / 存档恢复
+
+如果后端会在 run 完成后把结果存成 JSON，前端就不必再重放整段 SSE，可以直接恢复成 `RunSurface` 能渲染的 runtime。
+
+Agentdown 内置推荐的通用 archive 外壳很简单：
+
+```ts
+type AgentdownRenderRecord = {
+  event: string;
+  role: string;
+  content: unknown;
+  created_at: number;
+};
+
+type AgentdownRenderArchive = {
+  format: 'agentdown.session/v1';
+  framework: string;
+  status: string;
+  updated_at: number;
+  records: AgentdownRenderRecord[];
+};
+```
+
+最短方式：
+
+```vue
+<script setup lang="ts">
+import { AgentdownRenderArchiveSurface } from 'agentdown';
+
+const archive = {
+  format: 'agentdown.session/v1',
+  framework: 'agno',
+  status: 'completed',
+  updated_at: 1770000000200,
+  records: [
+    {
+      event: 'message',
+      role: 'user',
+      content: '帮我查一下北京天气',
+      created_at: 1770000000000
+    },
+    {
+      event: 'message',
+      role: 'assistant',
+      content: {
+        text: '我来帮你查询北京今天的天气情况。',
+        kind: 'markdown'
+      },
+      created_at: 1770000000100
+    },
+    {
+      event: 'tool',
+      role: 'assistant',
+      content: {
+        name: 'lookup_weather',
+        status: 'completed',
+        result: {
+          city: '北京',
+          temperature: '22°C'
+        }
+      },
+      created_at: 1770000000150
+    }
+  ]
+};
+</script>
+
+<template>
+  <AgentdownRenderArchiveSurface :input="archive" />
+</template>
+```
+
+如果你的后端 records 结构不是内置这一套，也可以继续用：
+
+- `defineAgentdownRecordsAdapter()`
+- `useAgentdownRenderArchive()`
+- `restoreAgentdownRenderArchive()`
+
 ## 某些非 UI 事件怎么处理
 
 如果你想做“某个 SSE 事件来了，就执行一个副作用”，例如抓后端回传的 sessionId、标题、埋点或日志，可以继续叠加事件 action。

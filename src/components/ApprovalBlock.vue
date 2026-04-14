@@ -372,11 +372,15 @@ async function executeApprovalAction(
   actionError.value = '';
   reasonPromptError.value = '';
   pendingActionKey.value = action.key;
+  const previousReasonPromptActionKey = reasonPromptActionKey.value;
+  const previousReasonPromptValue = reasonPromptValue.value;
 
   const executionContext: RunSurfaceApprovalActionContext = {
     ...context,
     ...(reason !== undefined ? { reason } : {})
   };
+
+  closeReasonPrompt();
 
   try {
     if (action.onClick) {
@@ -386,8 +390,12 @@ async function executeApprovalAction(
     }
 
     markSuccess(action.key);
-    closeReasonPrompt();
   } catch (error) {
+    if (previousReasonPromptActionKey === action.key) {
+      reasonPromptActionKey.value = previousReasonPromptActionKey;
+      reasonPromptValue.value = previousReasonPromptValue;
+    }
+
     actionError.value = error instanceof Error
       ? error.message
       : '审批动作执行失败，请稍后再试。';
@@ -430,6 +438,7 @@ const actions = computed<ResolvedApprovalAction[]>(() => {
           return;
         }
 
+        closeReasonPrompt();
         await executeApprovalAction(action, context);
       }
     }));

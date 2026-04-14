@@ -333,6 +333,172 @@ If you need lower-level control, then move down to:
 - `createAgnoProtocol()`
 - `defineAgnoPreset()`
 
+## Preferred Chat Page Entry: `AgentChatWorkspace`
+
+If you want a real chat workspace instead of rendering `RunSurface` by hand, start with `AgentChatWorkspace`.
+
+It bundles the page-layer pieces together:
+
+- `RunSurface`
+- built-in composer, attachments, and send flow
+- default loading dots while the request has started but the conversation has not appended new content yet
+- optional floating right panel
+- follow-bottom behavior plus a floating jump-to-bottom button
+- initial direct-to-bottom sync on mount or replay restore, so the page does not flash and visibly scroll down
+
+Minimal example:
+
+```vue
+<script setup lang="ts">
+import { ref } from 'vue';
+import {
+  AgentChatWorkspace,
+  useAgnoChatSession,
+  type AgentChatComposerSendPayload,
+  type AgentChatWorkspaceExposed
+} from 'agentdown';
+
+const workspaceRef = ref<AgentChatWorkspaceExposed | null>(null);
+const prompt = ref('');
+const uploads = ref([]);
+
+const session = useAgnoChatSession({
+  source: 'http://127.0.0.1:8000/api/stream/agno',
+  input: prompt,
+  conversationId: 'session:workspace-demo',
+  title: 'Agno Assistant',
+  mode: 'hitl'
+});
+
+async function handleSend(payload: AgentChatComposerSendPayload) {
+  await session.send(payload.input);
+}
+</script>
+
+<template>
+  <AgentChatWorkspace
+    ref="workspaceRef"
+    :runtime="session.runtime"
+    :surface="session.surface"
+    v-model="prompt"
+    v-model:uploads="uploads"
+    :busy="session.busy"
+    :awaiting-human-input="session.awaitingHumanInput"
+    :transport-error="session.transportError"
+    placeholder="Send a message"
+    :upload-file="async (file) => ({
+      fileId: `file:${file.name}`
+    })"
+    @send="handleSend"
+  >
+    <template #scroll-to-bottom="{ visible, unread, scrollToBottom }">
+      <button
+        v-if="visible"
+        type="button"
+        @click="scrollToBottom()"
+      >
+        Jump to bottom<span v-if="unread"> •</span>
+      </button>
+    </template>
+  </AgentChatWorkspace>
+</template>
+```
+
+Key points:
+
+- `payload.input` already combines text and attachments, so you can pass it directly to `session.send(payload.input)`
+- `uploadFile()` only needs to return `fileId`; if you already have a CDN URL or image preview, also return `href` or `previewSrc`
+- the built-in `conversation-tail` shows 3 loading dots while the request is active but no new chat content has been appended yet
+- follow-bottom is enabled by default; once the user scrolls up, the workspace stops forcing them down and shows a floating button instead
+- if you need imperative control, use `scrollToBottom()`, `scheduleScrollToBottom()`, and `scheduleInitialBottomSync()` through the exposed ref
+
+```ts
+import { ref } from 'vue';
+import type { AgentChatWorkspaceExposed } from 'agentdown';
+
+const workspaceRef = ref<AgentChatWorkspaceExposed | null>(null);
+
+workspaceRef.value?.scrollToBottom('smooth');
+```
+
+## Replay Completed Conversations From JSON
+
+If your backend stores the finished result as JSON after the run completes, the frontend does not need to replay the full SSE stream again. It can restore the UI directly into a runtime that `RunSurface` can render.
+
+The built-in archive envelope is intentionally small:
+
+```ts
+type AgentdownRenderRecord = {
+  event: string;
+  role: string;
+  content: unknown;
+  created_at: number;
+};
+
+type AgentdownRenderArchive = {
+  format: 'agentdown.session/v1';
+  framework: string;
+  status: string;
+  updated_at: number;
+  records: AgentdownRenderRecord[];
+};
+```
+
+Shortest path:
+
+```vue
+<script setup lang="ts">
+import { AgentdownRenderArchiveSurface } from 'agentdown';
+
+const archive = {
+  format: 'agentdown.session/v1',
+  framework: 'agno',
+  status: 'completed',
+  updated_at: 1770000000200,
+  records: [
+    {
+      event: 'message',
+      role: 'user',
+      content: 'Check Beijing weather',
+      created_at: 1770000000000
+    },
+    {
+      event: 'message',
+      role: 'assistant',
+      content: {
+        text: 'Let me check today\'s Beijing weather.',
+        kind: 'markdown'
+      },
+      created_at: 1770000000100
+    },
+    {
+      event: 'tool',
+      role: 'assistant',
+      content: {
+        name: 'lookup_weather',
+        status: 'completed',
+        result: {
+          city: 'Beijing',
+          temperature: '22°C'
+        }
+      },
+      created_at: 1770000000150
+    }
+  ]
+};
+</script>
+
+<template>
+  <AgentdownRenderArchiveSurface :input="archive" />
+</template>
+```
+
+If your backend uses a different record shape, continue with:
+
+- `defineAgentdownRecordsAdapter()`
+- `useAgentdownRenderArchive()`
+- `restoreAgentdownRenderArchive()`
+
 You can also attach side effects for non-UI events:
 
 ```ts

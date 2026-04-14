@@ -26,13 +26,6 @@ interface Props {
 const props = defineProps<Props>();
 
 /**
- * 图片附件在文件卡布局中使用左侧缩略图。
- */
-const shouldRenderThumbnail = computed(() => {
-  return props.attachmentKind === 'image' && typeof props.previewSrc === 'string' && props.previewSrc.length > 0;
-});
-
-/**
  * 附件统一收口成“文件条目卡”的展示数据。
  */
 const presentation = computed(() => {
@@ -189,25 +182,32 @@ function closeFilePreview() {
     @click="handleCardClick"
   >
     <div class="agentdown-attachment-visual">
-      <img
-        v-if="shouldRenderThumbnail"
-        class="agentdown-attachment-thumb"
-        :src="previewSrc"
-        :alt="presentation.title"
-      >
-
       <svg
-        v-else
-        class="agentdown-attachment-icon"
-        viewBox="0 0 24 24"
+        class="agentdown-attachment-file-icon"
+        viewBox="0 0 44 52"
         fill="none"
-        stroke="currentColor"
-        stroke-width="1.75"
-        stroke-linecap="round"
-        stroke-linejoin="round"
         aria-hidden="true"
       >
-        <path :d="presentation.iconPath" />
+        <path
+          class="agentdown-attachment-file-icon__page"
+          d="M9 2h17.2L38 13.8V47a3 3 0 0 1-3 3H9a3 3 0 0 1-3-3V5a3 3 0 0 1 3-3Z"
+          fill="currentColor"
+        />
+        <path
+          class="agentdown-attachment-file-icon__fold"
+          d="M26.2 2v9a2.8 2.8 0 0 0 2.8 2.8H38z"
+          fill="rgba(255,255,255,0.34)"
+        />
+        <text
+          class="agentdown-attachment-file-icon__label"
+          x="22"
+          y="36"
+          text-anchor="middle"
+          dominant-baseline="middle"
+          :data-size="presentation.iconLabelSize"
+        >
+          {{ presentation.iconLabel }}
+        </text>
       </svg>
     </div>
 
@@ -255,22 +255,21 @@ function closeFilePreview() {
 .agentdown-attachment-block {
   display: inline-flex;
   align-items: center;
-  gap: 0.72rem;
-  width: min(100%, 30rem);
-  max-width: 100%;
+  gap: 0.68rem;
+  width: fit-content;
+  max-width: min(100%, 24rem);
   min-width: 0;
   box-sizing: border-box;
   appearance: none;
-  border: 1px solid rgba(148, 163, 184, 0.24);
-  border-radius: 1.2rem;
-  padding: 0.78rem 0.88rem;
-  background: #fff;
+  border: none;
+  border-radius: 0.9rem;
+  padding: 0.76rem 0.84rem;
+  background: #f4f4f5;
   color: inherit;
   font: inherit;
   text-align: left;
   text-decoration: none;
   transition:
-    border-color 160ms ease,
     background-color 160ms ease;
 }
 
@@ -282,54 +281,63 @@ function closeFilePreview() {
   cursor: pointer;
 }
 
-.agentdown-attachment-block[href]:hover {
-  border-color: rgba(100, 116, 139, 0.34);
-  background: #fcfcfd;
+.agentdown-attachment-block[href]:hover,
+.agentdown-attachment-block[type='button']:hover {
+  background: #efeff1;
 }
 
 .agentdown-attachment-visual {
   display: inline-flex;
-  width: 2.7rem;
-  height: 2.7rem;
+  width: 2.55rem;
+  height: 2.55rem;
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
-  border-radius: 0.82rem;
-  background: #d1d5db;
-  color: #fff;
+  color: #9ca3af;
 }
 
 .agentdown-attachment-block[data-tone='blue'] .agentdown-attachment-visual {
-  background: linear-gradient(180deg, #5f90f7, #4b7be2);
+  color: #4f7df0;
 }
 
 .agentdown-attachment-block[data-tone='neutral'] .agentdown-attachment-visual {
-  background: linear-gradient(180deg, #d1d5db, #b6bcc6);
+  color: #9ca3af;
 }
 
 .agentdown-attachment-block[data-tone='amber'] .agentdown-attachment-visual {
-  background: linear-gradient(180deg, #f5c16d, #e5a94c);
+  color: #f59b4a;
 }
 
 .agentdown-attachment-block[data-tone='rose'] .agentdown-attachment-visual {
-  background: linear-gradient(180deg, #ea9d95, #de7c72);
+  color: #ef635a;
 }
 
 .agentdown-attachment-block[data-tone='emerald'] .agentdown-attachment-visual {
-  background: linear-gradient(180deg, #6fc7ae, #4cac90);
+  color: #4cb96d;
 }
 
-.agentdown-attachment-thumb {
+.agentdown-attachment-file-icon {
   width: 100%;
   height: 100%;
-  object-fit: cover;
 }
 
-.agentdown-attachment-icon {
-  width: 1.42rem;
-  height: 1.42rem;
-  flex-shrink: 0;
+.agentdown-attachment-file-icon__label {
+  fill: #ffffff;
+  font-family:
+    ui-sans-serif,
+    -apple-system,
+    BlinkMacSystemFont,
+    'SF Pro Text',
+    'PingFang SC',
+    'Helvetica Neue',
+    sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.agentdown-attachment-file-icon__label[data-size='md'] {
+  font-size: 14px;
 }
 
 .agentdown-attachment-copy {
@@ -337,16 +345,16 @@ function closeFilePreview() {
   min-width: 0;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: 0.12rem;
+  gap: 0.08rem;
 }
 
 .agentdown-attachment-copy strong {
   overflow: hidden;
-  color: #2f343b;
-  font-size: 0.88rem;
-  font-weight: 520;
+  color: #111827;
+  font-size: 0.84rem;
+  font-weight: 600;
   letter-spacing: -0.03em;
-  line-height: 1.28;
+  line-height: 1.18;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -354,9 +362,9 @@ function closeFilePreview() {
 .agentdown-attachment-meta,
 .agentdown-attachment-description {
   overflow: hidden;
-  color: #8b929c;
-  font-size: 0.75rem;
-  line-height: 1.35;
+  color: #8b8d96;
+  font-size: 0.7rem;
+  line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
