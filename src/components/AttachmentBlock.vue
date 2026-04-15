@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, inject, ref } from 'vue';
 import type { MarkdownAttachmentKind } from '../core/types';
 import { resolveAttachmentFileCardPresentation } from './fileCardPresentation';
 import FilePreviewOverlay from './FilePreviewOverlay.vue';
 import PreviewLightbox from './PreviewLightbox.vue';
+import { agentChatFilePreviewKey } from './agentChatFilePreview';
 import { loadFileCardPreviewText, resolveFileCardPreviewTarget } from './fileCardPreview';
 
 /**
@@ -48,6 +49,10 @@ const previewTarget = computed(() => {
     ...(props.title ? { title: props.title } : {})
   });
 });
+const filePreviewController = inject(agentChatFilePreviewKey, null);
+const shouldUsePanelPreview = computed(() => {
+  return filePreviewController?.canPreviewInPanel() ?? false;
+});
 
 const resolvedHref = computed(() => {
   if (props.href) {
@@ -62,6 +67,10 @@ const resolvedHref = computed(() => {
 });
 
 const resolvedTag = computed(() => {
+  if (shouldUsePanelPreview.value && (previewTarget.value.mode || previewTarget.value.externalHref)) {
+    return 'button';
+  }
+
   if (previewTarget.value.mode) {
     return 'button';
   }
@@ -100,6 +109,23 @@ const IMAGE_ZOOM_STEP = 0.2;
 
 async function openCardPreview() {
   const target = previewTarget.value;
+  const shouldPreviewInPanel = shouldUsePanelPreview.value;
+
+  if (!target.mode && !(shouldPreviewInPanel && target.externalHref)) {
+    return;
+  }
+
+  if (shouldPreviewInPanel && filePreviewController) {
+    const handled = await filePreviewController.openPreview({
+      title: presentation.value.title,
+      ...(target.subtitle ? { subtitle: target.subtitle } : {}),
+      target
+    });
+
+    if (handled) {
+      return;
+    }
+  }
 
   if (!target.mode) {
     return;
@@ -139,11 +165,14 @@ async function openCardPreview() {
 }
 
 function handleCardClick(event: MouseEvent) {
-  if (!previewTarget.value.mode) {
+  if (!previewTarget.value.mode && !(shouldUsePanelPreview.value && previewTarget.value.externalHref)) {
     return;
   }
 
-  event.preventDefault();
+  if (resolvedTag.value === 'button') {
+    event.preventDefault();
+  }
+
   void openCardPreview();
 }
 

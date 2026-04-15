@@ -1,9 +1,11 @@
 import type { MarkdownArtifactKind, MarkdownAttachmentKind } from '../core/types';
 
 export type FileCardPreviewMode = 'image' | 'iframe' | 'text' | null;
+export type FileCardPreviewContentKind = 'plain' | 'markdown' | 'json';
 
 export interface FileCardPreviewTarget {
   mode: FileCardPreviewMode;
+  contentKind?: FileCardPreviewContentKind;
   src?: string;
   externalHref?: string;
   subtitle?: string;
@@ -67,6 +69,18 @@ function isPdfMimeType(mimeType?: string): boolean {
   return mimeType === 'application/pdf';
 }
 
+function resolveTextContentKind(mimeType?: string, extension?: string): FileCardPreviewContentKind {
+  if (mimeType === 'application/json' || extension === 'json') {
+    return 'json';
+  }
+
+  if (mimeType?.includes('markdown') || extension === 'md' || extension === 'markdown' || extension === 'mdx') {
+    return 'markdown';
+  }
+
+  return 'plain';
+}
+
 function resolveFileSubtitle(kind: MarkdownAttachmentKind | MarkdownArtifactKind, mimeType?: string, extension?: string): string {
   if (kind === 'image' || mimeType?.startsWith('image/')) {
     return '图片预览';
@@ -128,6 +142,7 @@ export function resolveFileCardPreviewTarget(input: {
   ) {
     return {
       mode: 'text',
+      contentKind: resolveTextContentKind(input.mimeType, extension),
       src: externalHref,
       externalHref,
       subtitle

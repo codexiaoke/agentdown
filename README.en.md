@@ -342,6 +342,7 @@ It bundles the page-layer pieces together:
 - `RunSurface`
 - built-in composer, attachments, and send flow
 - default loading dots while the request has started but the conversation has not appended new content yet
+- built-in right-side preview for files, images, Markdown, and JSON artifacts
 - optional floating right panel
 - follow-bottom behavior plus a floating jump-to-bottom button
 - initial direct-to-bottom sync on mount or replay restore, so the page does not flash and visibly scroll down
@@ -408,6 +409,9 @@ Key points:
 
 - `payload.input` already combines text and attachments, so you can pass it directly to `session.send(payload.input)`
 - `uploadFile()` only needs to return `fileId`; if you already have a CDN URL or image preview, also return `href` or `previewSrc`
+- built-in attachment cards and artifact cards automatically open inside the workspace preview pane; Markdown, JSON, images, and common text files can be previewed directly
+- if you prefer the previous modal/lightbox behavior, set `filePreviewStrategy` to `'overlay'`
+- use `filePreviewPanelWidth` to control the width of the right preview pane
 - the built-in `conversation-tail` shows 3 loading dots while the request is active but no new chat content has been appended yet
 - follow-bottom is enabled by default; once the user scrolls up, the workspace stops forcing them down and shows a floating button instead
 - if you need imperative control, use `scrollToBottom()`, `scheduleScrollToBottom()`, and `scheduleInitialBottomSync()` through the exposed ref

@@ -54,10 +54,9 @@ const variant = computed(() => {
 .agentdown-run-surface-user-bubble[data-variant='bubble'] {
   display: inline-block;
   max-width: min(100%, 560px);
-  border-radius: 20px;
+  border-radius: 18px;
   padding: 12px 16px;
-  background: linear-gradient(180deg, #f4f8ff, #e8f1ff);
-  box-shadow: inset 0 0 0 1px rgba(147, 197, 253, 0.42);
+  background: #f3f4f6;
 }
 
 .agentdown-run-surface-user-bubble[data-variant='bare'] {
@@ -91,6 +90,8 @@ const variant = computed(() => {
   right: auto !important;
   top: auto !important;
   height: auto !important;
+  color: inherit;
+  font-weight: inherit;
 }
 
 .agentdown-run-surface-user-bubble :deep(.agentdown-text-block:last-child),

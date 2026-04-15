@@ -1,16 +1,20 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, useSlots, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, useSlots, watch } from 'vue';
 import type { AgentRuntime } from '../runtime/types';
 import type { RunSurfaceOptions } from '../surface/types';
+import AgentChatFilePreviewPanel from './AgentChatFilePreviewPanel.vue';
 import AgentChatLoadingDots from './AgentChatLoadingDots.vue';
 import AgentChatComposer from './AgentChatComposer.vue';
 import AgentChatFloatingPanel from './AgentChatFloatingPanel.vue';
 import RunSurface from './RunSurface.vue';
 import type { AgentChatWorkspaceExposed } from './agentChatWorkspace.types';
+import { agentChatFilePreviewKey, type AgentChatFilePreviewState } from './agentChatFilePreview';
 import { hasAgentChatAppendedConversationContent } from './agentChat';
 import {
   resolveChatScrollFollowState
 } from './chatScrollBehavior';
+import type { FileCardPreviewContentKind } from './fileCardPreview';
+import { loadFileCardPreviewText } from './fileCardPreview';
 import type {
   AgentChatComposerSendPayload,
   AgentChatPendingAttachment,
@@ -40,6 +44,8 @@ interface Props {
   uploadContext?: unknown | undefined;
   accept?: string;
   multiple?: boolean;
+  filePreviewStrategy?: 'panel' | 'overlay';
+  filePreviewPanelWidth?: number | string;
   autoScroll?: boolean;
   initialScrollToBottom?: boolean;
   initialScrollReveal?: 'immediate' | 'after-sync';
@@ -67,6 +73,8 @@ const props = withDefaults(defineProps<Props>(), {
   reservePanelSpace: true,
   accept: '',
   multiple: true,
+  filePreviewStrategy: 'panel',
+  filePreviewPanelWidth: 'clamp(520px, 44%, 860px)',
   autoScroll: true,
   initialScrollToBottom: true,
   initialScrollReveal: 'after-sync',
@@ -96,9 +104,11 @@ const conversationTailBaselineBlockIds = ref<string[]>([]);
 const previousScrollTop = ref(0);
 const initialScrollPending = ref(false);
 const initialScrollReady = ref(false);
+const filePreviewState = ref<AgentChatFilePreviewState | null>(null);
 
 let scrollToBottomFrame: number | null = null;
 let initialBottomSyncTimeouts: number[] = [];
+let filePreviewRequestId = 0;
 
 let unsubscribe: (() => void) | null = null;
 
@@ -107,6 +117,10 @@ const slotName = computed(() => {
 });
 
 const panelVisible = computed(() => {
+  if (filePreviewState.value) {
+    return true;
+  }
+
   if (slots.panel) {
     return true;
   }
@@ -123,10 +137,49 @@ const panelVisible = computed(() => {
 });
 
 const panelOpenProxy = computed({
-  get: () => props.panelOpen,
+  get: () => Boolean(filePreviewState.value) || props.panelOpen,
   set: (value: boolean) => {
+    if (!value) {
+      if (filePreviewState.value) {
+        closeFilePreview();
+      }
+    }
+
     emit('update:panelOpen', value);
   }
+});
+
+const resolvedPanelTitle = computed(() => {
+  if (filePreviewState.value) {
+    return filePreviewState.value.title;
+  }
+
+  return props.panelTitle;
+});
+
+const resolvedPanelWidth = computed(() => {
+  if (filePreviewState.value) {
+    return props.filePreviewPanelWidth;
+  }
+
+  return props.panelWidth;
+});
+
+const filePreviewPaneWidth = computed(() => {
+  const widthValue = typeof props.filePreviewPanelWidth === 'number'
+    ? `${props.filePreviewPanelWidth}px`
+    : props.filePreviewPanelWidth;
+
+  // 右侧文件预览按 workspace 自身宽度计算，不再使用 viewport 宽度，避免把左侧栏也算进去。
+  return `min(100%, max(520px, ${widthValue}))`;
+});
+
+const rawFilePreviewPaneWidth = computed(() => {
+  if (typeof props.filePreviewPanelWidth === 'number') {
+    return `${props.filePreviewPanelWidth}px`;
+  }
+
+  return props.filePreviewPanelWidth;
 });
 
 const hasConversation = computed(() => {
@@ -148,11 +201,15 @@ const reservedPanelWidth = computed(() => {
     return '0px';
   }
 
-  if (typeof props.panelWidth === 'number') {
-    return `calc(${props.panelWidth}px + 1.5rem)`;
+  if (filePreviewState.value) {
+    return filePreviewPaneWidth.value;
   }
 
-  return `calc(${props.panelWidth} + 1.5rem)`;
+  if (typeof resolvedPanelWidth.value === 'number') {
+    return `calc(${resolvedPanelWidth.value}px + 1.5rem)`;
+  }
+
+  return `calc(${resolvedPanelWidth.value} + 1.5rem)`;
 });
 
 const workspaceStyle = computed(() => ({
@@ -353,9 +410,96 @@ function handleSuggestionClick(suggestion: string) {
   });
 }
 
+function closeFilePreview() {
+  filePreviewRequestId += 1;
+  filePreviewState.value = null;
+}
+
+async function openFilePreview(request: {
+  title: string;
+  subtitle?: string;
+  target: {
+    mode: AgentChatFilePreviewState['mode'];
+    contentKind?: FileCardPreviewContentKind;
+    src?: string;
+    externalHref?: string;
+    subtitle?: string;
+  };
+}) {
+  if (props.filePreviewStrategy !== 'panel') {
+    return false;
+  }
+
+  const subtitle = request.subtitle ?? request.target.subtitle ?? '';
+  const nextState: AgentChatFilePreviewState = {
+    title: request.title,
+    subtitle,
+    mode: request.target.mode,
+    contentKind: request.target.contentKind ?? 'plain',
+    src: request.target.src ?? '',
+    text: '',
+    loading: false,
+    error: '',
+    externalHref: request.target.externalHref ?? ''
+  };
+
+  if (request.target.mode === 'text') {
+    if (!request.target.src) {
+      nextState.error = '当前文件缺少可预览地址。';
+    } else {
+      nextState.loading = true;
+    }
+  }
+
+  filePreviewState.value = nextState;
+  filePreviewRequestId += 1;
+
+  const requestId = filePreviewRequestId;
+
+  if (!nextState.loading || !request.target.src) {
+    return true;
+  }
+
+  try {
+    const text = await loadFileCardPreviewText(request.target.src);
+
+    if (!filePreviewState.value || requestId !== filePreviewRequestId) {
+      return true;
+    }
+
+    filePreviewState.value = {
+      ...filePreviewState.value,
+      loading: false,
+      text,
+      error: ''
+    };
+  } catch (error) {
+    if (!filePreviewState.value || requestId !== filePreviewRequestId) {
+      return true;
+    }
+
+    filePreviewState.value = {
+      ...filePreviewState.value,
+      loading: false,
+      error: error instanceof Error ? error.message : '读取文件内容失败。'
+    };
+  }
+
+  return true;
+}
+
+provide(agentChatFilePreviewKey, {
+  canPreviewInPanel: () => props.filePreviewStrategy === 'panel',
+  openPreview: openFilePreview,
+  closePreview: () => {
+    closeFilePreview();
+  }
+});
+
 watch(
   () => props.runtime,
   (runtime) => {
+    closeFilePreview();
     resetConversationTail();
     bindRuntime(runtime);
     syncDefaultConversationTail();
@@ -369,6 +513,7 @@ watch(
   hasConversation,
   (value) => {
     if (!value) {
+      closeFilePreview();
       return;
     }
 
@@ -646,11 +791,36 @@ defineExpose<AgentChatWorkspaceExposed>({
       </div>
     </div>
 
+    <Transition name="agentdown-chat-file-preview">
+      <aside
+        v-if="filePreviewState"
+        class="agentdown-chat-workspace__file-preview-pane"
+        :style="{
+          '--agentdown-chat-file-preview-pane-width': filePreviewPaneWidth,
+          '--agentdown-chat-file-preview-pane-width-raw': rawFilePreviewPaneWidth
+        }"
+      >
+        <AgentChatFilePreviewPanel
+          :title="filePreviewState.title"
+          :subtitle="filePreviewState.subtitle"
+          :mode="filePreviewState.mode"
+          :content-kind="filePreviewState.contentKind"
+          :src="filePreviewState.src"
+          :text="filePreviewState.text"
+          :loading="filePreviewState.loading"
+          :error="filePreviewState.error"
+          :external-href="filePreviewState.externalHref"
+          dismissible
+          @close="closeFilePreview"
+        />
+      </aside>
+    </Transition>
+
     <AgentChatFloatingPanel
-      v-if="panelVisible"
+      v-if="!filePreviewState && panelVisible"
       v-model:open="panelOpenProxy"
-      :title="panelTitle"
-      :width="panelWidth"
+      :title="resolvedPanelTitle"
+      :width="resolvedPanelWidth"
       :show-toggle="showPanelToggle"
     >
       <template
@@ -695,7 +865,44 @@ defineExpose<AgentChatWorkspaceExposed>({
   flex: 1;
   flex-direction: column;
   padding-right: var(--agentdown-chat-panel-space);
-  transition: padding-right 180ms ease;
+}
+
+.agentdown-chat-workspace__file-preview-pane {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  width: var(--agentdown-chat-file-preview-pane-width);
+  min-width: 0;
+  min-height: 0;
+  border-left: 1px solid rgba(15, 23, 42, 0.06);
+  background: rgba(255, 255, 255, 0.94);
+  box-sizing: border-box;
+  overflow: hidden;
+  will-change: transform, opacity;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+  contain: layout paint style;
+}
+
+.agentdown-chat-file-preview-enter-active,
+.agentdown-chat-file-preview-leave-active {
+  transition:
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 180ms ease;
+}
+
+.agentdown-chat-file-preview-enter-from,
+.agentdown-chat-file-preview-leave-to {
+  opacity: 0;
+  transform: translate3d(20px, 0, 0);
+}
+
+.agentdown-chat-file-preview-enter-to,
+.agentdown-chat-file-preview-leave-from {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
 }
 
 .agentdown-chat-workspace__header {
@@ -891,6 +1098,13 @@ defineExpose<AgentChatWorkspaceExposed>({
 @media (max-width: 960px) {
   .agentdown-chat-workspace__main {
     padding-right: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agentdown-chat-file-preview-enter-active,
+  .agentdown-chat-file-preview-leave-active {
+    transition: none;
   }
 }
 

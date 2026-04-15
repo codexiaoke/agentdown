@@ -128,6 +128,7 @@ const session = useAgnoChatSession<string>({
 - `RunSurface`
 - 输入框与附件上传
 - 会话尾部 loading dots
+- 文件 / 图片 / Markdown / JSON 的右侧预览栏
 - 跟随到底部与悬浮回底按钮
 - 首次加载 / 回放恢复时直接同步到底部
 - 右侧悬浮 panel 容器
@@ -174,6 +175,7 @@ async function handleSend(payload: AgentChatComposerSendPayload) {
 这里最重要的一点是：
 
 - `@send` 拿到的 `payload.input` 已经把文本和附件合并好了，直接传给 `session.send(payload.input)` 即可
+- 内置附件卡片和 artifact 卡片会自动接到工作区右侧预览；如果你想退回弹层行为，可以改 `filePreviewStrategy="overlay"`
 - 如果用户手动滚离底部，新内容到来时不会强制把用户拉回去，而是显示悬浮回底按钮
 - 默认 `conversation-tail` 会在请求已发出但正文还没开始 append 时显示 3 个 loading dots
 

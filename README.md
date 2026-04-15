@@ -120,6 +120,7 @@ const session = useAgnoChatSession<string>({
 | `MarkdownRenderer` | 负责 markdown 叙事层，支持 headings、段落、列表、表格、引用、图片、代码、Mermaid、KaTeX、HTML fallback |
 | `Protocol + Bridge + Runtime` | 把任意后端事件映射成稳定的运行态命令和可订阅状态 |
 | `RunSurface` | 把 runtime 中的 block 渲染成聊天式界面、工具卡片流和自定义 AGUI |
+| `AgentChatWorkspace` | 直接提供完整聊天工作区，内置输入区、附件上传、回底按钮、右侧 panel 和文件预览 |
 | 官方适配器 | 已提供 `Agno`、`LangChain`、`AutoGen`、`CrewAI` 官方事件适配层 |
 | 组件扩展 | 支持 `builtinComponents`、`renderers`、`messageShells`、`:::vue-component` |
 | 性能 | 支持 pretext 文本渲染、长文本 slab、长文窗口化、group windowing、重型 block lazy mount |
@@ -383,6 +384,7 @@ const session = useAgnoChatSession<string>({
 - `RunSurface`
 - 内置输入框、附件上传和发送逻辑
 - 请求刚发出但对话区还没追加新内容时的默认 loading dots
+- 内置文件 / 图片 / Markdown / JSON 右侧预览面板
 - 右侧悬浮 panel
 - 跟随到底部、脱离底部后的悬浮回底按钮
 - 首次进入 / 刷新回放时直接同步到底部，避免先闪一下再滚下来
@@ -449,6 +451,9 @@ async function handleSend(payload: AgentChatComposerSendPayload) {
 
 - `@send` 收到的 `payload.input` 已经把文本和附件合并好了，直接传给 `session.send(payload.input)` 即可
 - `uploadFile()` 返回的最小结果只需要 `fileId`；如果你已经有对象存储地址或图片预览，也可以继续返回 `href` / `previewSrc`
+- 内置附件卡片和 artifact 卡片在 `AgentChatWorkspace` 里会自动接到右侧预览面板；Markdown、JSON、图片和常见文本文件都能直接预览
+- 如果你更喜欢老的弹层体验，可以把 `filePreviewStrategy` 设成 `'overlay'`
+- `filePreviewPanelWidth` 可以直接控制右侧预览栏宽度
 - 默认自带 `conversation-tail`，当请求已经发出但新内容还没 append 到对话区时，会显示 3 个 loading dots
 - 默认开启跟随到底部；用户自己往上滚之后不会被强制拉回去，有新内容时只会显示一个悬浮回底按钮
 - 想手动控制时，可以通过 `ref` 调 `scrollToBottom()`、`scheduleScrollToBottom()`、`scheduleInitialBottomSync()`

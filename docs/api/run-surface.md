@@ -46,7 +46,7 @@ description: RunSurface、AgentChatWorkspace、ArchiveSurface 的主要 props、
 `AgentChatWorkspace` 是更上层的聊天页面组件，本质上是：
 
 ```text
-RunSurface + AgentChatComposer + follow-bottom scroll UX + floating panel
+RunSurface + AgentChatComposer + follow-bottom scroll UX + floating panel + file preview pane
 ```
 
 如果你要做完整聊天页，通常优先从这里开始，而不是自己拼一层布局。
@@ -79,9 +79,13 @@ RunSurface + AgentChatComposer + follow-bottom scroll UX + floating panel
 | `placeholder` | `string` | 内置默认 | 输入框 placeholder |
 | `suggestions` | `string[]` | `[]` | 空态提示集 |
 | `uploadFile` | `AgentChatUploadResolver` | - | 文件上传解析回调，最少返回 `fileId` |
+| `accept` | `string` | `''` | 透传给文件选择器的 accept |
+| `multiple` | `boolean` | `true` | 是否允许一次选择多个文件 |
 | `panelOpen` | `boolean` | `false` | 右侧浮动面板是否展开 |
 | `panelTitle` | `string` | `''` | 右侧浮动面板标题 |
 | `panelWidth` | `number \| string` | `320` | 右侧浮动面板宽度 |
+| `filePreviewStrategy` | `'panel' \| 'overlay'` | `'panel'` | 文件 / artifact 预览是走右侧工作区预览，还是走 overlay |
+| `filePreviewPanelWidth` | `number \| string` | `clamp(520px, 44%, 860px)` | 右侧文件预览栏宽度 |
 | `autoScroll` | `boolean` | `true` | 是否自动跟随到底部 |
 | `initialScrollToBottom` | `boolean` | `true` | 首次挂载 / 回放恢复时是否直接同步到底部 |
 | `initialScrollReveal` | `'immediate' \| 'after-sync'` | `'after-sync'` | 首次定位时何时显示滚动区 |
@@ -94,6 +98,8 @@ RunSurface + AgentChatComposer + follow-bottom scroll UX + floating panel
 - 用户手动滚离底部之后，不会再被强制拉回到底部
 - 脱离底部期间如果有新内容进入，会出现悬浮回底按钮和未读提示点
 - 请求已经发出但对话区还没追加新内容时，默认 `conversation-tail` 会显示 3 个 loading dots
+- 在 `AgentChatWorkspace` 里点击内置附件卡片和 artifact 卡片时，默认会打开右侧预览栏
+- 图片、Markdown、JSON 和常见文本文件会直接在线预览；不支持的类型会保留新窗口打开
 - `@send` 收到的 `payload.input` 已经把文本与附件合并好了，可以直接传给 `session.send(payload.input)`
 
 ### 插槽
@@ -111,6 +117,24 @@ RunSurface + AgentChatComposer + follow-bottom scroll UX + floating panel
 | `send-icon` | 覆写发送按钮图标 |
 | `disclaimer` | 覆写底部 AI 提示 |
 | `panel-header` / `panel` / `panel-footer` | 右侧浮动面板 |
+
+### 文件预览
+
+`AgentChatWorkspace` 的内置附件卡片和 artifact 卡片，会自动读取工作区上下文：
+
+- 默认 `filePreviewStrategy="panel"` 时，预览会在右侧工作区展开
+- 当你传 `filePreviewStrategy="overlay"` 时，会退回 overlay / lightbox 行为
+- `filePreviewPanelWidth` 可以直接调右侧预览栏宽度
+
+```vue
+<AgentChatWorkspace
+  :runtime="session.runtime"
+  :surface="session.surface"
+  file-preview-strategy="panel"
+  file-preview-panel-width="clamp(560px, 46%, 920px)"
+  @send="(payload) => session.send(payload.input)"
+/>
+```
 
 ### 暴露的 ref API
 

@@ -1,6 +1,7 @@
 import './styles/theme.css';
 
 export { default as DefaultMarkdownApprovalBlock } from './components/ApprovalBlock.vue';
+export { default as DefaultAgentChatFilePreviewPanel } from './components/AgentChatFilePreviewPanel.vue';
 export { default as DefaultAgentChatLoadingDots } from './components/AgentChatLoadingDots.vue';
 export { default as AgentChatComposer } from './components/AgentChatComposer.vue';
 export { default as AgentChatFloatingPanel } from './components/AgentChatFloatingPanel.vue';
@@ -296,6 +297,11 @@ export type {
   AgentChatUploadResolverContext,
   AgentChatUploadResolverResult
 } from './components/agentChat';
+export type {
+  AgentChatFilePreviewController,
+  AgentChatFilePreviewRequest,
+  AgentChatFilePreviewState
+} from './components/agentChatFilePreview';
 export type {
   AgentChatWorkspaceExposed
 } from './components/agentChatWorkspace.types';
