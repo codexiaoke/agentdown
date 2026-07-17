@@ -108,7 +108,7 @@ export type AgentChatBuiltinFrameworkId = 'agno' | 'langchain' | 'autogen' | 'cr
 /**
  * 一个可被 `useAgentChat()` 直接消费的框架 session 配置最小结构。
  *
- * 自定义 framework 不需要完全复刻官方四套 chat helper，
+ * 自定义 framework 不需要完全复刻内置框架的 chat helper，
  * 但至少要有：
  * - `source`
  * - 可选的 `tools / events / eventActions`
@@ -1266,7 +1266,7 @@ function runAgentChatWithFramework<
  * 目标：
  * - 给“自定义 framework driver”提供一套统一入口
  * - 允许直接传工具组件简写、事件组件简写、事件副作用简写
- * - 内部仍然完全复用四套官方框架各自的适配层
+ * - 内部仍然完全复用各内置框架自己的适配层
  *
  * 推荐用法：
  * - 内置框架优先使用各自的 `useAgnoChatSession()` / `useLangChainChatSession()` 等专用 helper

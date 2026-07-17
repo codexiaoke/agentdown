@@ -1,11 +1,11 @@
 ---
 title: 官方适配器 API
-description: Agno、LangChain、AutoGen、CrewAI 适配层的共同模式和主要导出。
+description: Agno、LangChain、AutoGen、CrewAI、Spring AI 适配层的共同模式和主要导出。
 ---
 
 # 官方适配器 API
 
-四套官方适配器遵循同一套模式。
+五套内置适配器遵循同一套公共入口模式，同时保留各自的原生事件语义。
 
 ## 共同层次
 
@@ -19,7 +19,7 @@ description: Agno、LangChain、AutoGen、CrewAI 适配层的共同模式和主�
 | `define*EventComponents()` | 事件名 -> 组件 |
 | `define*EventActions()` | 事件名 -> side effect |
 
-## 当前四套适配器
+## 当前五套适配器
 
 ### Agno
 
@@ -61,6 +61,16 @@ description: Agno、LangChain、AutoGen、CrewAI 适配层的共同模式和主�
 - `defineCrewAIEventComponents()`
 - `defineCrewAIEventActions()`
 - `parseCrewAISseMessage()`
+
+### Spring AI
+
+- `useSpringAiChatSession()`
+- `createSpringAiAdapter()`
+- `createSpringAiProtocol()`
+- `createSpringAiSseTransport()`
+- `defineSpringAiToolComponents()`
+- `defineSpringAiEventComponents()`
+- `defineSpringAiEventActions()`
 
 ## 共享 helper
 

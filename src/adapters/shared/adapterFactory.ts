@@ -36,7 +36,7 @@ export interface FrameworkEventRegistryLike<TRawPacket = unknown> {
 }
 
 /**
- * 四套官方 starter adapter 共享的最小 options 结构。
+ * 内置框架 starter adapter 共享的最小 options 结构。
  */
 export interface FrameworkAdapterOptionsLike<
   TRawPacket = unknown,
