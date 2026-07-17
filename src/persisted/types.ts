@@ -1,5 +1,10 @@
 import { cloneValue } from '../runtime/utils';
 
+/** 当前稳定的 Agentdown 会话归档格式标识。 */
+export const AGENTDOWN_RENDER_ARCHIVE_FORMAT = 'agentdown.session/v1' as const;
+
+export type AgentdownRenderArchiveFormat = typeof AGENTDOWN_RENDER_ARCHIVE_FORMAT;
+
 /**
  * records 渲染模型里默认支持的角色类型。
  *
@@ -45,7 +50,7 @@ export interface AgentdownRenderArchive<
   TStatus extends string = string
 > {
   /** 当前归档协议版本。 */
-  format: 'agentdown.session/v1';
+  format: AgentdownRenderArchiveFormat;
   /** 当前归档所属框架，例如 `agno` / `springai`。 */
   framework: TFramework;
   /** 当前会话级 conversation id。 */
@@ -80,6 +85,14 @@ function isTimestamp(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
 }
 
+function isOptionalNonEmptyString(value: unknown): value is string | undefined {
+  return value === undefined || (typeof value === 'string' && value.length > 0);
+}
+
+function isOptionalTimestamp(value: unknown): value is number | undefined {
+  return value === undefined || isTimestamp(value);
+}
+
 /**
  * 轻量判断一条记录是否符合公共 envelope 结构。
  */
@@ -104,12 +117,17 @@ export function isAgentdownRenderArchive(value: unknown): value is AgentdownRend
     return false;
   }
 
-  return value.format === 'agentdown.session/v1'
+  return value.format === AGENTDOWN_RENDER_ARCHIVE_FORMAT
     && typeof value.framework === 'string'
     && value.framework.length > 0
     && typeof value.status === 'string'
     && value.status.length > 0
+    && isOptionalNonEmptyString(value.conversation_id)
+    && isOptionalNonEmptyString(value.session_id)
+    && isOptionalNonEmptyString(value.run_id)
+    && isOptionalTimestamp(value.started_at)
     && isTimestamp(value.updated_at)
+    && isOptionalTimestamp(value.completed_at)
     && Array.isArray(value.records)
     && value.records.every((record) => isAgentdownRenderRecord(record));
 }

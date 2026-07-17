@@ -225,6 +225,23 @@ export interface CreateDefaultAgentdownRecordsAdapterOptions {
   conversationId?: string;
 }
 
+/**
+ * 为 archive 和 records-only 两种恢复入口生成一致的 conversationId。
+ */
+export function resolveBuiltinAgentdownConversationId(
+  records: readonly AgentdownRenderRecord[],
+  conversationId?: string
+): string {
+  if (conversationId) {
+    return conversationId;
+  }
+
+  const firstRecord = records[0];
+  return firstRecord
+    ? `conversation:render:${firstRecord.created_at}`
+    : 'conversation:render:empty';
+}
+
 interface RestoreScope {
   conversationId: string;
   turnId?: string;
@@ -966,14 +983,8 @@ export function createDefaultAgentdownRecordsAdapter(
 ): BuiltinAgentdownRecordsAdapter {
   return defineAgentdownRecordsAdapter<BuiltinAgentdownRenderRecord>({
     restoreRecords(records) {
-      const firstRecord = records[0];
       const state: RestoreState = {
-        conversationId: options.conversationId
-          ?? (
-            firstRecord
-              ? `conversation:render:${firstRecord.created_at}`
-              : 'conversation:render:empty'
-          ),
+        conversationId: resolveBuiltinAgentdownConversationId(records, options.conversationId),
         turnIndex: 0,
         systemIndex: 0,
         blockIndex: 0,

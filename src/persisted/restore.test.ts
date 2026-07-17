@@ -80,7 +80,13 @@ describe('restoreAgentdownRenderArchive', () => {
     expect(restored.archive).toBeNull();
     expect(restored.records).toHaveLength(2);
     expect(restored.metadata.framework).toBeNull();
+    expect(restored.metadata.conversationId).toBe('conversation:render:1776100000000');
     expect(restored.lastUserMessage).toBe('hello');
+
+    const firstBlockInsert = restored.commands.find((command) => command.type === 'block.insert');
+    expect(firstBlockInsert && firstBlockInsert.type === 'block.insert'
+      ? firstBlockInsert.block.conversationId
+      : null).toBe(restored.metadata.conversationId);
   });
 
   it('restores explicit markdown messages as markdown preview blocks', () => {

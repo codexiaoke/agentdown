@@ -2,11 +2,13 @@ import type { RuntimeCommand } from '../runtime/types';
 import type { AgentdownRecordsAdapter } from './adapter';
 import {
   createDefaultAgentdownRecordsAdapter,
+  resolveBuiltinAgentdownConversationId,
   resolveBuiltinAgentdownLastUserMessage,
   type BuiltinAgentdownRenderArchive,
   type BuiltinAgentdownRenderRecord
 } from './builtin';
 import {
+  isAgentdownRenderArchive,
   normalizeAgentdownRenderRecords,
   parseAgentdownRenderArchive,
   type AgentdownRenderArchive,
@@ -58,23 +60,6 @@ export interface RestoredAgentdownRenderArchiveResult<
 }
 
 /**
- * 判断未知值是否为普通对象。
- */
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-/**
- * 判断一个值是否看起来像 archive 外壳。
- */
-function looksLikeArchive(value: unknown): value is Record<string, unknown> {
-  return isRecord(value)
-    && value.format === 'agentdown.session/v1'
-    && typeof value.framework === 'string'
-    && Array.isArray(value.records);
-}
-
-/**
  * 从原始输入里解析出 archive 和 records。
  */
 function resolveRenderInput<
@@ -105,7 +90,7 @@ function resolveRenderInput<
     };
   }
 
-  if (!looksLikeArchive(input)) {
+  if (!isAgentdownRenderArchive(input)) {
     throw new Error('Invalid Agentdown render archive payload.');
   }
 
@@ -142,12 +127,9 @@ export function restoreAgentdownRenderArchive<
   options: RestoreAgentdownRenderArchiveOptions<TRecord> = {}
 ): RestoredAgentdownRenderArchiveResult<TRecord, TArchive> {
   const { archive, records } = resolveRenderInput(input);
+  const conversationId = resolveBuiltinAgentdownConversationId(records, archive?.conversation_id);
   const defaultAdapter = createDefaultAgentdownRecordsAdapter(
-    archive?.conversation_id
-      ? {
-          conversationId: archive.conversation_id
-        }
-      : {}
+    { conversationId }
   );
   const adapter = (
     options.adapter
@@ -162,7 +144,7 @@ export function restoreAgentdownRenderArchive<
     metadata: {
       format: archive?.format ?? null,
       framework: archive?.framework ?? null,
-      conversationId: archive?.conversation_id ?? '',
+      conversationId,
       sessionId: archive?.session_id ?? '',
       runId: archive?.run_id ?? '',
       status: archive?.status ?? '',

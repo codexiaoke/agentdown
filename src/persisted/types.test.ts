@@ -67,6 +67,26 @@ describe('persisted render archive helpers', () => {
     } as any)).toThrowError('Invalid Agentdown render archive payload.');
   });
 
+  it('rejects malformed optional archive metadata', () => {
+    expect(isAgentdownRenderArchive({
+      format: 'agentdown.session/v1',
+      framework: 'agno',
+      conversation_id: 42,
+      status: 'completed',
+      updated_at: 1776000000001,
+      records: []
+    })).toBe(false);
+
+    expect(isAgentdownRenderArchive({
+      format: 'agentdown.session/v1',
+      framework: 'agno',
+      status: 'completed',
+      started_at: Number.NaN,
+      updated_at: 1776000000001,
+      records: []
+    })).toBe(false);
+  });
+
   it('normalizes external records into a cloned array', () => {
     const source = [
       {
