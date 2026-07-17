@@ -201,9 +201,6 @@ export {
 export { useRuntimeSnapshot } from './composables/useRuntimeSnapshot';
 export { useRuntimeTranscript } from './composables/useRuntimeTranscript';
 export { useRuntimeReplayPlayer } from './composables/useRuntimeReplayPlayer';
-export { useRuntimeSnapshot as useAgentRuntimeSnapshot } from './composables/useRuntimeSnapshot';
-export { useRuntimeTranscript as useAgentRuntimeTranscript } from './composables/useRuntimeTranscript';
-export { useRuntimeReplayPlayer as useAgentRuntimeReplayPlayer } from './composables/useRuntimeReplayPlayer';
 export { createMarkdownAssembler, createPlainTextAssembler } from './runtime/assemblers';
 export {
   getBlocksByConversationId,
@@ -374,6 +371,7 @@ export type {
   UseAgentChatCrewAIOptions,
   UseAgentChatFrameworkOptions,
   UseAgentChatLangChainOptions,
+  UseAgentChatSpringAiOptions,
   UseAgentChatOptions,
   UseAgentChatResult
 } from './composables/useAgentChat';
@@ -443,14 +441,8 @@ export type {
   UseSseBridgeResult,
   UseWebSocketBridgeOptions
 } from './composables/useBridgeTransport';
-export type {
-  UseRuntimeSnapshotResult,
-  UseRuntimeSnapshotResult as UseAgentRuntimeSnapshotResult
-} from './composables/useRuntimeSnapshot';
-export type {
-  UseRuntimeTranscriptResult,
-  UseRuntimeTranscriptResult as UseAgentRuntimeTranscriptResult
-} from './composables/useRuntimeTranscript';
+export type { UseRuntimeSnapshotResult } from './composables/useRuntimeSnapshot';
+export type { UseRuntimeTranscriptResult } from './composables/useRuntimeTranscript';
 export type {
   AgnoApprovalRecordContent,
   AgnoAdapterOptions,
@@ -699,10 +691,7 @@ export type {
   UseSpringAiChatSessionOptions,
   UseSpringAiChatSessionResult
 } from './adapters/springai';
-export type {
-  UseRuntimeReplayPlayerResult,
-  UseRuntimeReplayPlayerResult as UseAgentRuntimeReplayPlayerResult
-} from './composables/useRuntimeReplayPlayer';
+export type { UseRuntimeReplayPlayerResult } from './composables/useRuntimeReplayPlayer';
 export type {
   AgentdownAdapter,
   AgentdownAdapterBridgeOptions,
