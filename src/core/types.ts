@@ -109,11 +109,16 @@ export interface MarkdownMathBlock {
   displayMode: boolean;
 }
 
-export interface MarkdownAguiBlock {
+/**
+ * Markdown 中通过受控组件注册表渲染的 Vue 组件块。
+ *
+ * 这里的 component 是 Agentdown 自己的渲染能力，和标准 AG-UI 协议无关。
+ */
+export interface MarkdownAgentComponentBlock {
   /** 当前 block 的稳定标识。 */
   id: string;
-  /** block 类型，固定为 agui。 */
-  kind: 'agui';
+  /** block 类型，固定为 component。 */
+  kind: 'component';
   /** 要注入的组件名。 */
   name: string;
   /** 从 markdown 指令里解析出的组件 props。 */
@@ -294,7 +299,7 @@ export type MarkdownBlock =
   | MarkdownMermaidBlock
   | MarkdownThoughtBlock
   | MarkdownMathBlock
-  | MarkdownAguiBlock
+  | MarkdownAgentComponentBlock
   | MarkdownArtifactBlock
   | MarkdownErrorBlock
   | MarkdownApprovalBlock
@@ -316,8 +321,8 @@ export interface MarkdownBuiltinComponents {
   thought: Component;
   /** 负责渲染 HTML 回退块的组件。 */
   html: Component;
-  /** 负责包裹 AGUI 注入节点的组件。 */
-  agui: Component;
+  /** 负责包裹受控 Vue 组件注入节点的组件。 */
+  component: Component;
   /** 负责渲染 artifact 卡片的组件。 */
   artifact: Component;
   /** 负责渲染 error 卡片的组件。 */
@@ -403,14 +408,14 @@ export interface MarkdownRendererTelemetry {
   windowRangeChangeCount: number;
 }
 
-export interface AguiComponentRegistration {
+export interface AgentComponentRegistration {
   /** 实际要渲染的 Vue 组件。 */
   component: Component;
   /** 组件在 markdown 中的建议最小高度。 */
   minHeight?: number;
 }
 
-export type AguiComponentMap = Record<string, Component | AguiComponentRegistration>;
+export type AgentComponentRegistry = Record<string, Component | AgentComponentRegistration>;
 
 export type MarkdownEnginePlugin = (md: MarkdownIt) => void;
 
@@ -419,8 +424,8 @@ export interface ParseMarkdownOptions {
   plugins?: MarkdownEnginePlugin[];
   /** thought 容器默认标题。 */
   thoughtTitle?: string;
-  /** 可供 AGUI 指令解析的组件映射表。 */
-  aguiComponents?: AguiComponentMap;
+  /** 可供 `:::vue-component` 指令使用的受控组件注册表。 */
+  componentRegistry?: AgentComponentRegistry;
   /**
    * 是否允许原始 HTML 直接进入 markdown 渲染链。
    * 默认关闭；开启后只应用于可信内容，否则会有注入风险。

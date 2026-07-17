@@ -22,7 +22,7 @@ raw packet / SSE -> protocol -> bridge -> assembler -> runtime -> Agent UI
 它更像是 Agent 产品的前端渲染层，而不是模型层或后端编排层。
 
 - 输入：Agno、LangChain、AutoGen、CrewAI 或你自己的 SSE / JSON 事件流
-- 输出：聊天消息、工具调用卡片、审批块、handoff 块、artifact、长文 Markdown 和自定义 AGUI 组件
+- 输出：聊天消息、工具调用卡片、审批块、handoff 块、artifact、长文 Markdown 和受控 Vue 组件
 - 作用位置：Agent 产品前端
 
 它不负责这些事情：
@@ -99,7 +99,7 @@ const session = useAgnoChatSession<string>({
 
 - 聊天式 Agent 页面
 - 工具调用卡片
-- artifact / approval / 自定义 AGUI 组件
+- artifact / approval / 受控 Vue 组件
 - 长文本和大组件混排的流式界面
 - Agno、LangChain、AutoGen、CrewAI 这类真实框架接入
 
@@ -119,7 +119,7 @@ const session = useAgnoChatSession<string>({
 | --- | --- |
 | `MarkdownRenderer` | 负责 markdown 叙事层，支持 headings、段落、列表、表格、引用、图片、代码、Mermaid、KaTeX、HTML fallback |
 | `Protocol + Bridge + Runtime` | 把任意后端事件映射成稳定的运行态命令和可订阅状态 |
-| `RunSurface` | 把 runtime 中的 block 渲染成聊天式界面、工具卡片流和自定义 AGUI |
+| `RunSurface` | 把 runtime 中的 block 渲染成聊天式界面、工具卡片流和受控 Vue 组件 |
 | `AgentChatWorkspace` | 直接提供完整聊天工作区，内置输入区、附件上传、回底按钮、右侧 panel 和文件预览 |
 | 官方适配器 | 已提供 `Agno`、`LangChain`、`AutoGen`、`CrewAI` 官方事件适配层 |
 | 组件扩展 | 支持 `builtinComponents`、`renderers`、`messageShells`、`:::vue-component` |
@@ -136,7 +136,7 @@ const session = useAgnoChatSession<string>({
 | `mermaid` | Mermaid 图表 |
 | `math` | KaTeX 数学公式 |
 | `thought` | 可折叠思考块 |
-| `agui` | `:::vue-component` 注入的 Vue 组件 |
+| `component` | `:::vue-component` 从受控注册表注入的 Vue 组件 |
 | `artifact` | Agent 产物 |
 | `approval` | 审批块 |
 | `timeline` | 时间线块 |

@@ -104,9 +104,9 @@ function mergeSurfaceOptions(base: RunSurfaceOptions = {}, override: RunSurfaceO
       ...(base.performance ?? {}),
       ...(override.performance ?? {})
     },
-    aguiComponents: {
-      ...(base.aguiComponents ?? {}),
-      ...(override.aguiComponents ?? {})
+    componentRegistry: {
+      ...(base.componentRegistry ?? {}),
+      ...(override.componentRegistry ?? {})
     },
     builtinComponents: {
       ...(base.builtinComponents ?? {}),

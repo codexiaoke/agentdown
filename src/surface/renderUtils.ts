@@ -9,7 +9,7 @@ const SURFACE_MARKDOWN_KINDS = new Set<MarkdownBlock['kind']>([
   'mermaid',
   'math',
   'thought',
-  'agui',
+  'component',
   'artifact',
   'error',
   'approval',
@@ -47,7 +47,7 @@ export function isHeavyMarkdownKind(kind: MarkdownBlock['kind']): boolean {
     || kind === 'mermaid'
     || kind === 'math'
     || kind === 'thought'
-    || kind === 'agui'
+    || kind === 'component'
     || kind === 'artifact'
     || kind === 'error'
     || kind === 'approval'
@@ -105,7 +105,7 @@ export function hasSurfaceBlockVisibleContent(block: SurfaceBlock): boolean {
         return markdownBlock.expression.trim().length > 0;
       case 'thought':
         return markdownBlock.blocks.length > 0 || markdownBlock.title.trim().length > 0;
-      case 'agui':
+      case 'component':
       case 'artifact':
       case 'error':
       case 'approval':

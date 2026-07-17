@@ -29,7 +29,7 @@ description: MarkdownRenderer 的主要 props、性能选项和安全策略。
 | `font` | `string` | 内置默认字体 | pretext 文本布局用的字体描述 |
 | `thoughtTitle` | `string` | `'Thought Process'` | `:::thought` 默认标题 |
 | `allowUnsafeHtml` | `boolean` | `false` | 是否允许不安全 HTML |
-| `aguiComponents` | `AguiComponentMap` | `{}` | `:::vue-component` 可用组件表 |
+| `componentRegistry` | `AgentComponentRegistry` | `{}` | `:::vue-component` 可用的受控组件注册表 |
 | `builtinComponents` | `MarkdownBuiltinComponentOverrides` | `{}` | 覆写内置 markdown block 组件 |
 | `plugins` | `MarkdownEnginePlugin[]` | `[]` | 额外 markdown-it 插件 |
 | `performance` | `MarkdownRendererPerformanceOptions` | `{}` | 长文和窗口化性能配置 |
@@ -73,7 +73,7 @@ description: MarkdownRenderer 的主要 props、性能选项和安全策略。
 - `mermaid`
 - `math`
 - `thought`
-- `agui`
+- `component`
 - `artifact`
 - `approval`
 - `handoff`

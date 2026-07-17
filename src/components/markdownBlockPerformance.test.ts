@@ -54,8 +54,8 @@ describe('markdownBlockPerformance', () => {
     ).toBe(true);
     expect(
       shouldMeasureMarkdownBlockHeight({
-        id: 'agui:1',
-        kind: 'agui',
+        id: 'component:1',
+        kind: 'component',
         name: 'Demo',
         props: {},
         minHeight: 120

@@ -22,7 +22,7 @@ In plain terms:
 It is much closer to a rendering/runtime layer for agent products than to a model SDK or backend orchestration framework.
 
 - Input: Agno, LangChain, AutoGen, CrewAI, or your own SSE / JSON event stream
-- Output: chat messages, tool call cards, approval blocks, handoff blocks, artifacts, long-form Markdown, and custom AGUI components
+- Output: chat messages, tool call cards, approval blocks, handoff blocks, artifacts, long-form Markdown, and registered Vue components
 - Layer: agent product frontend
 
 It does not try to be:
@@ -97,7 +97,7 @@ const session = useAgnoChatSession<string>({
 Agentdown is built for:
 
 - chat-style agent products
-- tool cards, artifacts, approvals, and custom AGUI widgets
+- tool cards, artifacts, approvals, and registered Vue components
 - streaming markdown output
 - long documents mixed with heavy interactive components
 - real framework integrations such as Agno, LangChain, AutoGen, and CrewAI
@@ -132,7 +132,7 @@ Agentdown is built for:
 | `mermaid` | Mermaid diagrams |
 | `math` | KaTeX math blocks |
 | `thought` | collapsible thought blocks |
-| `agui` | Vue components injected with `:::vue-component` |
+| `component` | Vue components injected from a controlled registry with `:::vue-component` |
 | `artifact` | agent outputs |
 | `approval` | approval blocks |
 | `timeline` | timeline blocks |

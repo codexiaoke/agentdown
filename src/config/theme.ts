@@ -152,7 +152,7 @@ export function resolveAgentdownThemeCssVars(theme?: AgentdownTheme): CSSPropert
   assignVar('--agentdown-thought-accent-soft', theme.tokens?.color?.thoughtAccentSoft);
   assignVar('--agentdown-thought-title-color', theme.tokens?.color?.thoughtTitle);
   assignVar('--agentdown-thought-title-muted', theme.tokens?.color?.thoughtTitleMuted);
-  assignVar('--agentdown-agui-bg', theme.tokens?.color?.aguiBg);
+  assignVar('--agentdown-component-bg', theme.tokens?.color?.componentBg);
   assignVar('--agentdown-radius', theme.tokens?.layout?.radius);
   assignVar('--agentdown-shadow', theme.tokens?.layout?.shadow);
 

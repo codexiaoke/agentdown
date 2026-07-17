@@ -1,7 +1,7 @@
 import ApprovalBlock from './ApprovalBlock.vue';
 import AttachmentBlock from './AttachmentBlock.vue';
 import ArtifactBlock from './ArtifactBlock.vue';
-import AguiComponentWrapper from './AguiComponentWrapper.vue';
+import AgentComponentWrapper from './AgentComponentWrapper.vue';
 import BranchBlock from './BranchBlock.vue';
 import CodeBlock from './CodeBlock.vue';
 import ErrorBlock from './ErrorBlock.vue';
@@ -22,7 +22,7 @@ export const defaultMarkdownBuiltinComponents: MarkdownBuiltinComponents = {
   math: MathBlock,
   thought: ThoughtBlock,
   html: HtmlBlock,
-  agui: AguiComponentWrapper,
+  component: AgentComponentWrapper,
   artifact: ArtifactBlock,
   error: ErrorBlock,
   approval: ApprovalBlock,

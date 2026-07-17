@@ -28,8 +28,8 @@ export interface AgentdownThemeColorTokens {
   thoughtTitle?: string;
   /** thought 标题静态弱色。 */
   thoughtTitleMuted?: string;
-  /** AGUI 区域背景色。 */
-  aguiBg?: string;
+  /** 受控组件区域背景色。 */
+  componentBg?: string;
 }
 
 /**

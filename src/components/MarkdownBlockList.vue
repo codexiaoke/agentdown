@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import MarkdownBlockRenderer from './MarkdownBlockRenderer.vue';
 import { getMarkdownBlockGapAfter } from './markdownBlockSpacing';
-import type { AguiComponentMap, MarkdownBlock, MarkdownBuiltinComponents } from '../core/types';
+import type { AgentComponentRegistry, MarkdownBlock, MarkdownBuiltinComponents } from '../core/types';
 
 interface Props {
   blocks: MarkdownBlock[];
   width: number;
   lineHeight: number;
   font: string;
-  aguiComponents: AguiComponentMap;
+  componentRegistry: AgentComponentRegistry;
   builtinComponents: MarkdownBuiltinComponents;
 }
 
@@ -32,7 +32,7 @@ defineProps<Props>();
           :width="width"
           :line-height="lineHeight"
           :font="font"
-          :agui-components="aguiComponents"
+          :component-registry="componentRegistry"
           :builtin-components="builtinComponents"
         />
       </div>

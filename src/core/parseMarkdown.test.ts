@@ -54,4 +54,25 @@ describe('parseMarkdown', () => {
       status: 'pending'
     });
   });
+
+  it('parses vue-component directives without conflating them with the AG-UI protocol', () => {
+    const blocks = parseMarkdown(':::vue-component WeatherCard city="北京"', {
+      componentRegistry: {
+        WeatherCard: {
+          component: {},
+          minHeight: 180
+        }
+      }
+    });
+
+    expect(blocks[0]).toMatchObject({
+      kind: 'component',
+      name: 'WeatherCard',
+      props: {
+        city: '北京'
+      },
+      minHeight: 180
+    });
+  });
+
 });

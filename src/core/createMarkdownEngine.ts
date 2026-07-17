@@ -1,7 +1,7 @@
 import MarkdownIt from 'markdown-it';
 import markdownItMath from 'markdown-it-math/no-default-renderer';
 import katex from 'katex';
-import { aguiPlugin } from './plugins/agui';
+import { agentComponentPlugin } from './plugins/agentComponent';
 import { agentDirectivesPlugin } from './plugins/agentDirectives';
 import { thoughtPlugin } from './plugins/thought';
 import type { MarkdownEnginePlugin } from './types';
@@ -50,7 +50,7 @@ export function createMarkdownEngine(
 
   // 内置扩展优先注册，外部插件可以在这个基础上继续扩展。
   md.use(thoughtPlugin);
-  md.use(aguiPlugin);
+  md.use(agentComponentPlugin);
   md.use(agentDirectivesPlugin);
 
   for (const plugin of plugins) {

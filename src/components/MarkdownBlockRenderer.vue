@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import MarkdownBlockList from './MarkdownBlockList.vue';
 import type {
-  AguiComponentMap,
+  AgentComponentRegistry,
   MarkdownBlock,
   MarkdownBuiltinComponents
 } from '../core/types';
@@ -14,7 +14,7 @@ interface Props {
   width: number;
   lineHeight: number;
   font: string;
-  aguiComponents: AguiComponentMap;
+  componentRegistry: AgentComponentRegistry;
   builtinComponents: MarkdownBuiltinComponents;
 }
 
@@ -66,17 +66,17 @@ defineProps<Props>();
       :width="width"
       :line-height="lineHeight"
       :font="font"
-      :agui-components="aguiComponents"
+      :component-registry="componentRegistry"
       :builtin-components="builtinComponents"
     />
   </component>
 
   <component
-    :is="builtinComponents.agui"
-    v-else-if="block.kind === 'agui'"
+    :is="builtinComponents.component"
+    v-else-if="block.kind === 'component'"
     :name="block.name"
     :component-props="block.props"
-    :components="aguiComponents"
+    :components="componentRegistry"
     :min-height="block.minHeight"
   />
 

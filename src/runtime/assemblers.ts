@@ -302,7 +302,7 @@ function markdownBlockToSurfaceBlock(
     case 'attachment':
     case 'branch':
     case 'handoff':
-    case 'agui':
+    case 'component':
     case 'timeline':
     case 'thought':
       break;

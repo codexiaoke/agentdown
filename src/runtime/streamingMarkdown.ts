@@ -61,7 +61,7 @@ export interface StreamingMarkdownTailInfo {
   multiline: boolean;
 }
 
-const AGUI_DIRECTIVE_RE = /^\s*:::\s*vue-component\s+[A-Za-z][\w-]*(?:\s+.*)?$/;
+const COMPONENT_DIRECTIVE_RE = /^\s*:::\s*vue-component\s+[A-Za-z][\w-]*(?:\s+.*)?$/;
 const AGENT_DIRECTIVE_RE = /^\s*:::\s*(approval|artifact|attachment|branch|handoff|timeline)(?:\s+.*)?$/;
 const THOUGHT_OPEN_RE = /^\s*:::\s*thought\s*$/;
 const THOUGHT_CLOSE_RE = /^\s*:::\s*$/;
@@ -225,7 +225,7 @@ function isSingleLineMathBlock(line: StreamingMarkdownLine): boolean {
  * 判断一行是否为完整的单行指令块。
  */
 function isSingleLineDirective(line: StreamingMarkdownLine): boolean {
-  return line.hasNewline && (AGUI_DIRECTIVE_RE.test(line.content) || AGENT_DIRECTIVE_RE.test(line.content));
+  return line.hasNewline && (COMPONENT_DIRECTIVE_RE.test(line.content) || AGENT_DIRECTIVE_RE.test(line.content));
 }
 
 /**
@@ -360,7 +360,7 @@ function isHardBlockStart(line: StreamingMarkdownLine): boolean {
     || !!matchHtmlBlockStart(line.content)
     || isBlockquoteLine(line.content)
     || isListItemLine(line.content)
-    || AGUI_DIRECTIVE_RE.test(line.content)
+    || COMPONENT_DIRECTIVE_RE.test(line.content)
     || AGENT_DIRECTIVE_RE.test(line.content)
     || HEADING_RE.test(line.content)
     || HR_RE.test(line.content)
@@ -376,7 +376,7 @@ function isCloseStableStart(line: StreamingMarkdownLine): boolean {
     || THOUGHT_OPEN_RE.test(line.content)
     || isMathBlockDelimiter(line.content)
     || !!matchHtmlBlockStart(line.content)
-    || AGUI_DIRECTIVE_RE.test(line.content)
+    || COMPONENT_DIRECTIVE_RE.test(line.content)
     || AGENT_DIRECTIVE_RE.test(line.content)
   );
 }
@@ -392,7 +392,7 @@ function canPairWithSetextUnderline(line: StreamingMarkdownLine): boolean {
     && !isTableRow(line.content)
     && !HEADING_RE.test(line.content)
     && !HR_RE.test(line.content)
-    && !AGUI_DIRECTIVE_RE.test(line.content)
+    && !COMPONENT_DIRECTIVE_RE.test(line.content)
     && !AGENT_DIRECTIVE_RE.test(line.content)
     && !THOUGHT_OPEN_RE.test(line.content)
     && !isMathBlockDelimiter(line.content)
@@ -856,7 +856,7 @@ export function resolveStreamingMarkdownTailInfo(source: string): StreamingMarkd
   }
 
   if (
-    AGUI_DIRECTIVE_RE.test(firstMeaningfulLine.content)
+    COMPONENT_DIRECTIVE_RE.test(firstMeaningfulLine.content)
     || AGENT_DIRECTIVE_RE.test(firstMeaningfulLine.content)
   ) {
     return createStreamingMarkdownTailInfo('hidden', 'directive', 'close-stable', multiline);
