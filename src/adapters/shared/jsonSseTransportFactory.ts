@@ -15,7 +15,7 @@ export type FrameworkJsonTransportResolvable<
   | ((source: TSource, context: TContext | undefined) => Promise<TValue> | TValue);
 
 /**
- * 四套官方 SSE helper 共享的最小 transport 配置结构。
+ * 内置框架 SSE helper 共享的最小 transport 配置结构。
  */
 export interface FrameworkJsonSseTransportOptionsLike<
   TRawPacket = unknown,

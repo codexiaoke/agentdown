@@ -27,7 +27,7 @@ import type { FrameworkAdapterOptionsLike, FrameworkAdapterProtocolOptionsLike, 
 import type { FrameworkJsonSseTransportOptionsLike } from './jsonSseTransportFactory';
 
 /**
- * 四套官方 chat helper 共享的最小消息语义 id 结构。
+ * 内置框架 chat helper 共享的最小消息语义 id 结构。
  */
 export interface FrameworkChatIds {
   /** 当前整段对话 / session 的 id。 */
@@ -243,7 +243,7 @@ export interface FrameworkChatProtocolOptionsLike extends FrameworkAdapterProtoc
 }
 
 /**
- * 四套官方 chat helper 共享的最小 adapter options 结构。
+ * 内置框架 chat helper 共享的最小 adapter options 结构。
  */
 export interface FrameworkChatAdapterOptionsLike<
   TRawPacket = unknown,
@@ -255,7 +255,7 @@ export interface FrameworkChatAdapterOptionsLike<
 > extends FrameworkAdapterOptionsLike<TRawPacket, TSource, TProtocolOptions, TTitle, TTools, TEvents> {}
 
 /**
- * 四套官方 chat helper 共享的最小 transport options 结构。
+ * 内置框架 chat helper 共享的最小 transport options 结构。
  */
 export interface FrameworkChatTransportOptionsLike<
   TRawPacket = unknown,
