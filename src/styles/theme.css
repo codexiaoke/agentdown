@@ -35,7 +35,7 @@
   --agentdown-tool-status-success-color: #5f7a67;
   --agentdown-tool-status-danger-bg: #fbf4f4;
   --agentdown-tool-status-danger-color: #987272;
-  --agentdown-agui-bg: #fbfcfe;
+  --agentdown-component-bg: #fbfcfe;
   --agentdown-radius: 16px;
   --agentdown-shadow: 0 10px 30px rgba(15, 23, 42, 0.04);
 }
@@ -1089,32 +1089,32 @@
   }
 }
 
-.agentdown-agui {
+.agentdown-component {
   position: relative;
   min-width: 0;
-  animation: agentdown-agui-shell-in 280ms ease;
+  animation: agentdown-component-shell-in 280ms ease;
 }
 
-.agentdown-agui-content {
+.agentdown-component-content {
   min-width: 0;
 }
 
-.agentdown-agui-missing {
+.agentdown-component-missing {
   color: var(--agentdown-muted-color);
 }
 
-.agentdown-agui-transition-enter-active,
-.agentdown-agui-transition-leave-active {
+.agentdown-component-transition-enter-active,
+.agentdown-component-transition-leave-active {
   transition:
     opacity 220ms ease;
 }
 
-.agentdown-agui-transition-enter-from,
-.agentdown-agui-transition-leave-to {
+.agentdown-component-transition-enter-from,
+.agentdown-component-transition-leave-to {
   opacity: 0;
 }
 
-@keyframes agentdown-agui-shell-in {
+@keyframes agentdown-component-shell-in {
   from {
     opacity: 0;
     transform: translateY(6px);
@@ -1127,7 +1127,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .agentdown-agui {
+  .agentdown-component {
     animation: none;
   }
 
@@ -1142,8 +1142,8 @@
   .agentdown-thought-title,
   .agentdown-thought-transition-enter-active,
   .agentdown-thought-transition-leave-active,
-  .agentdown-agui-transition-enter-active,
-  .agentdown-agui-transition-leave-active {
+  .agentdown-component-transition-enter-active,
+  .agentdown-component-transition-leave-active {
     transition: none;
     animation: none;
   }

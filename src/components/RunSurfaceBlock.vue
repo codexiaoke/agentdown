@@ -4,7 +4,7 @@ import MarkdownBlockList from './MarkdownBlockList.vue';
 import { parseMarkdown } from '../core/parseMarkdown';
 import { createStreamingMarkdownTextBlock } from '../core/streamingInlineFragments';
 import type {
-  AguiComponentMap,
+  AgentComponentRegistry,
   MarkdownBlock,
   MarkdownBuiltinComponents
 } from '../core/types';
@@ -51,7 +51,7 @@ interface Props {
   width: number;
   lineHeight: number;
   font: string;
-  aguiComponents: AguiComponentMap;
+  componentRegistry: AgentComponentRegistry;
   builtinComponents: MarkdownBuiltinComponents;
   renderers: RunSurfaceRendererMap;
   draftPlaceholder: RunSurfaceDraftPlaceholder;
@@ -365,7 +365,7 @@ const draftPreviewBlocks = computed<MarkdownBlock[]>(() => {
 
   if (draftMode.value === 'preview') {
     return parseMarkdown(fallbackText.value, {
-      aguiComponents: props.aguiComponents
+      componentRegistry: props.componentRegistry
     });
   }
 
@@ -485,11 +485,11 @@ const isHeavyBlock = computed(() => {
  * 推断懒挂载占位的最小高度，尽量减少滚动时的布局跳动。
  */
 const lazyPlaceholderMinHeight = computed(() => {
-  if (draftPreviewBlock.value?.kind === 'agui') {
+  if (draftPreviewBlock.value?.kind === 'component') {
     return draftPreviewBlock.value.minHeight;
   }
 
-  if (markdownBlock.value?.kind === 'agui') {
+  if (markdownBlock.value?.kind === 'component') {
     return markdownBlock.value.minHeight;
   }
 
@@ -711,7 +711,7 @@ onBeforeUnmount(() => {
             :width="width"
             :line-height="lineHeight"
             :font="font"
-            :agui-components="aguiComponents"
+            :component-registry="componentRegistry"
             :builtin-components="builtinComponents"
           />
         </div>
@@ -733,7 +733,7 @@ onBeforeUnmount(() => {
         :width="width"
         :line-height="lineHeight"
         :font="font"
-        :agui-components="aguiComponents"
+        :component-registry="componentRegistry"
         :builtin-components="builtinComponents"
       />
     </div>
@@ -794,7 +794,7 @@ onBeforeUnmount(() => {
             :width="width"
             :line-height="lineHeight"
             :font="font"
-            :agui-components="aguiComponents"
+            :component-registry="componentRegistry"
             :builtin-components="builtinComponents"
           />
         </div>
@@ -811,7 +811,7 @@ onBeforeUnmount(() => {
         :width="width"
         :line-height="lineHeight"
         :font="font"
-        :agui-components="aguiComponents"
+        :component-registry="componentRegistry"
         :builtin-components="builtinComponents"
       />
     </div>

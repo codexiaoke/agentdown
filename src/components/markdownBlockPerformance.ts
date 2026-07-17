@@ -13,7 +13,7 @@ export function shouldMeasureMarkdownBlockHeight(block: MarkdownBlock): boolean 
     case 'mermaid':
     case 'math':
     case 'thought':
-    case 'agui':
+    case 'component':
       return true;
 
     default:
@@ -50,7 +50,7 @@ export function estimateMarkdownBlockHeight(
         56 + block.blocks.reduce((total, child) => total + estimateMarkdownBlockHeight(child, width, lineHeight, font), 0)
       );
 
-    case 'agui':
+    case 'component':
       return block.minHeight;
 
     case 'artifact':

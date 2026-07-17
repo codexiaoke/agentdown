@@ -23,7 +23,7 @@ import {
 import { parseMarkdown } from '../core/parseMarkdown';
 import { splitMarkdownBlocksForRender } from '../surface/renderUtils';
 import type {
-  AguiComponentMap,
+  AgentComponentRegistry,
   MarkdownBuiltinComponentOverrides,
   MarkdownEnginePlugin,
   MarkdownRendererPerformanceOptions,
@@ -41,8 +41,8 @@ interface Props {
   thoughtTitle?: string;
   /** 是否允许直接渲染不安全 HTML。 */
   allowUnsafeHtml?: boolean;
-  /** markdown 内嵌 AGUI 组件注册表。 */
-  aguiComponents?: AguiComponentMap;
+  /** markdown 内嵌受控 Vue 组件注册表。 */
+  componentRegistry?: AgentComponentRegistry;
   /** markdown 内置 block 组件覆写。 */
   builtinComponents?: MarkdownBuiltinComponentOverrides;
   /** markdown-it 插件扩展。 */
@@ -58,7 +58,7 @@ const props = withDefaults(defineProps<Props>(), {
   font: AGENTDOWN_DEFAULT_TEXT_FONT,
   thoughtTitle: '思考过程',
   allowUnsafeHtml: false,
-  aguiComponents: () => ({}),
+  componentRegistry: () => ({}),
   builtinComponents: () => ({}),
   plugins: () => [],
   performance: () => ({})
@@ -80,7 +80,7 @@ const blocks = computed(() =>
   parseMarkdown(props.source, {
     plugins: props.plugins,
     thoughtTitle: props.thoughtTitle,
-    aguiComponents: props.aguiComponents,
+    componentRegistry: props.componentRegistry,
     allowUnsafeHtml: props.allowUnsafeHtml
   })
 );
@@ -451,7 +451,7 @@ onBeforeUnmount(() => {
       :width="width"
       :line-height="lineHeight"
       :font="font"
-      :agui-components="aguiComponents"
+      :component-registry="componentRegistry"
       :builtin-components="resolvedBuiltinComponents"
     />
 
@@ -476,7 +476,7 @@ onBeforeUnmount(() => {
           :width="width"
           :line-height="lineHeight"
           :font="font"
-          :agui-components="aguiComponents"
+          :component-registry="componentRegistry"
           :builtin-components="resolvedBuiltinComponents"
           @measured="updateMeasuredHeight(entry.block.id, $event)"
         />
@@ -491,7 +491,7 @@ onBeforeUnmount(() => {
             :width="width"
             :line-height="lineHeight"
             :font="font"
-            :agui-components="aguiComponents"
+            :component-registry="componentRegistry"
             :builtin-components="resolvedBuiltinComponents"
           />
         </div>

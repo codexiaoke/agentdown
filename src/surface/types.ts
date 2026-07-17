@@ -1,7 +1,7 @@
 import type { Component } from 'vue';
 import type { AgentdownTheme } from '../config/types';
 import type {
-  AguiComponentMap,
+  AgentComponentRegistry,
   MarkdownApprovalStatus,
   MarkdownBlock,
   MarkdownBuiltinComponentOverrides
@@ -551,7 +551,7 @@ export interface RunSurfaceHandoffActionsOptions {
  * 这一层决定的是“runtime 最终怎么显示”，包括：
  * - 默认渲染 slot
  * - 文本排版参数
- * - markdown / agui / renderer 覆盖
+ * - markdown / 受控组件 / renderer 覆盖
  * - draft 占位
  * - 不同角色的消息 shell
  */
@@ -566,8 +566,8 @@ export interface RunSurfaceOptions {
   emptyText?: string;
   /** 与窗口化、懒挂载、文本分段相关的性能配置。 */
   performance?: RunSurfacePerformanceOptions;
-  /** markdown 中内嵌 `agui` 组件时可用的组件注册表。 */
-  aguiComponents?: AguiComponentMap;
+  /** markdown 中内嵌受控 Vue 组件时可用的组件注册表。 */
+  componentRegistry?: AgentComponentRegistry;
   /** 内置 markdown block renderer 的覆写表。 */
   builtinComponents?: MarkdownBuiltinComponentOverrides;
   /** runtime block.renderer 到 Vue 组件的映射表。 */

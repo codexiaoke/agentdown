@@ -20,7 +20,7 @@ export { default as RunSurfaceDraftOverlay } from './components/RunSurfaceDraftO
 export { default as DefaultRunSurfaceMessageActions } from './components/RunSurfaceMessageActions.vue';
 export { default as DefaultRunSurfaceToolRenderer } from './components/RunSurfaceToolRenderer.vue';
 export { default as DefaultRunSurfaceUserBubble } from './components/RunSurfaceUserBubble.vue';
-export { default as DefaultMarkdownAguiBlock } from './components/AguiComponentWrapper.vue';
+export { default as DefaultMarkdownComponentBlock } from './components/AgentComponentWrapper.vue';
 export { default as DefaultMarkdownCodeBlock } from './components/CodeBlock.vue';
 export { default as DefaultMarkdownHandoffBlock } from './components/HandoffBlock.vue';
 export { default as DefaultMarkdownHtmlBlock } from './components/HtmlBlock.vue';
@@ -320,9 +320,9 @@ export type {
   UseAgentdownRenderArchiveResult
 } from './composables/useAgentdownRenderArchive';
 export type {
-  AguiComponentMap,
-  AguiComponentRegistration,
-  MarkdownAguiBlock,
+  AgentComponentRegistration,
+  AgentComponentRegistry,
+  MarkdownAgentComponentBlock,
   MarkdownAttachmentBlock,
   MarkdownAttachmentKind,
   MarkdownApprovalBlock,

@@ -4,7 +4,7 @@ layout: home
 hero:
   name: Agentdown
   text: 给 Agent 产品前端用的 UI Runtime
-  tagline: 把 Agent 后端返回的 SSE / JSON / 框架事件流，渲染成聊天消息、工具卡片、审批和可持续更新的 Markdown + AGUI 界面。
+  tagline: 把 Agent 后端返回的 SSE / JSON / 框架事件流，渲染成聊天消息、工具卡片、审批和可持续更新的 Markdown + 受控组件界面。
   actions:
     - theme: brand
       text: 5 分钟开始

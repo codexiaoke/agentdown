@@ -11,7 +11,7 @@ import { useAgentdownConfig } from '../config/context';
 import { resolveAgentdownThemeCssVars } from '../config/theme';
 import type { AgentdownTheme } from '../config/types';
 import type {
-  AguiComponentMap,
+  AgentComponentRegistry,
   MarkdownBuiltinComponentOverrides
 } from '../core/types';
 import type { AgentRuntime, RuntimeSnapshot, SurfaceBlock } from '../runtime/types';
@@ -44,8 +44,8 @@ interface Props {
   emptyText?: string;
   /** 性能配置。 */
   performance?: RunSurfacePerformanceOptions;
-  /** markdown 内嵌 AGUI 组件注册表。 */
-  aguiComponents?: AguiComponentMap;
+  /** markdown 内嵌受控 Vue 组件注册表。 */
+  componentRegistry?: AgentComponentRegistry;
   /** markdown 内置 block 组件覆写。 */
   builtinComponents?: MarkdownBuiltinComponentOverrides;
   /** runtime renderer 覆写。 */
@@ -97,7 +97,7 @@ const props = withDefaults(defineProps<Props>(), {
   font: AGENTDOWN_DEFAULT_TEXT_FONT,
   emptyText: '等待新的运行输出...',
   performance: () => ({}),
-  aguiComponents: () => ({}),
+  componentRegistry: () => ({}),
   builtinComponents: () => ({}),
   renderers: () => ({}),
   draftPlaceholder: false,
@@ -512,7 +512,7 @@ onBeforeUnmount(() => {
             :width="width"
             :line-height="lineHeight"
             :font="font"
-            :agui-components="aguiComponents"
+            :component-registry="componentRegistry"
             :builtin-components="resolvedBuiltinComponents"
             :renderers="resolvedRenderers"
             :draft-placeholder="resolvedDraftPlaceholder"

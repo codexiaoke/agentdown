@@ -20,7 +20,7 @@ const variant = computed(() => {
     || props.blockKind === 'attachment'
     || props.blockKind === 'branch'
     || props.blockKind === 'handoff'
-    || props.blockKind === 'agui'
+    || props.blockKind === 'component'
     || props.blockKind === 'code'
     || props.blockKind === 'mermaid'
     || props.blockKind === 'math'

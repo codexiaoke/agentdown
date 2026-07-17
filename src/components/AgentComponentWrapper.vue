@@ -1,17 +1,17 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import type { AguiComponentMap, AguiComponentRegistration } from '../core/types';
+import type { AgentComponentRegistration, AgentComponentRegistry } from '../core/types';
 
 interface Props {
   name: string;
   componentProps: Record<string, unknown>;
-  components: AguiComponentMap;
+  components: AgentComponentRegistry;
   minHeight: number;
 }
 
 const props = defineProps<Props>();
 
-const registration = computed<AguiComponentRegistration | null>(() => {
+const registration = computed<AgentComponentRegistration | null>(() => {
   const candidate = props.components[props.name];
 
   if (!candidate) {
@@ -20,7 +20,7 @@ const registration = computed<AguiComponentRegistration | null>(() => {
 
   // 兼容简写和完整注册对象两种写法，降低使用门槛。
   if (typeof candidate === 'object' && 'component' in candidate) {
-    return candidate as AguiComponentRegistration;
+    return candidate as AgentComponentRegistration;
   }
 
   return {
@@ -37,17 +37,17 @@ const forwardedProps = computed(() => {
 
 <template>
   <div
-    class="agentdown-agui"
+    class="agentdown-component"
     :style="{ minHeight: `${minHeight}px` }"
   >
     <Transition
-      name="agentdown-agui-transition"
+      name="agentdown-component-transition"
       appear
       mode="out-in"
     >
       <div
         :key="registration ? name : `missing-${name}`"
-        class="agentdown-agui-content"
+        class="agentdown-component-content"
       >
         <component
           :is="registration?.component"
@@ -57,9 +57,9 @@ const forwardedProps = computed(() => {
 
         <div
           v-else
-          class="agentdown-agui-missing"
+          class="agentdown-component-missing"
         >
-          Missing AGUI component: <code>{{ name }}</code>
+          Missing registered component: <code>{{ name }}</code>
         </div>
       </div>
     </Transition>

@@ -23,7 +23,7 @@ description: RunSurface、AgentChatWorkspace、ArchiveSurface 的主要 props、
 | `font` | `string` | 内置默认字体 | 文本默认字体描述 |
 | `emptyText` | `string` | `'等待新的运行输出...'` | 空状态文案 |
 | `performance` | `RunSurfacePerformanceOptions` | `{}` | group window / lazy mount / text slab |
-| `aguiComponents` | `AguiComponentMap` | `{}` | 给 markdown / draft 预览用的 AGUI 组件表 |
+| `componentRegistry` | `AgentComponentRegistry` | `{}` | 给 markdown / draft 预览使用的受控组件注册表 |
 | `builtinComponents` | `MarkdownBuiltinComponentOverrides` | `{}` | 覆写内置 markdown block 组件 |
 | `renderers` | `RunSurfaceRendererMap` | `{}` | 覆写 surface renderer |
 | `draftPlaceholder` | `RunSurfaceDraftPlaceholder` | `false` | 当前消息还没稳定内容时的占位 UI |

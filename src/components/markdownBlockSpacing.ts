@@ -39,7 +39,7 @@ export function getMarkdownBlockGapAfter(
     current.kind === 'code'
     || current.kind === 'mermaid'
     || current.kind === 'math'
-    || current.kind === 'agui'
+    || current.kind === 'component'
     || current.kind === 'artifact'
     || current.kind === 'error'
     || current.kind === 'approval'

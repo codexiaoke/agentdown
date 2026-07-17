@@ -2,7 +2,7 @@
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import MarkdownBlockRenderer from './MarkdownBlockRenderer.vue';
 import type {
-  AguiComponentMap,
+  AgentComponentRegistry,
   MarkdownBlock,
   MarkdownBuiltinComponents
 } from '../core/types';
@@ -16,7 +16,7 @@ interface Props {
   lineHeight: number;
   font: string;
   gapAfter?: number;
-  aguiComponents: AguiComponentMap;
+  componentRegistry: AgentComponentRegistry;
   builtinComponents: MarkdownBuiltinComponents;
 }
 
@@ -40,7 +40,7 @@ function shouldObserveBlockHeight(block: MarkdownBlock): boolean {
     case 'mermaid':
     case 'html':
     case 'thought':
-    case 'agui':
+    case 'component':
       return true;
 
     default:
@@ -114,7 +114,7 @@ onBeforeUnmount(() => {
         :width="width"
         :line-height="lineHeight"
         :font="font"
-        :agui-components="aguiComponents"
+        :component-registry="componentRegistry"
         :builtin-components="builtinComponents"
       />
     </div>

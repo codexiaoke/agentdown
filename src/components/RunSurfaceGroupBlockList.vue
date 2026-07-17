@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
 import type {
-  AguiComponentMap,
+  AgentComponentRegistry,
   MarkdownBuiltinComponents
 } from '../core/types';
 import type {
@@ -44,7 +44,7 @@ interface Props {
   width: number;
   lineHeight: number;
   font: string;
-  aguiComponents: AguiComponentMap;
+  componentRegistry: AgentComponentRegistry;
   builtinComponents: MarkdownBuiltinComponents;
   renderers: RunSurfaceRendererMap;
   draftPlaceholder: RunSurfaceDraftPlaceholder;
@@ -451,7 +451,7 @@ onBeforeUnmount(() => {
         :width="width"
         :line-height="lineHeight"
         :font="font"
-        :agui-components="aguiComponents"
+        :component-registry="componentRegistry"
         :builtin-components="builtinComponents"
         :renderers="renderers"
         :draft-placeholder="draftPlaceholder"
@@ -488,7 +488,7 @@ onBeforeUnmount(() => {
           :width="width"
           :line-height="lineHeight"
           :font="font"
-          :agui-components="aguiComponents"
+          :component-registry="componentRegistry"
           :builtin-components="builtinComponents"
           :renderers="renderers"
           :draft-placeholder="draftPlaceholder"
@@ -516,7 +516,7 @@ onBeforeUnmount(() => {
             :width="width"
             :line-height="lineHeight"
             :font="font"
-            :agui-components="aguiComponents"
+            :component-registry="componentRegistry"
             :builtin-components="builtinComponents"
             :renderers="renderers"
             :draft-placeholder="draftPlaceholder"

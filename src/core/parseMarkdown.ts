@@ -6,8 +6,8 @@ import {
   parseInlineFragments
 } from './inlineFragments';
 import type {
-  AguiComponentMap,
-  MarkdownAguiBlock,
+  AgentComponentRegistry,
+  MarkdownAgentComponentBlock,
   MarkdownAttachmentBlock,
   MarkdownAttachmentKind,
   MarkdownApprovalBlock,
@@ -33,8 +33,8 @@ function createBlockId(prefix: string, index: number): string {
   return `${prefix}-${index}`;
 }
 
-/** 读取 AGUI 组件注册里的最小高度配置。 */
-function getAguiMinHeight(components: AguiComponentMap | undefined, name: string): number {
+/** 读取受控组件注册表里的最小高度配置。 */
+function getComponentMinHeight(components: AgentComponentRegistry | undefined, name: string): number {
   const registration = components?.[name];
 
   if (!registration || typeof registration !== 'object' || !('component' in registration)) {
@@ -278,14 +278,14 @@ function parseTokens(
       continue;
     }
 
-    if (token.type === 'agui_component') {
+    if (token.type === 'agent_component') {
       const name = (token.meta?.name as string | undefined) ?? 'UnknownComponent';
-      const block: MarkdownAguiBlock = {
-        id: createBlockId('agui', index),
-        kind: 'agui',
+      const block: MarkdownAgentComponentBlock = {
+        id: createBlockId('component', index),
+        kind: 'component',
         name,
         props: (token.meta?.props as Record<string, unknown> | undefined) ?? {},
-        minHeight: getAguiMinHeight(options.aguiComponents, name)
+        minHeight: getComponentMinHeight(options.componentRegistry, name)
       };
       blocks.push(block);
       continue;
