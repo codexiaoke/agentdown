@@ -26,6 +26,7 @@ export default defineConfig({
     logo: '/agentdown-mark.svg',
     siteTitle: 'Agentdown',
     nav: [
+      { text: '在线体验', link: '/demo' },
       { text: '快速开始', link: '/guide/getting-started' },
       { text: '指南', link: '/guide/core-concepts' },
       { text: '适配器', link: '/guide/framework-adapters' },

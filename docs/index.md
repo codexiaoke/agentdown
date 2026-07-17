@@ -7,14 +7,14 @@ hero:
   tagline: 把 Agent 后端返回的 SSE / JSON / 框架事件流，渲染成聊天消息、工具卡片、审批和可持续更新的 Markdown + 受控组件界面。
   actions:
     - theme: brand
+      text: 在线体验
+      link: /demo
+    - theme: alt
       text: 5 分钟开始
       link: /guide/getting-started
     - theme: alt
       text: 官方框架接入
       link: /guide/framework-adapters
-    - theme: alt
-      text: Runtime API
-      link: /api/runtime
 
 features:
   - title: 几行接入真实聊天页
@@ -28,7 +28,7 @@ features:
   - title: 工具和工作流也是 UI
     details: tool、artifact、approval、handoff 不只是文本说明，它们都可以成为独立 block 和组件。
   - title: 官方框架适配
-    details: 已内置 Agno、LangChain、AutoGen、CrewAI 的前端适配层，直接消费官方事件。
+    details: 已内置 Agno、Spring AI、LangChain、AutoGen、CrewAI 的前端适配层，直接消费官方事件。
   - title: 长文性能优化
     details: 内建 pretext、text slab、windowing、group window、lazy mount，避免长文档和大组件把页面拖慢。
   - title: 调试与回放
@@ -49,13 +49,14 @@ Agentdown 不是模型 SDK，也不是 Python Agent 框架。
 - 输出：聊天消息、工具块、审批块、handoff、artifact、自定义组件、长文 Markdown
 - 位置：Agent 产品前端
 
-如果你已经有 Agent 后端，或者正在用 Agno、LangChain、AutoGen、CrewAI，这个库解决的就是“最后一公里 UI 渲染和交互”。
+如果你已经有 Agent 后端，或者正在用 Agno、Spring AI、LangChain、AutoGen、CrewAI，这个库解决的就是“最后一公里 UI 渲染和交互”。
 
 ## 先看这个
 
 如果你只是想把真实 Agent 后端快速接到前端聊天页，先用：
 
 - `useAgnoChatSession()`
+- `useSpringAiChatSession()`
 - `useLangChainChatSession()`
 - `useAutoGenChatSession()`
 - `useCrewAIChatSession()`
