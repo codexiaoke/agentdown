@@ -70,13 +70,13 @@
     "vue": "^3.5.0"
   },
   "dependencies": {
-    "@chenglou/pretext": "^0.0.4",
+    "@chenglou/pretext": "^0.0.8",
     "highlight.js": "^11.11.1",
     "katex": "^0.16.44",
-    "markdown-it": "^14.1.1",
+    "markdown-it": "^14.3.0",
     "markdown-it-container": "^4.0.0",
     "markdown-it-math": "^5.2.1",
-    "mermaid": "^10.9.5"
+    "mermaid": "^11.16.0"
   },
   "devDependencies": {
     "@types/markdown-it": "^14.1.2",
