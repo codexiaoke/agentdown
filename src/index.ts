@@ -49,6 +49,7 @@ export {
 } from './persisted/builtin';
 export { restoreAgentdownRenderArchive } from './persisted/restore';
 export {
+  AGENTDOWN_RENDER_ARCHIVE_FORMAT,
   isAgentdownRenderArchive,
   isAgentdownRenderRecord,
   normalizeAgentdownRenderRecords,
@@ -306,6 +307,7 @@ export type {
   AgentChatWorkspaceExposed
 } from './components/agentChatWorkspace.types';
 export type {
+  AgentdownRenderArchiveFormat,
   AgentdownRenderArchive,
   AgentdownRenderRecord,
   AgentdownRenderRole
