@@ -16,6 +16,8 @@ export default defineConfig({
     rollupOptions: {
       external: [
         'vue',
+        '@a2ui/web_core/v0_9',
+        '@ag-ui/core',
         '@chenglou/pretext',
         'highlight.js',
         'katex',

@@ -30,6 +30,19 @@ export { default as DefaultMarkdownTextBlock } from './components/PretextTextBlo
 export { default as DefaultMarkdownThoughtBlock } from './components/ThoughtBlock.vue';
 export { default as DefaultMarkdownTimelineBlock } from './components/TimelineBlock.vue';
 export { defaultMarkdownBuiltinComponents } from './components/defaultMarkdownComponents';
+export {
+  A2UI_BASIC_CATALOG_ID,
+  A2UI_BASIC_COMPONENT_NAMES,
+  A2UI_SURFACE_RENDERER,
+  A2UiBasicElement,
+  A2UiSurface,
+  DEFAULT_A2UI_SECURITY_POLICY,
+  a2uiRunSurfaceRenderer,
+  a2uiRunSurfaceRenderers,
+  createA2UiBasicCatalog,
+  createA2UiProcessor,
+  defaultA2UiBasicCatalog
+} from './a2ui';
 export { createAgentdownPlugin } from './config/plugin';
 export {
   defineAgentdownConfig,
@@ -712,6 +725,20 @@ export type {
   UseSpringAiChatSessionResult
 } from './adapters/springai';
 export type { UseRuntimeReplayPlayerResult } from './composables/useRuntimeReplayPlayer';
+export type {
+  A2UiAction,
+  A2UiChildReference,
+  A2UiElementProps,
+  A2UiErrorContext,
+  A2UiProcessor,
+  A2UiSecurityPolicy,
+  A2UiSurfaceBlockData,
+  A2UiVueCatalog,
+  A2uiClientAction,
+  A2uiMessage,
+  CreateA2UiBasicCatalogOptions,
+  CreateA2UiProcessorOptions
+} from './a2ui';
 export type {
   AgentdownAdapter,
   AgentdownAdapterBridgeOptions,
