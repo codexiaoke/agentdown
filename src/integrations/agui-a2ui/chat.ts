@@ -170,7 +170,7 @@ export function useAgUiA2UiChatSession<TSource = RequestInfo | URL>(
       pendingEnvelope.value = envelope;
       a2uiClientError.value = null;
       try {
-        await base.send({ requestText: '', blocks: [] }, source);
+        await base.continueConversation(source);
       } catch (cause) {
         const error = cause instanceof Error ? cause : new Error(String(cause));
         a2uiClientError.value = error;

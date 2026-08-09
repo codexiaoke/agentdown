@@ -428,6 +428,12 @@ export interface FrameworkChatSessionResult<
   interrupted: ShallowRef<boolean>;
   /** 发送当前输入框内容。 */
   send: (input?: FrameworkChatInputValue, source?: TSource) => Promise<void>;
+  /**
+   * 发起一次不插入用户消息、也不清空现有 runtime 的协议级 continuation。
+   *
+   * 用于 A2UI action/error 等客户端事件，不应替代普通用户消息发送。
+   */
+  continueConversation: (source?: TSource) => Promise<void>;
   /** 重新生成上一条 assistant 回复。 */
   regenerate: (source?: TSource) => Promise<void>;
   /** 重新发起上一条输入；默认行为等价于 retry last input。 */
@@ -1250,6 +1256,7 @@ export function useFrameworkChatSession<
   const requestInput = shallowRef('');
   const lastInput = shallowRef('');
   const lastSubmission = shallowRef<ResolvedFrameworkChatInput | null>(null);
+  const activeSubmission = shallowRef<ResolvedFrameworkChatInput | null>(null);
   const sessionId = shallowRef('');
   const eventCursor = shallowRef(0);
   const clientRequestId = shallowRef('');
@@ -1274,7 +1281,7 @@ export function useFrameworkChatSession<
     message: () => requestInput.value,
     resolveContext: () => ({
       requestText: requestInput.value,
-      submission: lastSubmission.value,
+      submission: activeSubmission.value,
       sessionId: sessionId.value || toValue(config.options.conversationId),
       clientRequestId: clientRequestId.value,
       afterCursor: eventCursor.value,
@@ -1474,6 +1481,7 @@ export function useFrameworkChatSession<
     lastInput.value = normalizedInput.requestText;
     requestInput.value = normalizedInput.requestText;
     lastSubmission.value = normalizedInput;
+    activeSubmission.value = normalizedInput;
     chatIds.value = ids;
     activeSource.value = nextSource;
     interrupted.value = false;
@@ -1485,6 +1493,60 @@ export function useFrameworkChatSession<
     sessionState.disconnect();
     sessionState.reset();
     seedFrameworkUserMessage(normalizedInput, ids, sessionState.runtime, config.options.userMessage, at);
+
+    try {
+      await sessionState.connect(nextSource);
+    } catch (error) {
+      upsertFrameworkAssistantErrorBlock({
+        frameworkName: config.frameworkName,
+        error: error as BridgeError<TRawPacket> | Error,
+        ids,
+        runtime: sessionState.runtime,
+        at: Date.now()
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * 提交协议级客户端事件，同时保留已有对话和 Surface。
+   *
+   * continuation 仍创建独立 run / 幂等键，但不会覆盖 lastInput，也不会执行 runtime reset。
+   */
+  async function continueConversation(source?: TSource) {
+    await recoveryReady;
+
+    const conversationId = toValue(config.options.conversationId);
+    const at = Date.now();
+    const ids = createIds({
+      conversationId,
+      text: '',
+      at
+    });
+    const resolvedSourceInput = toValue(config.options.source);
+    let fallbackSource = sessionState.source.value;
+
+    if (resolvedSourceInput !== null && resolvedSourceInput !== undefined) {
+      fallbackSource = resolvedSourceInput as TSource;
+    }
+
+    const nextSource = resolveFrameworkChatSource(
+      config.frameworkName,
+      source,
+      fallbackSource as TSource | undefined
+    );
+
+    requestInput.value = '';
+    activeSubmission.value = null;
+    chatIds.value = ids;
+    activeSource.value = nextSource;
+    interrupted.value = false;
+    recoveryError.value = null;
+    replayOnly.value = false;
+    activeRecoveryRequestId.value = '';
+    recoveryTracker.beginRequest();
+    clientRequestId.value = recoveryTracker.requestId;
+    sessionState.disconnect();
 
     try {
       await sessionState.connect(nextSource);
@@ -1785,6 +1847,7 @@ export function useFrameworkChatSession<
     devtools,
     interrupted,
     send,
+    continueConversation,
     regenerate,
     retry,
     interrupt,
