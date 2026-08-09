@@ -20,7 +20,7 @@ description: 用内置适配层直接接 AG-UI、Agno、LangChain、AutoGen、Cr
 
 | 框架 | 流式文本 | 工具卡片 | 内置操作审批 | 典型场景 |
 | --- | --- | --- | --- | --- |
-| AG-UI | 支持 | 支持 | 通过 A2UI action / 自定义业务审批 | 标准 Agent 事件、shared state、A2UI 生成式界面 |
+| AG-UI | 支持 | 支持 | 自定义业务审批 | 纯标准 Agent 事件与 shared state；A2UI 为显式可选组合层 |
 | Agno | 支持 | 支持 | 支持 | requirement、approval、工具确认 |
 | LangChain | 支持 | 支持 | 支持 | LangGraph interrupt、人工审阅、参数修改 |
 | AutoGen | 支持 | 支持 | 支持 | handoff、人机接力、继续对话 |
@@ -146,7 +146,8 @@ const preset = defineAgnoPreset({
 ### AG-UI
 
 - 适合后端已经采用开放 AG-UI 协议，或希望前后端不绑定某个 Agent 框架的场景
-- `useAgUiChatSession()` 会接入标准 `RunAgentInput`、AG-UI events、shared state 和 A2UI action
+- `agentdown/ag-ui` 的 `useAgUiChatSession()` 只接入标准 `RunAgentInput`、AG-UI events 和 shared state
+- 需要生成式界面时使用 `agentdown/ag-ui-a2ui` 的 `useAgUiA2UiChatSession()`
 - 生成式界面完整说明见 [AG-UI 与 A2UI](/guide/ag-ui-a2ui)
 
 ### Agno

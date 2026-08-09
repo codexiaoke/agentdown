@@ -64,7 +64,7 @@ devtools -> runtime
 
 `:::vue-component` 产生的是 Agentdown `component` block，通过 `componentRegistry` 挂载本地 Vue 组件。
 
-它不是标准 AG-UI 协议。未来增加 AG-UI 支持时，应作为新的 protocol/adapter 接入，再映射到现有 RuntimeCommand，不复用 `component` 的命名空间表达传输协议。
+它不是标准 AG-UI 协议。AG-UI 已通过独立 protocol/adapter 接入并映射到现有 RuntimeCommand，不复用 `component` 的命名空间表达传输协议；A2UI 则保持为另一套可独立组合的声明式 UI Runtime。
 
 ## 公共 API 原则
 

@@ -1,6 +1,6 @@
 ---
 title: FastAPI Backend
-description: 使用仓库内置 backend 联调真实 Agno、LangChain、AutoGen、CrewAI。
+description: 使用仓库内置 backend 联调真实 AG-UI+A2UI 示例和主流 Agent 框架。
 ---
 
 # FastAPI Backend
@@ -18,6 +18,7 @@ description: 使用仓库内置 backend 联调真实 Agno、LangChain、AutoGen�
 
 | 路径 | 框架 | 默认定位 |
 | --- | --- | --- |
+| `/api/stream/agui` | AG-UI + A2UI | 位于 `app/examples/` 的真实 DeepSeek 参考实现 |
 | `/api/stream/agno` | Agno | 聊天 + requirement / approval |
 | `/api/stream/langchain` | LangChain | interrupt / review |
 | `/api/stream/autogen` | AutoGen | handoff / 人机接力 |

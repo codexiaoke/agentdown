@@ -2,7 +2,7 @@
 
 这个 `backend/` 目录提供的是一个真实的 FastAPI SSE backend，用来和前端适配层直接联调。
 
-其中 `/api/stream/agui` 会真实调用 DeepSeek 生成 A2UI 计划，内存只承担会话与事件存储。Agno、LangChain、AutoGen、CrewAI endpoint 同样不是业务 mock，而是：
+其中 `/api/stream/agui` 是放在 `app/examples/` 下的真实 AG-UI+A2UI 参考实现：它调用 DeepSeek 生成 A2UI 计划，内存只承担会话与事件存储。它用于说明库的组合方式，不是 Agentdown 要求的固定后端。Agno、LangChain、AutoGen、CrewAI endpoint 同样不是业务 mock，而是：
 
 - `DeepSeek` 大模型
 - 真实 Agent 框架
@@ -11,7 +11,7 @@
 
 当前提供这些 endpoint：
 
-- `/api/stream/agui`：DeepSeek 生成、后端校验并通过标准 AG-UI 发送 A2UI v0.9 Surface；内存只保存会话和事件
+- `/api/stream/agui`：参考示例；DeepSeek 生成、后端校验并通过标准 AG-UI `CUSTOM` 发送 A2UI v0.9.1 Surface
 - `/api/stream/agno`
 - `/api/stream/langchain`
 - `/api/stream/autogen`
@@ -115,7 +115,7 @@ curl http://127.0.0.1:8000/api/health
 
 ## 请求示例
 
-### AG-UI + A2UI（真实 DeepSeek）
+### AG-UI + A2UI 参考示例（真实 DeepSeek）
 
 ```bash
 curl -N \
@@ -138,14 +138,14 @@ curl -N \
   }'
 ```
 
-这个 endpoint 会调用配置的 DeepSeek Chat Completion JSON mode，校验模型生成的组件树、DataModel、绑定路径、action 和资源上限，再返回标准 AG-UI lifecycle/text/tool/state events，以及三条装在 `CUSTOM name=a2ui` 中的 A2UI v0.9 Surface 消息。完成事件的 `result.model` 和 `result.usage` 来自真实模型响应。
+这个 endpoint 会调用配置的 DeepSeek Chat Completion JSON mode，校验模型生成的组件树、DataModel、绑定路径、action 和资源上限，再返回标准 AG-UI lifecycle/text/tool/state events，以及三条装在 `CUSTOM name=a2ui` 中的 A2UI v0.9.1 Surface 消息。客户端回传采用 `forwardedProps.a2ui.clientMessage/clientCapabilities/clientDataModel`。完成事件的 `result.model` 和 `result.usage` 来自真实模型响应。
 
 常规测试会替换付费模型边界，只验证协议转换、安全校验、action 上下文和恢复。要显式执行一次在线生成测试：
 
 ```bash
 cd backend
 AGENTDOWN_RUN_LIVE_DEEPSEEK=1 uv run python -m unittest \
-  tests.test_agui.AgUiProviderTest.test_live_deepseek_generation_when_explicitly_enabled -v
+  tests.examples.test_agui_a2ui_deepseek.AgUiProviderTest.test_live_deepseek_generation_when_explicitly_enabled -v
 ```
 
 ### Agno
