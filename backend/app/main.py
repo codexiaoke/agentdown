@@ -19,7 +19,7 @@ from app.models import (
 )
 from app.providers import PROVIDER_REGISTRY
 from app.providers.agno import stream_agno_requirement_resolution
-from app.providers.agui import stream_agui_events
+from app.examples.agui_a2ui_deepseek import stream_agui_events
 from app.providers.base import ProviderContext, create_provider_descriptors
 from app.settings import load_settings
 from app.conversation_state import ConversationConflictError, conversation_event_store
@@ -80,7 +80,7 @@ async def stream_agui_provider(
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     last_event_id: str | None = Header(default=None, alias="Last-Event-ID"),
 ) -> object:
-    """Run the real DeepSeek AG-UI + A2UI agent with backend recovery."""
+    """Run the real DeepSeek AG-UI + A2UI reference example with backend recovery."""
 
     conversation_id = request.thread_id
     request_id = idempotency_key or request.run_id
