@@ -25,6 +25,12 @@ def create_provider_descriptors() -> list[ProviderDescriptor]:
 
     return [
         ProviderDescriptor(
+            id="agui",
+            path="/api/stream/agui",
+            label="AG-UI + A2UI",
+            note="标准 AG-UI RunAgentInput/Event SSE 与 A2UI v0.9 交互 Surface 的纯内存示例。",
+        ),
+        ProviderDescriptor(
             id="agno",
             path="/api/stream/agno",
             label="Agno",

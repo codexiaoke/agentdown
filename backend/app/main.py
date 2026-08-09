@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.agno_state import get_agno_paused_run_store
 from app.models import (
+    AgUiRunAgentInput,
     AgnoPausedRunResponse,
     AgnoRequirementResolutionRequest,
     HealthResponse,
@@ -18,6 +19,7 @@ from app.models import (
 )
 from app.providers import PROVIDER_REGISTRY
 from app.providers.agno import stream_agno_requirement_resolution
+from app.providers.agui import stream_agui_events
 from app.providers.base import ProviderContext, create_provider_descriptors
 from app.settings import load_settings
 from app.conversation_state import ConversationConflictError, conversation_event_store
@@ -29,7 +31,7 @@ provider_descriptors = create_provider_descriptors()
 app = FastAPI(
     title="Agentdown FastAPI Backend",
     version="0.1.0",
-    description="Real SSE backend for Agno, LangChain, AutoGen, and CrewAI using DeepSeek.",
+    description="SSE backend for AG-UI/A2UI plus Agno, LangChain, AutoGen, and CrewAI adapters.",
 )
 app.add_middleware(
     CORSMiddleware,
@@ -70,6 +72,38 @@ def parse_event_cursor(value: str | None) -> int | None:
     if cursor < 0:
         raise HTTPException(status_code=422, detail="Last-Event-ID cursor must be non-negative.")
     return cursor
+
+
+@app.post("/api/stream/agui")
+async def stream_agui_provider(
+    request: AgUiRunAgentInput,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    last_event_id: str | None = Header(default=None, alias="Last-Event-ID"),
+) -> object:
+    """Run the standard AG-UI + A2UI in-memory example with backend recovery."""
+
+    conversation_id = request.thread_id
+    request_id = idempotency_key or request.run_id
+    after_cursor = parse_event_cursor(last_event_id) or 0
+    request_payload = request.model_dump(mode="json", by_alias=True, exclude_none=True)
+
+    try:
+        conversation, run, reused = await conversation_event_store.open_run(
+            conversation_id=conversation_id,
+            provider_id="agui",
+            request_id=request_id,
+            request_payload=request_payload,
+            event_factory=lambda: stream_agui_events(request),
+        )
+    except ConversationConflictError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+
+    return create_resumable_sse_response(
+        conversation_event_store.subscribe(conversation, run, after_cursor=after_cursor),
+        conversation_id=conversation_id,
+        request_id=request_id,
+        reused=reused,
+    )
 
 
 @app.post("/api/stream/{provider_id}")

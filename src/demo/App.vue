@@ -9,6 +9,7 @@ import {
   type AgentChatUploadResolver,
   type AgentChatUploadResolverResult,
   type FrameworkChatTransportContext,
+  useAgUiChatSession,
   useAgnoChatSession,
   useAutoGenChatSession,
   useCrewAIChatSession,
@@ -25,7 +26,7 @@ import type {
   DemoReplayPreset
 } from './replayRecords.mock';
 
-type DemoFrameworkId = 'agno' | 'springai' | 'langchain' | 'autogen' | 'crewai';
+type DemoFrameworkId = 'agui' | 'agno' | 'springai' | 'langchain' | 'autogen' | 'crewai';
 type ProviderStatusTone = 'idle' | 'busy' | 'waiting' | 'error';
 
 interface DemoChatSessionLike extends Pick<
@@ -71,6 +72,7 @@ const FASTAPI_BASE_URL = resolveConfiguredBaseUrl('http://127.0.0.1:8000');
 const SPRING_BASE_URL = resolveConfiguredBaseUrl('http://127.0.0.1:8080');
 const DEFAULT_EDITED_CITY = '上海';
 const providerOrder: DemoFrameworkId[] = [
+  'agui',
   'agno',
   'springai',
   'langchain',
@@ -144,7 +146,8 @@ function readRecord(value: unknown): Record<string, unknown> | undefined {
 }
 
 function isDemoFrameworkId(value: unknown): value is DemoFrameworkId {
-  return value === 'agno'
+  return value === 'agui'
+    || value === 'agno'
     || value === 'springai'
     || value === 'langchain'
     || value === 'autogen'
@@ -166,16 +169,29 @@ function resolveUploadProviderId(value: unknown): DemoFrameworkId | null {
   return providerId;
 }
 
+const agUiPrompt = ref('');
 const agnoPrompt = ref('');
 const springAiPrompt = ref('');
 const langChainPrompt = ref('');
 const autoGenPrompt = ref('');
 const crewAiPrompt = ref('');
+const agUiPendingUploads = ref<AgentChatPendingAttachment[]>([]);
 const agnoPendingUploads = ref<AgentChatPendingAttachment[]>([]);
 const springAiPendingUploads = ref<AgentChatPendingAttachment[]>([]);
 const langChainPendingUploads = ref<AgentChatPendingAttachment[]>([]);
 const autoGenPendingUploads = ref<AgentChatPendingAttachment[]>([]);
 const crewAiPendingUploads = ref<AgentChatPendingAttachment[]>([]);
+
+const agUiSession = useAgUiChatSession<string>({
+  source: `${FASTAPI_BASE_URL}/api/stream/agui`,
+  input: agUiPrompt,
+  conversationId: createConversationId('agui'),
+  title: 'AG-UI + A2UI',
+  recovery: {},
+  transport: {
+    state: { client: 'agentdown-demo', a2uiVersion: 'v0.9' }
+  }
+});
 
 const agnoSession = useAgnoChatSession<string>({
   source: `${FASTAPI_BASE_URL}/api/stream/agno`,
@@ -328,11 +344,12 @@ const crewAiSession = useCrewAIChatSession<string>({
   surface: createThinkingPlaceholder('CrewAI 正在思考')
 });
 
-const currentProviderId = ref<DemoFrameworkId>('agno');
+const currentProviderId = ref<DemoFrameworkId>('agui');
 const panelOpen = ref(false);
 const panelState = ref<DemoSidePanelState | null>(null);
 
 const objectUrlsByProvider: Record<DemoFrameworkId, Set<string>> = {
+  agui: new Set<string>(),
   agno: new Set<string>(),
   springai: new Set<string>(),
   langchain: new Set<string>(),
@@ -341,6 +358,19 @@ const objectUrlsByProvider: Record<DemoFrameworkId, Set<string>> = {
 };
 
 const providerStateMap: Record<DemoFrameworkId, DemoProviderState> = {
+  agui: {
+    id: 'agui',
+    label: 'AG-UI + A2UI',
+    subtitle: 'Generative UI',
+    suggestions: [
+      '帮我生成一个杭州周末旅行计划，直接用可交互表单展示',
+      '做一个成都三日游计划，我想在页面里调整偏好',
+      '用生成式 UI 帮我规划厦门周末旅行'
+    ],
+    prompt: agUiPrompt,
+    pendingUploads: agUiPendingUploads,
+    session: agUiSession
+  },
   agno: {
     id: 'agno',
     label: 'Agno',
@@ -452,6 +482,7 @@ const emptyTitle = computed(() => {
 });
 
 const uploadFileByProvider: Record<DemoFrameworkId, AgentChatUploadResolver> = {
+  agui: resolveDemoUpload,
   agno: resolveDemoUpload,
   springai: resolveDemoUpload,
   langchain: resolveDemoUpload,

@@ -3,7 +3,7 @@ import type {
   BuiltinAgentdownRenderRecord
 } from '../persisted/builtin';
 
-export type DemoReplayFrameworkId = 'agno' | 'springai' | 'langchain' | 'autogen' | 'crewai';
+export type DemoReplayFrameworkId = 'agui' | 'agno' | 'springai' | 'langchain' | 'autogen' | 'crewai';
 
 export interface DemoReplayPreset {
   id: string;
@@ -172,6 +172,7 @@ const autoGenBase = 1776103000000;
 const crewAiBase = 1776104000000;
 
 export const demoReplayPresetsByProvider = {
+  agui: [],
   agno: [
     {
       id: 'agno-long-markdown-report',

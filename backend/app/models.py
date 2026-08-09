@@ -4,7 +4,22 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class AgUiRunAgentInput(BaseModel):
+    """Standard AG-UI RunAgentInput accepted by the generative UI example."""
+
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+    thread_id: str = Field(alias="threadId", min_length=1)
+    run_id: str = Field(alias="runId", min_length=1)
+    parent_run_id: str | None = Field(default=None, alias="parentRunId")
+    state: Any = Field(default_factory=dict)
+    messages: list[dict[str, Any]] = Field(default_factory=list)
+    tools: list[dict[str, Any]] = Field(default_factory=list)
+    context: list[dict[str, Any]] = Field(default_factory=list)
+    forwarded_props: Any = Field(default=None, alias="forwardedProps")
 
 
 class StreamRequest(BaseModel):
