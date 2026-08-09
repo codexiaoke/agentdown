@@ -9,7 +9,6 @@ import {
   type AgentChatUploadResolver,
   type AgentChatUploadResolverResult,
   type FrameworkChatTransportContext,
-  useAgUiChatSession,
   useAgnoChatSession,
   useAutoGenChatSession,
   useCrewAIChatSession,
@@ -17,6 +16,7 @@ import {
   useSpringAiChatSession,
   type UseAgnoChatSessionResult
 } from '../index';
+import { useAgUiA2UiChatSession } from '../integrations/agui-a2ui';
 import DemoThinkingBubble from './components/DemoThinkingBubble.vue';
 import {
   demoReplayPresetsByProvider,
@@ -182,14 +182,14 @@ const langChainPendingUploads = ref<AgentChatPendingAttachment[]>([]);
 const autoGenPendingUploads = ref<AgentChatPendingAttachment[]>([]);
 const crewAiPendingUploads = ref<AgentChatPendingAttachment[]>([]);
 
-const agUiSession = useAgUiChatSession<string>({
+const agUiSession = useAgUiA2UiChatSession<string>({
   source: `${FASTAPI_BASE_URL}/api/stream/agui`,
   input: agUiPrompt,
   conversationId: createConversationId('agui'),
   title: 'AG-UI + A2UI',
   recovery: {},
   transport: {
-    state: { client: 'agentdown-demo', a2uiVersion: 'v0.9' }
+    state: { client: 'agentdown-demo', a2uiVersion: 'v0.9.1' }
   }
 });
 

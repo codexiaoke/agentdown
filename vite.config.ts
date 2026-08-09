@@ -7,10 +7,15 @@ export default defineConfig({
   build: {
     assetsInlineLimit: 0,
     lib: {
-      entry: resolve(__dirname, 'src/index.ts'),
+      entry: {
+        index: resolve(__dirname, 'src/index.ts'),
+        'ag-ui': resolve(__dirname, 'src/entries/ag-ui.ts'),
+        a2ui: resolve(__dirname, 'src/entries/a2ui.ts'),
+        'ag-ui-a2ui': resolve(__dirname, 'src/entries/ag-ui-a2ui.ts')
+      },
       name: 'Agentdown',
       formats: ['es', 'cjs'],
-      fileName: (format) => (format === 'es' ? 'index.js' : 'index.cjs'),
+      fileName: (format, entryName) => `${entryName}.${format === 'es' ? 'js' : 'cjs'}`,
       cssFileName: 'style'
     },
     rollupOptions: {
