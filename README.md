@@ -40,10 +40,12 @@ raw packet / SSE -> protocol -> bridge -> assembler -> runtime -> Agent UI
 
 ## AG-UI + A2UI 生成式界面
 
-如果后端使用开放的 AG-UI 协议，直接用 `useAgUiChatSession()`。它会把标准 run/message/tool/state/activity 事件映射到 Runtime，并自动把 AG-UI custom event 中的 A2UI v0.9 Surface 渲染成安全的 Vue 组件树。
+AG-UI 与 A2UI 是可独立采用的两层。纯 AG-UI 从 `agentdown/ag-ui` 导入；只有需要生成式界面时，才显式使用 `agentdown/ag-ui-a2ui`。
 
 ```ts
-const session = useAgUiChatSession({
+import { useAgUiA2UiChatSession } from 'agentdown/ag-ui-a2ui';
+
+const session = useAgUiA2UiChatSession({
   source: '/api/stream/agui',
   conversationId: 'session:reading-planner',
   recovery: {}
@@ -52,7 +54,7 @@ const session = useAgUiChatSession({
 await session.send('生成一个读书计划表单，包含书名、每日分钟数和提交按钮');
 ```
 
-Agent 只发送声明式组件和 DataModel；Catalog、Vue 实现、URL 策略和资源上限都由前端控制。按钮等交互会作为标准 A2UI action 自动放进下一次 AG-UI `RunAgentInput.forwardedProps`。
+Agent 只发送声明式组件和 DataModel；Catalog、Vue 实现、URL 策略和资源上限都由前端控制。Action/Error 会带上客户端能力以及启用 `sendDataModel` 的数据模型。独立 A2UI Runtime 也可从 `agentdown/a2ui` 使用，不依赖 AG-UI。
 
 仓库示例会真实调用 DeepSeek 生成界面，进程内存只保存会话和事件，不提供硬编码业务结果。完整说明和浏览器验证步骤见 [AG-UI 与 A2UI](https://codexiaoke.github.io/agentdown/guide/ag-ui-a2ui)。
 
@@ -140,7 +142,7 @@ const session = useAgnoChatSession<string>({
 | `RunSurface` | 把 runtime 中的 block 渲染成聊天式界面、工具卡片流和受控 Vue 组件 |
 | `AgentChatWorkspace` | 直接提供完整聊天工作区，内置输入区、附件上传、回底按钮、右侧 panel 和文件预览 |
 | 官方适配器 | 已提供 `AG-UI`、`Agno`、`LangChain`、`AutoGen`、`CrewAI` 官方事件适配层 |
-| 生成式 UI | A2UI v0.9 Surface、DataModel、action 回传与前端安全 Catalog |
+| 生成式 UI | 独立 A2UI v0.9/v0.9.1 Runtime、增量 Surface、客户端消息与前端安全 Catalog |
 | 组件扩展 | 支持 `builtinComponents`、`renderers`、`messageShells`、`:::vue-component` |
 | 性能 | 支持 pretext 文本渲染、长文本 slab、长文窗口化、group windowing、重型 block lazy mount |
 | 调试回放 | 支持 transcript 导入导出、history replay、事件记录和性能遥测 |
@@ -156,7 +158,7 @@ const session = useAgnoChatSession<string>({
 | `math` | KaTeX 数学公式 |
 | `thought` | 可折叠思考块 |
 | `component` | `:::vue-component` 从受控注册表注入的 Vue 组件 |
-| `a2ui` | A2UI v0.9 声明式 Surface，由前端 Catalog 渲染 |
+| `a2ui` | A2UI v0.9/v0.9.1 声明式 Surface，由前端 Catalog 渲染 |
 | `artifact` | Agent 产物 |
 | `approval` | 审批块 |
 | `timeline` | 时间线块 |
@@ -167,7 +169,7 @@ const session = useAgnoChatSession<string>({
 
 | 框架 | 推荐入口 | 流式文本 | 工具卡片 | 内置操作审批 | 说明 |
 | --- | --- | --- | --- | --- | --- |
-| AG-UI | `useAgUiChatSession()` / `createAgUiAdapter()` | 支持 | 支持 | A2UI action / 自定义审批 | 标准 `RunAgentInput`、events、shared state 与生成式 UI |
+| AG-UI | `agentdown/ag-ui` 的 `useAgUiChatSession()` / `createAgUiAdapter()` | 支持 | 支持 | 业务自定义 | 纯标准 `RunAgentInput`、events 与 shared state；A2UI 使用独立组合入口 |
 | Agno | `useAgnoChatSession()` / `createAgnoAdapter()` | 支持 | 支持 | 支持 | 聊天页面优先用 `useAgnoChatSession()` |
 | LangChain | `useLangChainChatSession()` / `createLangChainAdapter()` | 支持 | 支持 | 支持 | 直接消费 `astream_events()` 风格事件 |
 | AutoGen | `useAutoGenChatSession()` / `createAutoGenAdapter()` | 支持 | 支持 | 支持 | 直接消费官方 `run_stream()` 事件 |
@@ -192,6 +194,14 @@ const session = useAgnoChatSession<string>({
 
 ```bash
 npm install agentdown katex
+```
+
+AG-UI、A2UI 是可选 peer dependency，按需安装：
+
+```bash
+npm install @ag-ui/core                 # 纯 AG-UI
+npm install @a2ui/web_core              # 独立 A2UI
+npm install @ag-ui/core @a2ui/web_core  # 组合使用
 ```
 
 ```ts

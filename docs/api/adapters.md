@@ -30,7 +30,15 @@ description: AG-UI、Agno、LangChain、AutoGen、CrewAI、Spring AI 适配层�
 - `createAgUiStateStore()`
 - `applyAgUiJsonPatch()`
 
-AG-UI 适配器还会自动识别 A2UI custom/raw event，并给 `RunSurface` 注册 `A2UiSurface`。完整用法见 [AG-UI 与 A2UI](/guide/ag-ui-a2ui)。
+这些纯 AG-UI API 从 `agentdown/ag-ui` 导入，不解释 A2UI custom/raw event。
+
+需要生成式 UI 时显式改用 `agentdown/ag-ui-a2ui`：
+
+- `useAgUiA2UiChatSession()`
+- `createAgUiA2UiAdapter()`
+- `createAgUiA2UiProtocol()`
+
+独立 A2UI Runtime 和 Renderer 从 `agentdown/a2ui` 导入。完整用法见 [AG-UI 与 A2UI](/guide/ag-ui-a2ui)。
 
 ### Agno
 

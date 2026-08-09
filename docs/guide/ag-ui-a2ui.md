@@ -1,56 +1,132 @@
 ---
 title: AG-UI 与 A2UI
-description: 用标准 AG-UI 事件驱动 Agentdown，并在 Vue 中安全渲染和回传 A2UI v0.9 生成式界面。
+description: 分别使用纯 AG-UI、独立 A2UI Runtime，或显式组合两者。
 ---
 
 # AG-UI 与 A2UI
 
-Agentdown 把两个协议放在不同层处理：
+Agentdown 把两套协议做成三个独立入口：
 
-- [AG-UI](https://docs.ag-ui.com/) 是 Agent 与前端之间的运行协议，负责 run、message、tool、shared state、activity 和 custom event。
-- [A2UI v0.9](https://a2ui.org/specification/v0.9-a2ui/) 是声明式 UI 协议，负责 Surface、组件树、DataModel 和用户 action。
+| 入口 | 负责什么 | 不负责什么 |
+| --- | --- | --- |
+| `agentdown/ag-ui` | AG-UI run、message、tool、state、activity 与 transport | 不解释 A2UI，不注册 A2UI Renderer |
+| `agentdown/a2ui` | A2UI v0.9/v0.9.1 状态、Catalog、Vue Renderer 与客户端消息 | 不规定后端或传输协议 |
+| `agentdown/ag-ui-a2ui` | 用明确的 AG-UI 扩展事件承载 A2UI，并接好双向消息 | 不要求业务采用固定的服务端实现 |
 
-一句话理解：
+这种分层意味着 A2UI 可以放在 AG-UI、WebSocket 或业务自定义 transport 上；只用 AG-UI 的项目也不会被生成式 UI 逻辑影响。
 
-```text
-Agent backend
-  -> AG-UI SSE events
-  -> Agentdown protocol/runtime
-  -> A2UI Surface block
-  -> frontend-owned Vue Catalog
-  -> A2UI action
-  -> next standard AG-UI RunAgentInput
+## 安装
+
+核心包只要求 Vue。按实际入口安装协议 peer dependency：
+
+```bash
+npm install agentdown vue
+
+# 纯 AG-UI
+npm install @ag-ui/core
+
+# 独立 A2UI
+npm install @a2ui/web_core
+
+# AG-UI + A2UI
+npm install @ag-ui/core @a2ui/web_core
 ```
 
-Agent 可以决定“用哪些已允许组件、绑定什么数据、触发什么事件”，但不能下发 Vue 文件、JavaScript、HTML 或任意可执行代码。Vue 组件实现和安全策略始终归前端所有。
+样式仍由应用显式引入：
 
-## 最短接入
+```ts
+import 'agentdown/style.css';
+```
 
-`useAgUiChatSession()` 会一次接好：
+## 只接 AG-UI
 
-- 标准 `RunAgentInput` POST
-- 标准 AG-UI SSE event 校验与映射
-- text、reasoning、tool、step、shared state、activity
-- A2UI custom event 聚合和 Vue Renderer
-- A2UI action 自动回传
-- 后端事件归档恢复和断线续传
+`useAgUiChatSession()` 只处理标准 AG-UI 语义。`CUSTOM` 和 `RAW` 保持应用自定义事件，不会被猜测成 A2UI。
+
+```ts
+import { useAgUiChatSession } from 'agentdown/ag-ui';
+
+const session = useAgUiChatSession({
+  source: '/api/stream/agui',
+  conversationId: 'session:assistant',
+  recovery: {}
+});
+```
+
+低层入口也位于同一个 subpath：
+
+- `createAgUiProtocol()`
+- `createAgUiAdapter()`
+- `createAgUiSseTransport()`
+- `createAgUiStateStore()`
+- `applyAgUiJsonPatch()`
+
+## 独立使用 A2UI
+
+A2UI Renderer 不依赖 AG-UI。宿主只需要提供服务端消息，并自行发送 `client-message`：
 
 ```vue
 <script setup lang="ts">
 import { ref } from 'vue';
-import { RunSurface, useAgUiChatSession } from 'agentdown';
+import {
+  A2UiSurface,
+  createA2UiBasicCatalog,
+  type A2UiClientEnvelope
+} from 'agentdown/a2ui';
 
-const prompt = ref('生成一个读书计划表单，包含书名、每日分钟数和提交按钮。');
+const messages = ref<unknown[]>([]);
+const catalogs = [createA2UiBasicCatalog()];
 
-const session = useAgUiChatSession<string>({
+async function sendToBackend(envelope: A2UiClientEnvelope) {
+  await fetch('/api/a2ui/client', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(envelope)
+  });
+}
+</script>
+
+<template>
+  <A2UiSurface
+    surface-id="planner"
+    :messages="messages"
+    :catalogs="catalogs"
+    @client-message="sendToBackend"
+  />
+</template>
+```
+
+`A2UiSurface` 内部持有长生命周期 `MessageProcessor`。当服务端消息历史只是追加时，它只处理新增消息，不重放旧历史，因此用户在 TextField、ChoicePicker 等组件中的本地输入不会被下一条服务端消息覆盖。只有历史发生替换或回退时才重建 Surface。
+
+需要完全脱离 Vue 时使用：
+
+```ts
+import { createA2UiSurfaceController } from 'agentdown/a2ui';
+
+const controller = createA2UiSurfaceController({
+  surfaceId: 'planner',
+  catalogs,
+  onClientMessage: sendToBackend
+});
+
+controller.sync(serverMessages);
+```
+
+## 显式组合 AG-UI + A2UI
+
+组合入口会注册 A2UI Renderer，并将客户端消息放进下一次标准 AG-UI `RunAgentInput.forwardedProps`：
+
+```vue
+<script setup lang="ts">
+import { ref } from 'vue';
+import { RunSurface } from 'agentdown';
+import { useAgUiA2UiChatSession } from 'agentdown/ag-ui-a2ui';
+
+const prompt = ref('生成一个读书计划表单。');
+const session = useAgUiA2UiChatSession({
   source: 'http://127.0.0.1:8000/api/stream/agui',
   input: prompt,
   conversationId: 'session:reading-planner',
-  recovery: {},
-  transport: {
-    state: { locale: 'zh-CN' },
-    context: [{ description: '当前页面是阅读计划页', value: 'reading-planner' }]
-  }
+  recovery: {}
 });
 </script>
 
@@ -59,79 +135,20 @@ const session = useAgUiChatSession<string>({
     <input v-model="prompt">
     <button :disabled="session.busy.value">发送</button>
   </form>
-
   <RunSurface :runtime="session.runtime" v-bind="session.surface.value" />
 </template>
 ```
 
-如果模板自动解包了 ref，也可以按项目现有习惯省略 `.value`。
-
-## 后端请求契约
-
-Transport 发送的是 AG-UI 官方 `RunAgentInput`，不会往 body 塞入 Agentdown 私有字段：
-
-```json
-{
-  "threadId": "session:reading-planner",
-  "runId": "request:01",
-  "messages": [
-    {
-      "id": "message:user:request:01",
-      "role": "user",
-      "content": "生成一个读书计划表单"
-    }
-  ],
-  "tools": [],
-  "context": [],
-  "state": {}
-}
-```
-
-幂等和游标放在 HTTP/SSE 语义里：
-
-```http
-Idempotency-Key: request:01
-Last-Event-ID: session:reading-planner:12
-```
-
-`createAgUiSseTransport()` 会使用 `@ag-ui/core` 的 `RunAgentInputSchema` 和 `EventSchemas` 在边界校验请求与事件。协议不合法时会直接失败，不会把未知 payload 静默渲染成可信 UI。
-
-## 仓库示例的真实模型边界
-
-`backend/app/providers/agui.py` 会真实调用配置的 DeepSeek Chat Completion JSON mode，而不是按关键词拼旅行卡片。模型返回受限的中间 JSON：
-
-```json
-{
-  "assistantText": "我为你生成了一个可调整的读书计划。",
-  "components": [],
-  "dataModel": {}
-}
-```
-
-后端负责固定 A2UI 版本、`surfaceId` 和 Catalog，并在发送前校验：
-
-- 组件与属性 allowlist、组件数量和消息大小
-- `root`、子组件引用、可达性和循环
-- DataModel 路径存在且类型匹配
-- Button 只能产生服务端 `event`，不能下发 `functionCall`
-- 原型污染键、客户端函数、URL/媒体和正则表达式均不允许
-
-模型偶尔会把单选值写成字符串，后端只做 A2UI 类型层面的窄标准化，例如把 `"moderate"` 转为 `["moderate"]`；业务标题、字段、选项、文案和 action 仍来自模型。无效输出会请求模型修复一次，仍不合规则返回标准 `RUN_ERROR`。
-
-调用方式遵循 DeepSeek 官方的 [JSON Output](https://api-docs.deepseek.com/guides/json_mode/) 和 [Chat Completion API](https://api-docs.deepseek.com/api/create-chat-completion)。`RUN_FINISHED.result` 会保留真实响应的 model、usage 和 response id，便于测试与审计。
-
-## 后端发送 A2UI
-
-A2UI 消息通过 AG-UI `CUSTOM` event 传输。一个可渲染 Surface 至少包含 `createSurface`、`updateComponents` 和 `updateDataModel`：
+后端通过命名明确的 AG-UI `CUSTOM` event 发送 A2UI：
 
 ```json
 {
   "type": "CUSTOM",
   "name": "a2ui",
   "value": {
-    "version": "v0.9",
+    "version": "v0.9.1",
     "createSurface": {
-      "surfaceId": "trip-planner",
+      "surfaceId": "planner",
       "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json",
       "sendDataModel": true
     }
@@ -139,206 +156,124 @@ A2UI 消息通过 AG-UI `CUSTOM` event 传输。一个可渲染 Surface 至少�
 }
 ```
 
-```json
-{
-  "type": "CUSTOM",
-  "name": "a2ui",
-  "value": {
-    "version": "v0.9",
-    "updateComponents": {
-      "surfaceId": "trip-planner",
-      "components": [
-        { "id": "root", "component": "Column", "children": ["title", "city"] },
-        { "id": "title", "component": "Text", "text": { "path": "/title" }, "variant": "h2" },
-        { "id": "city", "component": "TextField", "label": "目的地", "value": { "path": "/city" } }
-      ]
-    }
-  }
-}
-```
+默认允许的 `CUSTOM` name 是 `a2ui`、`a2ui.message` 和 `a2ui.surface`。命中后的 payload 必须通过官方 A2UI schema；非法消息会报错，不会静默丢弃。
 
-```json
-{
-  "type": "CUSTOM",
-  "name": "a2ui",
-  "value": {
-    "version": "v0.9",
-    "updateDataModel": {
-      "surfaceId": "trip-planner",
-      "path": "/",
-      "value": { "title": "杭州周末旅行计划", "city": "杭州" }
-    }
-  }
-}
-```
-
-同一个 Surface 的消息会按到达顺序保存在 `a2ui.surface` block 中。因此 DataModel 和组件的流式增量更新可以被 Runtime 立即渲染，也可以作为普通后端事件归档后重新解释。
-
-默认识别的 custom event 名是：
-
-- `a2ui`
-- `a2ui.message`
-- `a2ui.surface`
-
-也支持 AG-UI `RAW` event 中直接承载 A2UI 消息。自定义 allowlist 可通过 `protocolOptions.a2uiEventNames` 配置。
-
-## 用户 action 如何回传
-
-Button 的 `action.event.context` 可以引用当前 DataModel：
-
-```json
-{
-  "id": "submit",
-  "component": "Button",
-  "child": "submit-label",
-  "action": {
-    "event": {
-      "name": "trip_submitted",
-      "context": {
-        "city": { "path": "/city" },
-        "days": { "path": "/days" }
-      }
-    }
-  }
-}
-```
-
-用户点击后，Renderer 生成标准 A2UI client action。`useAgUiChatSession()` 自动把它放进下一次标准 AG-UI 请求：
-
-```json
-{
-  "threadId": "session:trip-planner",
-  "runId": "request:02",
-  "messages": [],
-  "tools": [],
-  "context": [],
-  "state": {},
-  "forwardedProps": {
-    "a2ui": {
-      "version": "v0.9",
-      "action": {
-        "name": "trip_submitted",
-        "surfaceId": "trip-planner",
-        "sourceComponentId": "submit",
-        "timestamp": "2026-08-09T10:00:00.000Z",
-        "context": { "city": "杭州", "days": 2 }
-      }
-    }
-  }
-}
-```
-
-也可以直接调用 `await session.sendA2UiAction(action)`。每个 action 都是新的幂等 run，不复用上一次运行的 request id。
-
-## 安全边界
-
-内置 `createA2UiBasicCatalog()` 使用官方 Basic Catalog schema，但 Vue 实现由 Agentdown 提供。默认安全策略包括：
-
-- Catalog allowlist：未知 `catalogId` 拒绝处理
-- Component allowlist：未注册组件拒绝处理
-- 不注册会产生浏览器副作用的 `openUrl` 函数
-- URL 协议 allowlist，默认只允许 `http:` 和 `https:`
-- 单条消息、消息数量、组件数量、字符串长度和组件深度上限
-- 拒绝 `__proto__`、`constructor`、`prototype` 等原型污染键
-- 组件循环和过深嵌套在 Renderer 层中止
-
-可以在独立 Renderer 上收紧策略：
-
-```vue
-<A2UiSurface
-  surface-id="trip-planner"
-  :messages="messages"
-  :security-policy="{
-    maxComponents: 80,
-    maxDepth: 12,
-    allowedUrlProtocols: new Set(['https:'])
-  }"
-  @action="handleAction"
-  @error="reportA2UiError"
-/>
-```
-
-业务组件需要自己控制视觉或行为时，覆盖前端 Renderer，不让 Agent 指定组件源码：
+`RAW` 默认完全禁用。只有明确配置 source 后才解析：
 
 ```ts
-import { createA2UiBasicCatalog } from 'agentdown';
-import ProductCard from './ProductCard.vue';
-
-const catalog = createA2UiBasicCatalog({
-  renderers: {
-    Card: ProductCard
+useAgUiA2UiChatSession({
+  // ...
+  a2uiProtocolOptions: {
+    rawEventSources: new Set(['my-a2ui-bridge'])
   }
 });
 ```
 
-Schema 仍由 Catalog 校验；覆盖只改变 Vue 呈现实现。
+也可以用 `extractMessages(event, context)` 完全接管扩展事件提取逻辑。
 
-## Shared state 与低层入口
+## 跨 run Surface
 
-页面可以读取 AG-UI 的共享状态：
+组合协议按 `threadId + surfaceId` 保存消息历史。新的 AG-UI run 不会清空 Surface；后端可以在下一次 run 只发送新的 `updateDataModel` 或 `updateComponents`。扩展层会把完整历史重新写入 Runtime block，浏览器 A2UI controller 则只处理真正新增的消息。
+
+`RUN_FINISHED` 后 block 仍保持 `stable`，不会被错误地标为不可再更新的 `settled`。`deleteSurface` 才会移除历史和 block。
+
+如果业务确实要清理历史，可以持有 `createAgUiA2UiProtocol()` 的返回值并调用 `clearSurfaces(threadId?)`。
+
+## 客户端消息契约
+
+Action 和 Error 都使用官方 A2UI client message。组合 helper 默认放入以下 AG-UI `forwardedProps`：
+
+```json
+{
+  "a2ui": {
+    "clientMessage": {
+      "version": "v0.9.1",
+      "action": {
+        "name": "plan_submitted",
+        "surfaceId": "planner",
+        "sourceComponentId": "submit",
+        "timestamp": "2026-08-09T10:00:00.000Z",
+        "context": { "book": "深度工作" }
+      }
+    },
+    "clientCapabilities": {
+      "v0.9.1": {
+        "supportedCatalogIds": [
+          "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+        ]
+      }
+    },
+    "clientDataModel": {
+      "version": "v0.9.1",
+      "surfaces": {
+        "planner": { "book": "深度工作" }
+      }
+    }
+  }
+}
+```
+
+只有服务端在 `createSurface.sendDataModel` 中启用后，`clientDataModel` 才会出现。Error 使用同一个 `clientMessage` 字段中的 `error` 分支。
+
+`forwardedProps.a2ui` 是 Agentdown 组合 helper 的默认 transport envelope，不是 A2UI 对 HTTP body 的强制规定。业务可以完全替换序列化方式：
 
 ```ts
-session.agUiState.value.state
-session.agUiState.value.messages
-session.agUiState.value.activities
+useAgUiA2UiChatSession({
+  // ...
+  serializeA2UiClient({ envelope, forwardedProps }) {
+    return {
+      forwardedProps,
+      uiProtocol: envelope
+    };
+  }
+});
 ```
 
-需要自己组合运行链时，可以使用：
+也可以直接调用 `session.sendA2UiClient(envelope)`。
 
-- `createAgUiProtocol()`
-- `createAgUiAdapter()`
-- `createAgUiSseTransport()`
-- `createAgUiStateStore()`
-- `applyAgUiJsonPatch()`
-- `createA2UiProcessor()`
-- `A2UiSurface`
+## Catalog 与安全边界
 
-`applyAgUiJsonPatch()` 支持 RFC 6902 的 `add`、`remove`、`replace`、`copy`、`move` 和 `test`，并拒绝危险 JSON Pointer 片段。
+Basic Catalog 只是零配置起点。业务可以覆盖基础组件，也可以声明完全独立的 Catalog：
 
-## 会话恢复
+```ts
+import { Catalog } from '@a2ui/web_core/v0_9';
+import { defineA2UiCatalog } from 'agentdown/a2ui';
+import ProductCard from './ProductCard.vue';
 
-传入 `recovery: {}` 后，AG-UI 与其他 Agentdown chat helper 使用同一套后端权威恢复协议：
-
-```http
-GET /api/v1/conversations/{threadId}
-GET /api/v1/conversations/{threadId}/events?request_id={activeRequestId}
+const protocol = new Catalog('https://example.com/catalog/product/v1', componentApis);
+const productCatalog = defineA2UiCatalog({
+  id: protocol.id,
+  protocol,
+  renderers: { ProductCard }
+});
 ```
 
-归档保存原始 AG-UI/A2UI 事件，不保存浏览器组件实例。页面刷新后，Adapter 会重新解释事件并重建 Runtime、Surface、组件树和 DataModel。运行中断线则使用稳定 SSE id 和 `Last-Event-ID` 只补缺失事件。
+`defineA2UiCatalog()` 会检查协议 ID 和每个组件的 Vue Renderer 是否完整。多个 Catalog 可同时传给 `catalogs`，具体 Surface 只能使用自己声明的 Catalog。
 
-完整 HTTP 契约见[后端会话恢复](/guide/backend-conversation-recovery)。
+默认安全策略还包括：
 
-## 运行仓库内示例
+- 未注册 Catalog 和 Component 拒绝处理
+- 不注册会产生浏览器副作用的 Basic Catalog `openUrl`
+- URL 协议 allowlist
+- 消息大小、消息数、组件数、字符串长度和组件深度上限
+- 拒绝原型污染键、组件循环和过深嵌套
+- Agent 只能发送声明式数据，不能发送 Vue、JavaScript 或任意 HTML 实现
 
-这个示例会真实调用 DeepSeek，需要先在 `backend/.env` 配置 `DEEPSEEK_API_KEY`。进程内存只用于会话上下文、事件归档、幂等和恢复，不生成业务答案：
+## 仓库内真实示例
+
+仓库 FastAPI 服务中的 AG-UI+A2UI endpoint 是一个参考示例，不是库要求的固定后端：
+
+- 前端：`src/demo/App.vue`
+- DeepSeek 示例与安全转换：`backend/app/examples/agui_a2ui_deepseek.py`
+- HTTP endpoint：`backend/app/main.py`
+- 示例测试：`backend/tests/examples/test_agui_a2ui_deepseek.py`
+
+它会真实调用 DeepSeek JSON mode；进程内存仅保存会话、事件、幂等和恢复状态。运行：
 
 ```bash
+# 在 backend/.env 配置 DEEPSEEK_API_KEY
 npm run backend:dev
 npm run dev
 ```
 
-打开 `http://localhost:5173/`，默认第一个适配器就是 **AG-UI + A2UI**：
-
-1. 点击任意生成式界面快捷提示，例如读书计划。
-2. 修改书名、每日分钟数和阅读节奏。
-3. 点击模型生成的提交按钮。
-4. 后端把 A2UI action 和当前 context 交给 DeepSeek，返回新的 AG-UI run 和 Surface。
-5. 刷新页面，确认后端事件归档能恢复同一 Surface 和 DataModel。
-
-对应实现：
-
-- 前端：`src/demo/App.vue`
-- DeepSeek provider 与安全转换：`backend/app/providers/agui.py`
-- HTTP endpoint：`backend/app/main.py`
-- 后端协议/安全测试和显式在线测试：`backend/tests/test_agui.py`
-
-## 线上落地建议
-
-仓库示例使用进程内 `ConversationEventStore`，服务重启后数据会消失。线上应把事件归档、run 索引和幂等键替换成 PostgreSQL/Redis 等持久化实现，同时保持 AG-UI body、SSE event 和恢复 HTTP 契约不变。
-
-不要把 A2UI 当成“让模型生成任意前端代码”。生产环境应继续遵循：
-
-1. 后端/Agent 只能发声明式消息。
-2. 前端 Catalog 是唯一可执行实现来源。
-3. action 到达后端仍要做鉴权、业务校验、幂等和审计。
-4. 高风险业务操作要在业务层加入 approval，不能因为来自已渲染按钮就默认可信。
+生产环境应把事件归档、run 索引和幂等键换成 PostgreSQL/Redis 等持久化实现，并继续在业务层执行鉴权、校验、审计和高风险操作审批。

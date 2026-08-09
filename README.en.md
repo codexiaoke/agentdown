@@ -40,10 +40,12 @@ It is mainly responsible for:
 
 ## AG-UI + A2UI Generative UI
 
-Use `useAgUiChatSession()` when your backend speaks the open AG-UI protocol. It maps standard run/message/tool/state/activity events and renders A2UI v0.9 custom events through a frontend-owned Vue catalog.
+AG-UI and A2UI are independent layers. Import pure AG-UI from `agentdown/ag-ui`, and opt into `agentdown/ag-ui-a2ui` only when you need generative UI.
 
 ```ts
-const session = useAgUiChatSession({
+import { useAgUiA2UiChatSession } from 'agentdown/ag-ui-a2ui';
+
+const session = useAgUiA2UiChatSession({
   source: '/api/stream/agui',
   conversationId: 'session:trip-planner',
   recovery: {}
@@ -52,7 +54,7 @@ const session = useAgUiChatSession({
 await session.send('Build an interactive weekend trip planner');
 ```
 
-The agent sends declarative components and data only. Vue implementations, URL policy, and resource limits remain frontend-owned. Component actions are returned as standard A2UI client actions in the next AG-UI `RunAgentInput.forwardedProps`.
+The agent sends declarative components and data only. Vue implementations, URL policy, and resource limits remain frontend-owned. Actions and errors carry client capabilities and any data model explicitly enabled by the server. The standalone A2UI runtime is available from `agentdown/a2ui` without AG-UI.
 
 See [AG-UI and A2UI](https://codexiaoke.github.io/agentdown/guide/ag-ui-a2ui) for the full contract and the API-key-free browser example.
 
@@ -135,7 +137,7 @@ Agentdown is built for:
 | Narrative layer | `MarkdownRenderer`, `parseMarkdown()`, `markdown-it`, and `@chenglou/pretext` |
 | Runtime chain | `Protocol + Bridge + Assembler + Runtime + RunSurface` |
 | Official adapters | AG-UI, Agno, LangChain, AutoGen, CrewAI |
-| Generative UI | A2UI v0.9 surfaces, data model updates, actions, and a safe Vue catalog |
+| Generative UI | Standalone A2UI v0.9/v0.9.1 runtime, incremental surfaces, client messages, and a safe Vue catalog |
 | Custom protocol | `defineProtocol()`, `defineEventProtocol()`, `defineHelperProtocol()` |
 | Custom UI | `builtinComponents`, `renderers`, `messageShells`, `:::vue-component` |
 | Performance | text slabization, viewport virtualization, group windowing, lazy mount |
@@ -152,7 +154,7 @@ Agentdown is built for:
 | `math` | KaTeX math blocks |
 | `thought` | collapsible thought blocks |
 | `component` | Vue components injected from a controlled registry with `:::vue-component` |
-| `a2ui` | A declarative A2UI v0.9 surface rendered by a frontend-owned catalog |
+| `a2ui` | A declarative A2UI v0.9/v0.9.1 surface rendered by a frontend-owned catalog |
 | `artifact` | agent outputs |
 | `approval` | approval blocks |
 | `timeline` | timeline blocks |
@@ -163,7 +165,7 @@ If you want to connect a real chat page quickly, this is the first section to lo
 
 | Framework | Entry points | Streaming text | Tool cards | Built-in operation approval | Notes |
 | --- | --- | --- | --- | --- | --- |
-| AG-UI | `useAgUiChatSession()` / `createAgUiAdapter()` | Yes | Yes | A2UI actions / custom approval | Standard `RunAgentInput`, events, shared state, and generative UI |
+| AG-UI | `agentdown/ag-ui` | Yes | Yes | Application-defined | Pure `RunAgentInput`, events, and shared state; A2UI uses the opt-in integration entry |
 | Agno | `useAgnoChatSession()` / `createAgnoAdapter()` | Yes | Yes | Yes | chat pages should start with `useAgnoChatSession()` |
 | LangChain | `useLangChainChatSession()` / `createLangChainAdapter()` | Yes | Yes | Yes | consumes `astream_events()`-style packets directly |
 | AutoGen | `useAutoGenChatSession()` / `createAutoGenAdapter()` | Yes | Yes | Yes | consumes official `run_stream()` packets directly |
@@ -173,6 +175,14 @@ If you want to connect a real chat page quickly, this is the first section to lo
 
 ```bash
 npm install agentdown katex
+```
+
+Install the optional protocol peers only for the subpaths you use:
+
+```bash
+npm install @ag-ui/core                 # pure AG-UI
+npm install @a2ui/web_core              # standalone A2UI
+npm install @ag-ui/core @a2ui/web_core  # combined integration
 ```
 
 ```ts
