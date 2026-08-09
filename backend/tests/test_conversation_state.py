@@ -114,6 +114,33 @@ class ConversationEventStoreTest(unittest.IsolatedAsyncioTestCase):
                 event_factory=provider,
             )
 
+    async def test_existing_run_can_be_loaded_without_reopening_its_request(self) -> None:
+        release = asyncio.Event()
+
+        async def provider():
+            yield {"event": "response.delta", "data": {"content": "A"}}
+            await release.wait()
+
+        conversation, run, _ = await self.store.open_run(
+            conversation_id="session:test",
+            provider_id="springai",
+            request_id="request:running",
+            request_payload={"message": "secret original body"},
+            event_factory=provider,
+        )
+        first = await anext(self.store.subscribe(conversation, run, after_cursor=0))
+
+        loaded = await self.store.get_run("session:test", "request:running")
+
+        self.assertIsNotNone(loaded)
+        assert loaded is not None
+        self.assertIs(conversation, loaded[0])
+        self.assertIs(run, loaded[1])
+        self.assertEqual(1, first.cursor)
+        release.set()
+        assert run.task is not None
+        await run.task
+
 
 if __name__ == "__main__":
     unittest.main()

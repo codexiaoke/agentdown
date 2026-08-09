@@ -230,6 +230,22 @@ class ConversationEventStore:
         async with self._lock:
             return self._conversations.get(conversation_id)
 
+    async def get_run(
+        self,
+        conversation_id: str,
+        request_id: str,
+    ) -> tuple[ConversationRecord, ConversationRun] | None:
+        """Load an existing idempotent run for a read-only reconnect."""
+
+        async with self._lock:
+            conversation = self._conversations.get(conversation_id)
+            if conversation is None:
+                return None
+            run = conversation.runs.get(request_id)
+            if run is None:
+                return None
+            return conversation, run
+
     async def clear(self) -> None:
         """Cancel producers and clear state; intended for tests."""
 
