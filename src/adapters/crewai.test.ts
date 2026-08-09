@@ -648,6 +648,7 @@ describe('useCrewAIChatSession', () => {
     expect(sessionState.busy.value).toBe(false);
     expect(capturedBodies[0]).toEqual({
       message: '帮我查一下北京天气，并说明工具调用过程。',
+      session_id: 'session:demo:crewai-chat',
       client_request_id: expect.any(String),
       after_cursor: 0
     });

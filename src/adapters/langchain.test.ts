@@ -638,6 +638,7 @@ describe('useLangChainChatSession', () => {
     expect(capturedBodies[0]).toEqual({
       message: '帮我查一下北京天气',
       mode: 'hitl',
+      session_id: 'session:demo:langchain-hitl',
       client_request_id: expect.any(String),
       after_cursor: 0
     });

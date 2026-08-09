@@ -1138,7 +1138,7 @@ export function useFrameworkChatSession<
     resolveContext: () => ({
       requestText: requestInput.value,
       submission: lastSubmission.value,
-      sessionId: sessionId.value,
+      sessionId: sessionId.value || toValue(config.options.conversationId),
       clientRequestId: clientRequestId.value,
       afterCursor: eventCursor.value
     }),
