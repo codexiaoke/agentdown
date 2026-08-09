@@ -56,7 +56,7 @@ await session.send('生成一个读书计划表单，包含书名、每日分钟
 
 Agent 只发送声明式组件和 DataModel；Catalog、Vue 实现、URL 策略和资源上限都由前端控制。Action/Error 会带上客户端能力以及启用 `sendDataModel` 的数据模型。独立 A2UI Runtime 也可从 `agentdown/a2ui` 使用，不依赖 AG-UI。
 
-仓库示例会真实调用 DeepSeek 生成界面，进程内存只保存会话和事件，不提供硬编码业务结果。完整说明和浏览器验证步骤见 [AG-UI 与 A2UI](https://codexiaoke.github.io/agentdown/guide/ag-ui-a2ui)。
+仓库在 `examples/` 中提供纯 AG-UI、独立 A2UI、AG-UI+A2UI 三个独立 Vue 消费者。三条示例后端都真实调用 DeepSeek，进程内存只保存会话和事件，不提供硬编码业务结果。完整说明和浏览器验证步骤见 [AG-UI 与 A2UI](https://codexiaoke.github.io/agentdown/guide/ag-ui-a2ui)。
 
 ## 最快接入官方框架
 

@@ -277,10 +277,17 @@ const productCatalog = defineA2UiCatalog({
 
 ## 仓库内真实示例
 
-仓库 FastAPI 服务中的 AG-UI+A2UI endpoint 是一个参考示例，不是库要求的固定后端：
+仓库提供三个独立 Vue 消费者，分别验证公开 npm 入口：
+
+- `examples/vue-ag-ui` → `agentdown/ag-ui` → `/api/examples/agui`
+- `examples/vue-a2ui` → `agentdown/a2ui` → `/api/examples/a2ui`
+- `examples/vue-ag-ui-a2ui` → `agentdown/ag-ui-a2ui` → `/api/stream/agui`
+
+三条后端都真实调用 DeepSeek。纯 AG-UI 端点只发送标准 lifecycle/text events；独立 A2UI 端点使用普通 JSON transport；组合端点才通过 AG-UI `CUSTOM` 承载 A2UI。它们都是参考示例，不是库要求的固定后端：
 
 - 前端：`src/demo/App.vue`
 - DeepSeek 示例与安全转换：`backend/app/examples/agui_a2ui_deepseek.py`
+- 纯协议示例后端：`backend/app/examples/agui_deepseek.py`、`backend/app/examples/a2ui_deepseek.py`
 - HTTP endpoint：`backend/app/main.py`
 - 示例测试：`backend/tests/examples/test_agui_a2ui_deepseek.py`
 

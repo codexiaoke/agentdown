@@ -56,7 +56,7 @@ await session.send('Build an interactive weekend trip planner');
 
 The agent sends declarative components and data only. Vue implementations, URL policy, and resource limits remain frontend-owned. Actions and errors carry client capabilities and any data model explicitly enabled by the server. The standalone A2UI runtime is available from `agentdown/a2ui` without AG-UI.
 
-See [AG-UI and A2UI](https://codexiaoke.github.io/agentdown/guide/ag-ui-a2ui) for the full contract and the API-key-free browser example.
+The repository includes three independent Vue consumers under `examples/`: pure AG-UI, standalone A2UI, and AG-UI+A2UI. Their reference endpoints call DeepSeek for real; in-memory state is limited to example conversations and events. See [AG-UI and A2UI](https://codexiaoke.github.io/agentdown/guide/ag-ui-a2ui) for the full contract.
 
 ## Fastest Way To Integrate Official Frameworks
 

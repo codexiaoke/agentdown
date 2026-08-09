@@ -1,0 +1,15 @@
+:root { font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: #14201c; background: #f1f8f5; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+button, textarea { font: inherit; }
+.page { width: min(960px, calc(100% - 32px)); min-height: 100vh; margin: 0 auto; padding: 48px 0; }
+.eyebrow { margin: 0; color: #047857; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+h1 { margin: 8px 0; font-size: clamp(28px, 5vw, 44px); }
+header > p:last-child { color: #64748b; }
+.chat { min-height: 420px; padding: 24px; border: 1px solid #cfe5dc; border-radius: 20px; background: white; box-shadow: 0 16px 50px rgba(6, 78, 59, .08); }
+.composer { display: grid; grid-template-columns: 1fr auto; gap: 12px; margin-top: 16px; }
+textarea { resize: vertical; padding: 14px; border: 1px solid #bcd8cc; border-radius: 14px; background: white; }
+button { padding: 0 24px; border: 0; border-radius: 14px; color: white; background: #047857; font-weight: 700; cursor: pointer; }
+button:disabled { opacity: .5; cursor: wait; }
+.error { color: #b91c1c; }
+@media (max-width: 640px) { .composer { grid-template-columns: 1fr; } button { min-height: 48px; } }

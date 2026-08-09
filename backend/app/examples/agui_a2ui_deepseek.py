@@ -689,7 +689,7 @@ async def generate_deepseek_surface(
     raise ValueError(f"DeepSeek did not return a valid A2UI plan after repair: {last_error}")
 
 
-def _surface_messages(surface: AgUiGeneratedSurface) -> list[dict[str, Any]]:
+def build_a2ui_surface_messages(surface: AgUiGeneratedSurface) -> list[dict[str, Any]]:
     """Wrap a validated model plan in server-owned A2UI protocol envelopes."""
 
     return [
@@ -842,7 +842,7 @@ async def stream_agui_events(
         async for streamed in _yield_event(event):
             yield streamed
 
-    for message in _surface_messages(generation.surface):
+    for message in build_a2ui_surface_messages(generation.surface):
         async for event in _yield_event({"type": "CUSTOM", "name": "a2ui", "value": message}):
             yield event
 
