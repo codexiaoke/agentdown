@@ -1,4 +1,4 @@
-"""Real DeepSeek-backed AG-UI agent that emits validated A2UI surfaces."""
+"""Reference DeepSeek-backed AG-UI agent that emits validated A2UI surfaces."""
 
 from __future__ import annotations
 
@@ -79,7 +79,7 @@ _REQUIRED_COMPONENT_PROPERTIES: dict[str, set[str]] = {
     "DateTimeInput": {"value"},
 }
 
-_SYSTEM_PROMPT = """你是 Agentdown 的生成式界面 Agent。根据对话和最新输入，设计一个有用、可交互的 A2UI v0.9 Basic Catalog 界面。
+_SYSTEM_PROMPT = """你是 Agentdown 的生成式界面 Agent。根据对话和最新输入，设计一个有用、可交互的 A2UI v0.9.1 Basic Catalog 界面。
 
 你必须只返回一个 JSON object，不能返回 Markdown、代码围栏、HTML、Vue、JavaScript 或解释。JSON 顶层必须严格为：
 {"assistantText":"给用户的简短说明","components":[...],"dataModel":{...}}
@@ -225,8 +225,8 @@ def _last_user_text(request: AgUiRunAgentInput) -> str:
     return ""
 
 
-def _read_a2ui_action(request: AgUiRunAgentInput) -> dict[str, Any] | None:
-    """Read the A2UI client action carried in AG-UI forwardedProps."""
+def _read_a2ui_client_envelope(request: AgUiRunAgentInput) -> dict[str, Any] | None:
+    """Read the standard A2UI client message and metadata from forwardedProps."""
 
     forwarded = request.forwarded_props
     if not isinstance(forwarded, dict):
@@ -234,18 +234,36 @@ def _read_a2ui_action(request: AgUiRunAgentInput) -> dict[str, Any] | None:
     a2ui = forwarded.get("a2ui")
     if not isinstance(a2ui, dict):
         return None
-    action = a2ui.get("action")
-    return action if isinstance(action, dict) else None
+    message = a2ui.get("clientMessage")
+    capabilities = a2ui.get("clientCapabilities")
+    if not isinstance(message, dict) or not isinstance(capabilities, dict):
+        return None
+    version = message.get("version")
+    if version not in {"v0.9", "v0.9.1"} or version not in capabilities:
+        raise ValueError("A2UI client message version is not advertised by clientCapabilities.")
+    action = message.get("action")
+    error = message.get("error")
+    if isinstance(action, dict) == isinstance(error, dict):
+        raise ValueError("A2UI clientMessage requires exactly one action or error.")
+    data_model = a2ui.get("clientDataModel")
+    if data_model is not None and not isinstance(data_model, dict):
+        raise ValueError("A2UI clientDataModel must be an object when provided.")
+    return {
+        "message": message,
+        "clientDataModel": data_model,
+    }
 
 
 def _latest_input(request: AgUiRunAgentInput) -> str:
     """Build the newest model instruction from either text or an A2UI action."""
 
-    action = _read_a2ui_action(request)
-    if action is not None:
+    envelope = _read_a2ui_client_envelope(request)
+    if envelope is not None:
+        message = envelope["message"]
+        event_type = "action" if "action" in message else "error"
         return (
-            "用户刚刚触发了以下 A2UI action。请使用其中的真实 context 更新界面和答复：\n"
-            + json.dumps(action, ensure_ascii=False, separators=(",", ":"))
+            f"A2UI 客户端刚刚上报了以下 {event_type}。请结合消息和可选 DataModel 更新界面与答复：\n"
+            + json.dumps(envelope, ensure_ascii=False, separators=(",", ":"))
         )
     prompt = _last_user_text(request)
     if not prompt:
@@ -658,7 +676,7 @@ def _surface_messages(surface: AgUiGeneratedSurface) -> list[dict[str, Any]]:
 
     return [
         {
-            "version": "v0.9",
+            "version": "v0.9.1",
             "createSurface": {
                 "surfaceId": A2UI_SURFACE_ID,
                 "catalogId": A2UI_BASIC_CATALOG_ID,
@@ -666,14 +684,14 @@ def _surface_messages(surface: AgUiGeneratedSurface) -> list[dict[str, Any]]:
             },
         },
         {
-            "version": "v0.9",
+            "version": "v0.9.1",
             "updateComponents": {
                 "surfaceId": A2UI_SURFACE_ID,
                 "components": surface.components,
             },
         },
         {
-            "version": "v0.9",
+            "version": "v0.9.1",
             "updateDataModel": {
                 "surfaceId": A2UI_SURFACE_ID,
                 "path": "/",

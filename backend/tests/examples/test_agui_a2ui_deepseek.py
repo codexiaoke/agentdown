@@ -12,7 +12,7 @@ from httpx import ASGITransport, AsyncClient
 from app.conversation_state import conversation_event_store
 from app.main import app
 from app.models import AgUiRunAgentInput
-from app.providers.agui import (
+from app.examples.agui_a2ui_deepseek import (
     AgUiGeneratedSurface,
     AgUiModelGeneration,
     agui_agent_session_store,
@@ -207,7 +207,28 @@ class AgUiProviderTest(unittest.IsolatedAsyncioTestCase):
             _run_input(
                 run_id="run-action",
                 content="",
-                forwarded_props={"a2ui": {"version": "v0.9", "action": action}},
+                forwarded_props={
+                    "a2ui": {
+                        "clientMessage": {"version": "v0.9.1", "action": action},
+                        "clientCapabilities": {
+                            "v0.9.1": {
+                                "supportedCatalogIds": [
+                                    "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+                                ]
+                            }
+                        },
+                        "clientDataModel": {
+                            "version": "v0.9.1",
+                            "surfaces": {
+                                "agent-surface": {
+                                    "book": "深度工作",
+                                    "minutes": 45,
+                                    "pace": ["稳定"],
+                                }
+                            },
+                        },
+                    }
+                },
             )
         )
         events = [
@@ -222,6 +243,7 @@ class AgUiProviderTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(1, len(calls))
         self.assertEqual("生成一个读书计划表单", calls[0][0][0]["content"])
         self.assertIn('"book":"深度工作"', calls[0][1])
+        self.assertIn('"clientDataModel"', calls[0][1])
         data_message = next(
             event["value"]["updateDataModel"]
             for event in events
@@ -260,7 +282,7 @@ class AgUiProviderTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_http_stream_is_archived_and_idempotently_replayed(self) -> None:
         transport = ASGITransport(app=app)
-        with patch("app.providers.agui.generate_deepseek_surface", new=_fake_generator):
+        with patch("app.examples.agui_a2ui_deepseek.generate_deepseek_surface", new=_fake_generator):
             async with AsyncClient(transport=transport, base_url="http://test") as client:
                 response = await client.post(
                     "/api/stream/agui",
