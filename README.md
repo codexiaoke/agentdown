@@ -21,8 +21,8 @@ raw packet / SSE -> protocol -> bridge -> assembler -> runtime -> Agent UI
 
 它更像是 Agent 产品的前端渲染层，而不是模型层或后端编排层。
 
-- 输入：Agno、LangChain、AutoGen、CrewAI 或你自己的 SSE / JSON 事件流
-- 输出：聊天消息、工具调用卡片、审批块、handoff 块、artifact、长文 Markdown 和受控 Vue 组件
+- 输入：AG-UI、Agno、LangChain、AutoGen、CrewAI 或你自己的 SSE / JSON 事件流
+- 输出：聊天消息、工具调用卡片、审批块、handoff 块、artifact、长文 Markdown、A2UI Surface 和受控 Vue 组件
 - 作用位置：Agent 产品前端
 
 它不负责这些事情：
@@ -37,6 +37,24 @@ raw packet / SSE -> protocol -> bridge -> assembler -> runtime -> Agent UI
 - 把工具调用、审批、人机交互事件渲染成真正的 UI
 - 把长文本和大组件控制在浏览器可承受的性能范围内
 - 让官方框架事件可以直接接到前端页面
+
+## AG-UI + A2UI 生成式界面
+
+如果后端使用开放的 AG-UI 协议，直接用 `useAgUiChatSession()`。它会把标准 run/message/tool/state/activity 事件映射到 Runtime，并自动把 AG-UI custom event 中的 A2UI v0.9 Surface 渲染成安全的 Vue 组件树。
+
+```ts
+const session = useAgUiChatSession({
+  source: '/api/stream/agui',
+  conversationId: 'session:trip-planner',
+  recovery: {}
+});
+
+await session.send('帮我做一个杭州周末计划，用可交互表单展示');
+```
+
+Agent 只发送声明式组件和 DataModel；Catalog、Vue 实现、URL 策略和资源上限都由前端控制。按钮等交互会作为标准 A2UI action 自动放进下一次 AG-UI `RunAgentInput.forwardedProps`。
+
+完整说明和无需 API Key 的浏览器示例见 [AG-UI 与 A2UI](https://codexiaoke.github.io/agentdown/guide/ag-ui-a2ui)。
 
 ## 最快接入官方框架
 
@@ -121,7 +139,8 @@ const session = useAgnoChatSession<string>({
 | `Protocol + Bridge + Runtime` | 把任意后端事件映射成稳定的运行态命令和可订阅状态 |
 | `RunSurface` | 把 runtime 中的 block 渲染成聊天式界面、工具卡片流和受控 Vue 组件 |
 | `AgentChatWorkspace` | 直接提供完整聊天工作区，内置输入区、附件上传、回底按钮、右侧 panel 和文件预览 |
-| 官方适配器 | 已提供 `Agno`、`LangChain`、`AutoGen`、`CrewAI` 官方事件适配层 |
+| 官方适配器 | 已提供 `AG-UI`、`Agno`、`LangChain`、`AutoGen`、`CrewAI` 官方事件适配层 |
+| 生成式 UI | A2UI v0.9 Surface、DataModel、action 回传与前端安全 Catalog |
 | 组件扩展 | 支持 `builtinComponents`、`renderers`、`messageShells`、`:::vue-component` |
 | 性能 | 支持 pretext 文本渲染、长文本 slab、长文窗口化、group windowing、重型 block lazy mount |
 | 调试回放 | 支持 transcript 导入导出、history replay、事件记录和性能遥测 |
@@ -137,6 +156,7 @@ const session = useAgnoChatSession<string>({
 | `math` | KaTeX 数学公式 |
 | `thought` | 可折叠思考块 |
 | `component` | `:::vue-component` 从受控注册表注入的 Vue 组件 |
+| `a2ui` | A2UI v0.9 声明式 Surface，由前端 Catalog 渲染 |
 | `artifact` | Agent 产物 |
 | `approval` | 审批块 |
 | `timeline` | 时间线块 |
@@ -147,6 +167,7 @@ const session = useAgnoChatSession<string>({
 
 | 框架 | 推荐入口 | 流式文本 | 工具卡片 | 内置操作审批 | 说明 |
 | --- | --- | --- | --- | --- | --- |
+| AG-UI | `useAgUiChatSession()` / `createAgUiAdapter()` | 支持 | 支持 | A2UI action / 自定义审批 | 标准 `RunAgentInput`、events、shared state 与生成式 UI |
 | Agno | `useAgnoChatSession()` / `createAgnoAdapter()` | 支持 | 支持 | 支持 | 聊天页面优先用 `useAgnoChatSession()` |
 | LangChain | `useLangChainChatSession()` / `createLangChainAdapter()` | 支持 | 支持 | 支持 | 直接消费 `astream_events()` 风格事件 |
 | AutoGen | `useAutoGenChatSession()` / `createAutoGenAdapter()` | 支持 | 支持 | 支持 | 直接消费官方 `run_stream()` 事件 |
@@ -728,6 +749,7 @@ python3 backend/run.py
 - [快速开始](https://codexiaoke.github.io/agentdown/guide/getting-started)
 - [核心概念](https://codexiaoke.github.io/agentdown/guide/core-concepts)
 - [官方框架适配](https://codexiaoke.github.io/agentdown/guide/framework-adapters)
+- [AG-UI 与 A2UI](https://codexiaoke.github.io/agentdown/guide/ag-ui-a2ui)
 - [后端会话恢复与断线续传](https://codexiaoke.github.io/agentdown/guide/backend-conversation-recovery)
 - [自定义协议接入](https://codexiaoke.github.io/agentdown/guide/custom-framework)
 - [RunSurface](https://codexiaoke.github.io/agentdown/guide/run-surface)

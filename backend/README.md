@@ -2,7 +2,7 @@
 
 这个 `backend/` 目录提供的是一个真实的 FastAPI SSE backend，用来和前端适配层直接联调。
 
-它不是 mock，也不是 demo 文本流，而是：
+其中 Agno、LangChain、AutoGen、CrewAI endpoint 不是 mock，而是：
 
 - `DeepSeek` 大模型
 - 真实 Agent 框架
@@ -11,6 +11,7 @@
 
 当前提供这些 endpoint：
 
+- `/api/stream/agui`：无需 API Key 的标准 AG-UI + A2UI v0.9 内存示例
 - `/api/stream/agno`
 - `/api/stream/langchain`
 - `/api/stream/autogen`
@@ -18,13 +19,15 @@
 - `GET /api/v1/conversations/{conversation_id}`：读取后端权威事件归档
 - `GET /api/v1/conversations/{conversation_id}/events?request_id=...`：只读续接已有运行
 
-所有 stream endpoint 都支持：
+所有 stream endpoint 都支持稳定的 SSE id、幂等请求和按游标补发。AG-UI 使用标准 `RunAgentInput`，身份与游标放在 HTTP headers；其他框架 endpoint 同时兼容现有请求体字段：
 
 - `client_request_id` / `Idempotency-Key`：避免重连时重复执行模型调用
 - `after_cursor` / `Last-Event-ID`：只补发尚未应用的事件
 - SSE `id`：格式为 `{conversation_id}:{cursor}`
 
 客户端断开后，provider 生产任务仍在后端继续运行。详细契约见 `docs/guide/backend-conversation-recovery.md`。
+
+AG-UI/A2UI 的前后端职责、action 回传和安全 Catalog 见 `docs/guide/ag-ui-a2ui.md`。
 
 归档响应为 `running` 时会提供 `active_request_id`。刷新后的页面使用 events GET 接口和 `Last-Event-ID` 继续读取，不能为了恢复而重新 POST 原始 prompt。
 
@@ -111,6 +114,31 @@ curl http://127.0.0.1:8000/api/health
 ```
 
 ## 请求示例
+
+### AG-UI + A2UI（无需 API Key）
+
+```bash
+curl -N \
+  -X POST http://127.0.0.1:8000/api/stream/agui \
+  -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: request:trip-demo-1' \
+  -d '{
+    "threadId": "session:trip-demo",
+    "runId": "request:trip-demo-1",
+    "messages": [
+      {
+        "id": "message:user:trip-demo-1",
+        "role": "user",
+        "content": "帮我做一个杭州周末旅行计划"
+      }
+    ],
+    "tools": [],
+    "context": [],
+    "state": {}
+  }'
+```
+
+这个 endpoint 会返回标准 AG-UI lifecycle/text/tool/state events，以及三条装在 `CUSTOM name=a2ui` 中的 A2UI v0.9 Surface 消息。
 
 ### Agno
 

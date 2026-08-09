@@ -29,6 +29,7 @@ export default defineConfig({
       { text: '在线体验', link: '/demo' },
       { text: '快速开始', link: '/guide/getting-started' },
       { text: '指南', link: '/guide/core-concepts' },
+      { text: 'AG-UI + A2UI', link: '/guide/ag-ui-a2ui' },
       { text: '适配器', link: '/guide/framework-adapters' },
       { text: 'API', link: '/api/runtime' },
       { text: 'GitHub', link: repositoryUrl }
@@ -42,6 +43,7 @@ export default defineConfig({
             { text: '核心概念', link: '/guide/core-concepts' },
             { text: '内部架构边界', link: '/guide/architecture' },
             { text: '后端会话恢复', link: '/guide/backend-conversation-recovery' },
+            { text: 'AG-UI 与 A2UI', link: '/guide/ag-ui-a2ui' },
             { text: '官方框架适配', link: '/guide/framework-adapters' },
             { text: '自定义协议接入', link: '/guide/custom-framework' },
             { text: 'RunSurface 定制', link: '/guide/run-surface' },
