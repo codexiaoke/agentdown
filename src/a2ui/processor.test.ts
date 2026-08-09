@@ -69,11 +69,19 @@ function createMessages() {
 describe('createA2UiProcessor', () => {
   it('processes official v0.9 surface, components and data model messages', () => {
     const controller = createA2UiProcessor({ catalogs: [createA2UiBasicCatalog()] });
+    const messages = createMessages();
 
-    controller.process(createMessages());
+    controller.process(messages[0]);
+    expect(controller.getSurface('planner')).toBeDefined();
+    expect(controller.getSurface('planner')?.componentsModel.get('title')).toBeUndefined();
+
+    controller.process(messages[1]);
+    expect(controller.getSurface('planner')?.componentsModel.get('title')?.type).toBe('Text');
+    expect(controller.getSurface('planner')?.dataModel.get('/city')).toBeUndefined();
+
+    controller.process(messages[2]);
 
     const surface = controller.getSurface('planner');
-    expect(surface?.componentsModel.get('title')?.type).toBe('Text');
     expect(surface?.dataModel.get('/city')).toBe('杭州');
     expect(controller.processor.getClientDataModel()).toEqual({
       version: 'v0.9',
