@@ -1,6 +1,7 @@
 import { effectScope } from 'vue';
 import { describe, expect, it, vi } from 'vitest';
 import { A2UI_BASIC_CATALOG_ID, A2UI_SURFACE_RENDERER } from '../../a2ui';
+import type { FrameworkChatTransportContext } from '../../adapters/shared/chatFactory';
 import type { RunSurfaceRendererContext, RunSurfaceRendererRegistration } from '../../surface/types';
 import { serializeAgUiA2UiForwardedProps, useAgUiA2UiChatSession } from './chat';
 
@@ -96,6 +97,7 @@ describe('useAgUiA2UiChatSession', () => {
 
   it('sends capabilities on text requests and adds action or error only when present', async () => {
     const requests: Array<Record<string, unknown>> = [];
+    const transportContexts: Array<FrameworkChatTransportContext | undefined> = [];
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       const request = JSON.parse(String(init?.body)) as Record<string, unknown>;
       requests.push(request);
@@ -117,11 +119,18 @@ describe('useAgUiA2UiChatSession', () => {
       conversationId: 'thread:test',
       transport: {
         fetch: fetchMock as typeof fetch,
-        forwardedProps: { tenantId: 'tenant-1' }
+        forwardedProps(_source: string, context: FrameworkChatTransportContext | undefined) {
+          transportContexts.push(context);
+          return { tenantId: 'tenant-1' };
+        }
       }
     }));
 
     await session!.send('生成计划');
+    const originalUserBlock = session!.runtime.snapshot().blocks.find(
+      (block) => block.content === '生成计划'
+    );
+    expect(originalUserBlock).toBeDefined();
     await session!.sendA2UiClient({
       message: {
         version: 'v0.9.1',
@@ -188,6 +197,11 @@ describe('useAgUiA2UiChatSession', () => {
         }
       }
     });
+    expect(transportContexts[0]?.submission).toMatchObject({ requestText: '生成计划' });
+    expect(transportContexts[1]?.submission).toBeNull();
+    expect(transportContexts[2]?.submission).toBeNull();
+    expect(session!.lastInput.value).toBe('生成计划');
+    expect(session!.runtime.snapshot().blocks).toContainEqual(originalUserBlock);
 
     scope.stop();
   });

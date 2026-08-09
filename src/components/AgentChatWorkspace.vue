@@ -708,6 +708,7 @@ defineExpose<AgentChatWorkspaceExposed>({
               type="button"
               class="agentdown-chat-workspace__scroll-to-bottom"
               :data-unread="scrollToBottomHasUnread"
+              aria-label="滚动到底部"
               @click="handleScrollToBottomClick"
             >
               <span
@@ -1032,7 +1033,7 @@ defineExpose<AgentChatWorkspaceExposed>({
 
 .agentdown-chat-workspace__scroll-to-bottom {
   position: absolute;
-  left: 50%;
+  right: 1.4rem;
   top: 0;
   z-index: 2;
   display: inline-flex;
@@ -1047,7 +1048,7 @@ defineExpose<AgentChatWorkspaceExposed>({
   color: #475569;
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
   cursor: pointer;
-  transform: translate(-50%, -115%);
+  transform: translateY(-115%);
   transition:
     background-color 160ms ease,
     border-color 160ms ease,

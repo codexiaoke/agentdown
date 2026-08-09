@@ -371,6 +371,7 @@ function alignClass(value: unknown): string {
 .agentdown-a2ui-divider--vertical { width: 1px; min-height: 2rem; border: 0; background: var(--agentdown-border, #d8dee9); }
 .agentdown-a2ui-button { min-height: 2.35rem; padding: 0.55rem 0.9rem; border: 1px solid transparent; border-radius: 0.7rem; font: inherit; cursor: pointer; }
 .agentdown-a2ui-button--primary { background: var(--agentdown-accent, #4f46e5); color: white; }
+.agentdown-a2ui-button :deep(.agentdown-a2ui-text) { color: inherit; }
 .agentdown-a2ui-button--default { border-color: var(--agentdown-border, #d8dee9); background: var(--agentdown-surface, #fff); color: inherit; }
 .agentdown-a2ui-button--borderless { padding-inline: 0.2rem; border-color: transparent; background: transparent; color: var(--agentdown-accent, #4f46e5); }
 .agentdown-a2ui-button:disabled { cursor: not-allowed; opacity: 0.5; }
