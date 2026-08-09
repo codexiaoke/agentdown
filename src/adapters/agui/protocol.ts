@@ -92,6 +92,8 @@ export function createAgUiProtocol(options: AgUiProtocolOptions = {}): AgUiProto
   let activeThreadId: string | null = null;
   let activeTextMessageId: string | null = null;
   let activeReasoningMessageId: string | null = null;
+  let activeToolCallId: string | null = null;
+  let activeThinkingNodeId: string | null = null;
 
   function semantics(
     event: AgUiEvent,
@@ -183,6 +185,8 @@ export function createAgUiProtocol(options: AgUiProtocolOptions = {}): AgUiProto
         toolNames.clear();
         toolArguments.clear();
         a2uiSurfaces.clear();
+        activeToolCallId = null;
+        activeThinkingNodeId = null;
         store.reset();
       }
       store.apply(event);
@@ -298,6 +302,7 @@ export function createAgUiProtocol(options: AgUiProtocolOptions = {}): AgUiProto
         }
 
         case EventType.TOOL_CALL_START: {
+          activeToolCallId = event.toolCallId;
           toolNames.set(event.toolCallId, event.toolCallName);
           toolArguments.set(event.toolCallId, '');
           const renderer = resolveToolRenderer(event, context, event.toolCallId, event.toolCallName);
@@ -310,6 +315,45 @@ export function createAgUiProtocol(options: AgUiProtocolOptions = {}): AgUiProto
             data: { arguments: '', rawEvent: event as unknown as RuntimeData },
             at
           }));
+          break;
+        }
+        case EventType.TOOL_CALL_CHUNK: {
+          const toolCallId = event.toolCallId ?? activeToolCallId;
+          if (!toolCallId) break;
+
+          activeToolCallId = toolCallId;
+          const wasKnown = toolNames.has(toolCallId);
+          const toolCallName = event.toolCallName
+            ?? toolNames.get(toolCallId)
+            ?? '工具调用';
+          toolNames.set(toolCallId, toolCallName);
+
+          if (!wasKnown) {
+            toolArguments.set(toolCallId, '');
+            const renderer = resolveToolRenderer(event, context, toolCallId, toolCallName);
+            commands.push(...cmd.tool.start({
+              id: toolCallId,
+              title: toolCallName,
+              parentId: activeRunId,
+              ...(renderer !== undefined ? { renderer } : {}),
+              ...semantics(event, context, event.parentMessageId),
+              data: { arguments: '', rawEvent: event as unknown as RuntimeData },
+              at
+            }));
+          }
+
+          if (event.delta) {
+            const args = `${toolArguments.get(toolCallId) ?? ''}${event.delta}`;
+            toolArguments.set(toolCallId, args);
+            const renderer = resolveToolRenderer(event, context, toolCallId, toolCallName);
+            commands.push(...cmd.tool.update({
+              id: toolCallId,
+              title: toolCallName,
+              ...(renderer !== undefined ? { renderer } : {}),
+              data: { arguments: args, rawEvent: event as unknown as RuntimeData },
+              at
+            }));
+          }
           break;
         }
         case EventType.TOOL_CALL_ARGS: {
@@ -327,6 +371,7 @@ export function createAgUiProtocol(options: AgUiProtocolOptions = {}): AgUiProto
           break;
         }
         case EventType.TOOL_CALL_END:
+          if (activeToolCallId === event.toolCallId) activeToolCallId = null;
           commands.push(...cmd.tool.update({
             id: event.toolCallId,
             title: toolNames.get(event.toolCallId) ?? '工具调用',
@@ -349,6 +394,33 @@ export function createAgUiProtocol(options: AgUiProtocolOptions = {}): AgUiProto
           }));
           toolNames.delete(event.toolCallId);
           toolArguments.delete(event.toolCallId);
+          if (activeToolCallId === event.toolCallId) activeToolCallId = null;
+          break;
+
+        case EventType.THINKING_START: {
+          activeThinkingNodeId = `agui:thinking:${activeRunId ?? context.makeId('run')}`;
+          commands.push(cmd.node.upsert({
+            id: activeThinkingNodeId,
+            type: 'reasoning',
+            status: 'running',
+            parentId: activeRunId,
+            title: event.title ?? '思考过程',
+            data: { rawEvent: event as unknown as RuntimeData },
+            startedAt: at,
+            updatedAt: at
+          }));
+          break;
+        }
+        case EventType.THINKING_END:
+          if (activeThinkingNodeId) {
+            commands.push(cmd.node.patch(activeThinkingNodeId, {
+              status: 'done',
+              data: { rawEvent: event as unknown as RuntimeData },
+              endedAt: at,
+              updatedAt: at
+            }));
+            activeThinkingNodeId = null;
+          }
           break;
 
         case EventType.STEP_STARTED:
@@ -405,6 +477,15 @@ export function createAgUiProtocol(options: AgUiProtocolOptions = {}): AgUiProto
           }
           openTextStreams.clear();
           openReasoningStreams.clear();
+          if (activeThinkingNodeId) {
+            commands.push(cmd.node.patch(activeThinkingNodeId, {
+              status: 'done',
+              endedAt: at,
+              updatedAt: at
+            }));
+          }
+          activeThinkingNodeId = null;
+          activeToolCallId = null;
           for (const surfaceId of a2uiSurfaces.keys()) {
             commands.push(cmd.block.patch(createA2UiBlockId(surfaceId), { state: 'settled', updatedAt: at }));
           }
@@ -427,6 +508,15 @@ export function createAgUiProtocol(options: AgUiProtocolOptions = {}): AgUiProto
           }
           openTextStreams.clear();
           openReasoningStreams.clear();
+          if (activeThinkingNodeId) {
+            commands.push(cmd.node.error({
+              id: activeThinkingNodeId,
+              message: event.message,
+              at
+            }));
+          }
+          activeThinkingNodeId = null;
+          activeToolCallId = null;
           commands.push(
             cmd.error.upsert({
               id: `block:agui:error:${runId}`,

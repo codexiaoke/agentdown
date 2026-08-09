@@ -65,7 +65,8 @@ function validateMessage<T extends ComponentApi>(
   policy: A2UiSecurityPolicy
 ): A2uiMessage {
   const serialized = JSON.stringify(input);
-  if (serialized.length > policy.maxMessageBytes) {
+  const messageBytes = new TextEncoder().encode(serialized).byteLength;
+  if (messageBytes > policy.maxMessageBytes) {
     throw new Error(`A2UI message exceeds ${policy.maxMessageBytes} bytes.`);
   }
 

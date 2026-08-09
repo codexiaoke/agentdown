@@ -2,6 +2,7 @@ import type {
   AGUIEvent,
   Context,
   Message,
+  ResumeEntry,
   RunAgentInput,
   Tool
 } from '@ag-ui/core';
@@ -79,6 +80,7 @@ export interface AgUiSseTransportOptions<
   state?: FrameworkJsonTransportResolvable<TSource, unknown, TContext>;
   forwardedProps?: FrameworkJsonTransportResolvable<TSource, unknown, TContext>;
   parentRunId?: FrameworkJsonTransportResolvable<TSource, string | undefined, TContext>;
+  resume?: FrameworkJsonTransportResolvable<TSource, ResumeEntry[] | undefined, TContext>;
 }
 
 export interface UseAgUiChatSessionOptions<TSource = FetchTransportSource> {
@@ -113,6 +115,7 @@ export type {
   AGUIEvent,
   Context,
   Message,
+  ResumeEntry,
   RunAgentInput,
   Tool
 };
