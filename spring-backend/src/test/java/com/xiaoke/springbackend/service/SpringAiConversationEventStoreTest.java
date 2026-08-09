@@ -1,5 +1,7 @@
 package com.xiaoke.springbackend.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import reactor.test.StepVerifier;
 
@@ -50,5 +52,25 @@ class SpringAiConversationEventStoreTest {
                 SpringAiConversationEventStore.IdempotencyConflictException.class,
                 () -> store.openRun("session:test", "request:1", "changed")
         );
+    }
+
+    @Test
+    void serializesTheSameSnakeCaseArchiveContractAsFastApi() throws JsonProcessingException {
+        SpringAiConversationEventStore store = new SpringAiConversationEventStore();
+        SpringAiConversationEventStore.OpenRunResult opened = store.openRun(
+                "session:test",
+                "request:1",
+                "fingerprint"
+        );
+        store.append(opened, "done", Map.of("event", "done"));
+        store.complete(opened, "completed");
+
+        String json = new ObjectMapper().writeValueAsString(store.load("session:test"));
+
+        assertTrue(json.contains("\"conversation_id\":\"session:test\""));
+        assertTrue(json.contains("\"provider_id\":\"springai\""));
+        assertTrue(json.contains("\"latest_cursor\":1"));
+        assertTrue(json.contains("\"event_id\":\"session:test:1\""));
+        assertTrue(json.contains("\"request_id\":\"request:1\""));
     }
 }
