@@ -1,11 +1,10 @@
 import { EventType, type AGUIEvent } from '@ag-ui/core';
 import { describe, expect, it } from 'vitest';
-import { A2UI_BASIC_CATALOG_ID } from '../../a2ui';
 import { createAgUiAdapter } from './adapter';
 import { createAgUiProtocol } from './protocol';
 
 describe('createAgUiProtocol', () => {
-  it('maps lifecycle, text, tool and A2UI custom events into the runtime', () => {
+  it('maps lifecycle, text and tool events without interpreting custom events', () => {
     const protocol = createAgUiProtocol({ recordEvents: true });
     const adapter = createAgUiAdapter({ protocol });
     const session = adapter.createSession();
@@ -32,39 +31,7 @@ describe('createAgUiProtocol', () => {
       {
         type: EventType.CUSTOM,
         name: 'a2ui',
-        value: {
-          version: 'v0.9',
-          createSurface: {
-            surfaceId: 'trip-planner',
-            catalogId: A2UI_BASIC_CATALOG_ID,
-            sendDataModel: true
-          }
-        }
-      },
-      {
-        type: EventType.CUSTOM,
-        name: 'a2ui',
-        value: {
-          version: 'v0.9',
-          updateComponents: {
-            surfaceId: 'trip-planner',
-            components: [
-              { id: 'root', component: 'Text', text: { path: '/title' }, variant: 'h2' }
-            ]
-          }
-        }
-      },
-      {
-        type: EventType.CUSTOM,
-        name: 'a2ui',
-        value: {
-          version: 'v0.9',
-          updateDataModel: {
-            surfaceId: 'trip-planner',
-            path: '/',
-            value: { title: '杭州周末计划' }
-          }
-        }
+        value: { applicationDefined: true }
       },
       {
         type: EventType.RUN_FINISHED,
@@ -80,10 +47,7 @@ describe('createAgUiProtocol', () => {
     expect(session.runtime.node('run-1')?.status).toBe('done');
     expect(session.runtime.node('tool-1')?.status).toBe('done');
     expect(session.runtime.blocks().some((block) => block.content?.includes('正在生成计划'))).toBe(true);
-    const surfaceBlock = session.runtime.block('block:a2ui:trip-planner');
-    expect(surfaceBlock?.renderer).toBe('a2ui.surface');
-    expect(surfaceBlock?.state).toBe('settled');
-    expect((surfaceBlock?.data.messages as unknown[]).length).toBe(3);
+    expect(session.runtime.blocks().some((block) => block.type === 'a2ui')).toBe(false);
     expect(protocol.store.snapshot.state).toEqual({ status: 'planning' });
     expect(session.runtime.history().some((entry) => (
       entry.kind === 'command' && entry.command.type === 'event.record'

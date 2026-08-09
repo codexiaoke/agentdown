@@ -1,6 +1,4 @@
 import { EventType, type AGUIEvent } from '@ag-ui/core';
-import { A2uiMessageSchema, type A2uiMessage } from '@a2ui/web_core/v0_9';
-import { A2UI_SURFACE_RENDERER } from '../../a2ui';
 import { cmd } from '../../runtime/defineProtocol';
 import type {
   ProtocolContext,
@@ -10,8 +8,6 @@ import type {
 } from '../../runtime/types';
 import { createAgUiStateStore } from './state';
 import type { AgUiEvent, AgUiProtocol, AgUiProtocolOptions, AgUiValueResolver } from './types';
-
-const DEFAULT_A2UI_EVENT_NAMES = new Set(['a2ui', 'a2ui.message', 'a2ui.surface']);
 
 function resolveValue<T>(
   resolver: AgUiValueResolver<T> | undefined,
@@ -37,44 +33,6 @@ function readEventDelta(event: AgUiEvent): string | undefined {
   return 'delta' in event && typeof event.delta === 'string' ? event.delta : undefined;
 }
 
-function readA2UiSurfaceId(message: A2uiMessage): string {
-  if ('createSurface' in message) return message.createSurface.surfaceId;
-  if ('updateComponents' in message) return message.updateComponents.surfaceId;
-  if ('updateDataModel' in message) return message.updateDataModel.surfaceId;
-  return message.deleteSurface.surfaceId;
-}
-
-function parseA2UiMessages(value: unknown): A2uiMessage[] {
-  const candidates = Array.isArray(value)
-    ? value
-    : value && typeof value === 'object' && 'messages' in value && Array.isArray(value.messages)
-      ? value.messages
-      : [value];
-
-  const messages: A2uiMessage[] = [];
-  for (const candidate of candidates) {
-    const parsed = A2uiMessageSchema.safeParse(candidate);
-    if (parsed.success) {
-      messages.push(parsed.data as A2uiMessage);
-    }
-  }
-  return messages;
-}
-
-function extractA2UiMessages(event: AgUiEvent, names: ReadonlySet<string>): A2uiMessage[] {
-  if (event.type === EventType.CUSTOM && names.has(event.name)) {
-    return parseA2UiMessages(event.value);
-  }
-  if (event.type === EventType.RAW) {
-    return parseA2UiMessages(event.event);
-  }
-  return [];
-}
-
-function createA2UiBlockId(surfaceId: string): string {
-  return `block:a2ui:${surfaceId}`;
-}
-
 function createActivityBlockId(messageId: string): string {
   return `block:agui:activity:${messageId}`;
 }
@@ -86,8 +44,6 @@ export function createAgUiProtocol(options: AgUiProtocolOptions = {}): AgUiProto
   const openReasoningStreams = new Set<string>();
   const toolNames = new Map<string, string>();
   const toolArguments = new Map<string, string>();
-  const a2uiSurfaces = new Map<string, A2uiMessage[]>();
-  const a2uiNames = options.a2uiEventNames ?? DEFAULT_A2UI_EVENT_NAMES;
   let activeRunId: string | null = null;
   let activeThreadId: string | null = null;
   let activeTextMessageId: string | null = null;
@@ -184,7 +140,6 @@ export function createAgUiProtocol(options: AgUiProtocolOptions = {}): AgUiProto
         openReasoningStreams.clear();
         toolNames.clear();
         toolArguments.clear();
-        a2uiSurfaces.clear();
         activeToolCallId = null;
         activeThinkingNodeId = null;
         store.reset();
@@ -192,35 +147,6 @@ export function createAgUiProtocol(options: AgUiProtocolOptions = {}): AgUiProto
       store.apply(event);
       if (options.recordEvents) {
         commands.push(cmd.event.record(event as unknown as RuntimeData));
-      }
-
-      const a2uiMessages = extractA2UiMessages(event, a2uiNames);
-      for (const message of a2uiMessages) {
-        const surfaceId = readA2UiSurfaceId(message);
-        const blockId = createA2UiBlockId(surfaceId);
-
-        if ('deleteSurface' in message) {
-          a2uiSurfaces.delete(surfaceId);
-          commands.push(cmd.block.remove(blockId));
-          continue;
-        }
-
-        const history = 'createSurface' in message
-          ? [message]
-          : [...(a2uiSurfaces.get(surfaceId) ?? []), message];
-        a2uiSurfaces.set(surfaceId, history);
-        commands.push(cmd.block.upsert({
-          id: blockId,
-          slot: options.slot ?? 'main',
-          type: 'a2ui',
-          renderer: A2UI_SURFACE_RENDERER,
-          state: 'stable',
-          nodeId: activeRunId,
-          ...semantics(event, context, `message:a2ui:${surfaceId}`),
-          data: { surfaceId, messages: history },
-          createdAt: at,
-          updatedAt: at
-        }));
       }
 
       switch (event.type) {
@@ -486,9 +412,6 @@ export function createAgUiProtocol(options: AgUiProtocolOptions = {}): AgUiProto
           }
           activeThinkingNodeId = null;
           activeToolCallId = null;
-          for (const surfaceId of a2uiSurfaces.keys()) {
-            commands.push(cmd.block.patch(createA2UiBlockId(surfaceId), { state: 'settled', updatedAt: at }));
-          }
           commands.push(cmd.run.finish({
             id: event.runId,
             status: event.outcome?.type === 'interrupt' ? 'blocked' : 'done',
