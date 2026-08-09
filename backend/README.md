@@ -27,6 +27,10 @@
 - `after_cursor` / `Last-Event-ID`：只补发尚未应用的事件
 - SSE `id`：格式为 `{conversation_id}:{cursor}`
 
+独立 `/api/examples/a2ui` 也接受 envelope 中的 `requestId` 和 HTTP
+`Idempotency-Key`。失败重试必须复用同一个值；相同请求会直接返回已保存结果，不会再次
+调用模型，同一个键配不同载荷会返回 `409`。
+
 客户端断开后，provider 生产任务仍在后端继续运行。详细契约见 `docs/guide/backend-conversation-recovery.md`。
 
 AG-UI/A2UI 的前后端职责、action 回传和安全 Catalog 见 `docs/guide/ag-ui-a2ui.md`。

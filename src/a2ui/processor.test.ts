@@ -238,7 +238,8 @@ describe('createA2UiProcessor', () => {
     const controller = createA2UiSurfaceController({
       surfaceId: 'planner',
       catalogs: [createA2UiBasicCatalog()],
-      onClientMessage
+      onClientMessage,
+      createClientRequestId: () => 'a2ui:request:test'
     });
     controller.sync(createMessages());
 
@@ -247,6 +248,7 @@ describe('createA2UiProcessor', () => {
     }, 'submit');
 
     expect(onClientMessage).toHaveBeenCalledWith({
+      requestId: 'a2ui:request:test',
       message: {
         version: 'v0.9.1',
         action: expect.objectContaining({
@@ -265,6 +267,86 @@ describe('createA2UiProcessor', () => {
         }
       }
     });
+
+    controller.dispose();
+  });
+
+  it('keeps one action pending and suppresses rapid duplicate dispatches', async () => {
+    let release: (() => void) | undefined;
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const states: string[] = [];
+    const onClientMessage = vi.fn(() => pending);
+    const controller = createA2UiSurfaceController({
+      surfaceId: 'planner',
+      catalogs: [createA2UiBasicCatalog()],
+      onClientMessage,
+      createClientRequestId: () => 'a2ui:request:deduplicated',
+      onActionStateChange(state) {
+        states.push(state.status);
+      }
+    });
+    controller.sync(createMessages());
+
+    const first = controller.getSurface()!.dispatchAction({
+      event: { name: 'trip_submitted', context: { city: '杭州' } }
+    }, 'submit');
+    const duplicate = controller.getSurface()!.dispatchAction({
+      event: { name: 'trip_submitted', context: { city: '杭州' } }
+    }, 'submit');
+
+    await duplicate;
+    expect(onClientMessage).toHaveBeenCalledTimes(1);
+    expect(controller.getActionState('submit')).toMatchObject({
+      requestId: 'a2ui:request:deduplicated',
+      status: 'pending',
+      attempt: 1
+    });
+
+    release?.();
+    await first;
+    expect(controller.getActionState('submit')?.status).toBe('succeeded');
+    expect(states).toEqual(['pending', 'succeeded']);
+
+    controller.dispose();
+  });
+
+  it('retries a failed action with the original envelope and request id', async () => {
+    const envelopes: unknown[] = [];
+    let attempt = 0;
+    const controller = createA2UiSurfaceController({
+      surfaceId: 'planner',
+      catalogs: [createA2UiBasicCatalog()],
+      createClientRequestId: () => 'a2ui:request:retry',
+      async onClientMessage(envelope) {
+        envelopes.push(envelope);
+        attempt += 1;
+        if (attempt === 1) {
+          throw new Error('网络暂时不可用');
+        }
+      }
+    });
+    controller.sync(createMessages());
+
+    await controller.getSurface()!.dispatchAction({
+      event: { name: 'trip_submitted', context: { city: '杭州' } }
+    }, 'submit');
+
+    expect(controller.getActionState('submit')).toMatchObject({
+      requestId: 'a2ui:request:retry',
+      status: 'failed',
+      attempt: 1,
+      error: '网络暂时不可用'
+    });
+    expect(await controller.retryAction('submit')).toBe(true);
+    expect(controller.getActionState('submit')).toMatchObject({
+      requestId: 'a2ui:request:retry',
+      status: 'succeeded',
+      attempt: 2
+    });
+    expect(envelopes).toHaveLength(2);
+    expect(envelopes[1]).toEqual(envelopes[0]);
 
     controller.dispose();
   });

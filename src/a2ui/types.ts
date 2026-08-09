@@ -64,6 +64,12 @@ export interface A2UiElementProps {
   resolvedProps: Record<string, unknown>;
   surface: SurfaceModel<ComponentApi>;
   securityPolicy: A2UiSecurityPolicy;
+  /** 当前组件最近一次服务端 action 的生命周期状态。 */
+  actionState?: A2UiActionState;
+  /** 使用原请求 id 和原始数据重试最近一次失败的 action。 */
+  retryAction?: () => Promise<boolean>;
+  /** 宿主正在恢复或执行其他互斥操作时统一禁止交互。 */
+  interactionDisabled?: boolean;
 }
 
 /** RunSurface block 中可序列化、可归档恢复的 A2UI 数据。 */
@@ -88,6 +94,8 @@ export interface A2UiClientMetadata {
 
 /** Surface 产生 action 或 error 时交给宿主的完整客户端消息。 */
 export interface A2UiClientEnvelope extends A2UiClientMetadata {
+  /** Agentdown transport 使用的稳定请求 id；重试时必须保持不变。 */
+  requestId: string;
   message: A2uiClientMessage;
 }
 
@@ -97,7 +105,38 @@ export interface A2UiClientEnvelope extends A2UiClientMetadata {
  * 首次普通请求只有能力声明；Surface 产生 action 或 error 后才会包含 message。
  */
 export interface A2UiClientTransportEnvelope extends A2UiClientMetadata {
+  requestId?: string;
   message?: A2uiClientMessage;
+}
+
+/** A2UI 服务端 action 的客户端生命周期。 */
+export type A2UiActionStatus = 'pending' | 'succeeded' | 'failed';
+
+/**
+ * 一个组件最近一次 action 的状态。
+ *
+ * `requestId` 在失败重试时保持不变，后端可直接把它用作幂等键。
+ */
+export interface A2UiActionState {
+  key: string;
+  requestId: string;
+  action: A2uiClientAction;
+  status: A2UiActionStatus;
+  attempt: number;
+  startedAt: number;
+  settledAt?: number;
+  error?: string;
+}
+
+/** 按 `surfaceId + sourceComponentId` 索引的 action 状态快照。 */
+export type A2UiActionStateMap = Readonly<Record<string, A2UiActionState>>;
+
+/** 生成 action 状态表使用的稳定组件 key。 */
+export function createA2UiActionStateKey(
+  surfaceId: string,
+  sourceComponentId: string
+): string {
+  return `${encodeURIComponent(surfaceId)}:${encodeURIComponent(sourceComponentId)}`;
 }
 
 /** A2UI Surface 处理错误的统一上下文。 */

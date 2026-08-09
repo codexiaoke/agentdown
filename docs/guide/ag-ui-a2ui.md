@@ -79,7 +79,10 @@ const catalogs = [createA2UiBasicCatalog()];
 async function sendToBackend(envelope: A2UiClientEnvelope) {
   await fetch('/api/a2ui/client', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'Idempotency-Key': envelope.requestId
+    },
     body: JSON.stringify(envelope)
   });
 }
@@ -90,10 +93,14 @@ async function sendToBackend(envelope: A2UiClientEnvelope) {
     surface-id="planner"
     :messages="messages"
     :catalogs="catalogs"
-    @client-message="sendToBackend"
+    :send-client-message="sendToBackend"
   />
 </template>
 ```
+
+`sendClientMessage` 是可等待的 transport callback。它返回的 Promise 会驱动按钮的
+`pending / succeeded / failed` 状态；`@client-message` 仍可用于埋点观察，但不会被 Vue
+等待，因此不能代替 transport callback。
 
 `A2UiSurface` 内部持有长生命周期 `MessageProcessor`。当服务端消息历史只是追加时，它只处理新增消息，不重放旧历史，因此用户在 TextField、ChoicePicker 等组件中的本地输入不会被下一条服务端消息覆盖。只有历史发生替换或回退时才重建 Surface。
 
@@ -202,6 +209,7 @@ useAgUiA2UiChatSession({
 ```json
 {
   "a2ui": {
+    "requestId": "a2ui:7a90d64f-...",
     "clientMessage": {
       "version": "v0.9.1",
       "action": {
@@ -229,6 +237,10 @@ useAgUiA2UiChatSession({
 }
 ```
 
+`requestId` 是 Agentdown envelope 的 transport 元数据，不是 A2UI 标准消息字段。按钮
+快速重复点击时只发送一次；失败后的“重试”会原样复用同一个 envelope 和 `requestId`，
+宿主应把它映射到 HTTP `Idempotency-Key` 或等价的后端幂等字段。
+
 只有服务端在 `createSurface.sendDataModel` 中启用后，`clientDataModel` 才会出现。Error 使用同一个 `clientMessage` 字段中的 `error` 分支。
 
 `forwardedProps.a2ui` 是 Agentdown 组合 helper 的默认 transport envelope，不是 A2UI 对 HTTP body 的强制规定。业务可以完全替换序列化方式：
@@ -246,6 +258,20 @@ useAgUiA2UiChatSession({
 ```
 
 也可以直接调用 `session.sendA2UiClient(envelope)`。
+
+## Action 生命周期
+
+Basic Catalog 的 Button 默认具备完整的服务端 action 状态：
+
+- 请求中显示“处理中…”并禁用，阻止双击重复提交
+- 成功后恢复可交互状态
+- 失败时保留 Surface 和表单数据，在原按钮下显示错误与“重试”
+- 重试复用原始 action、data model 和 `requestId`
+- AG-UI 断线重连期间统一禁止 Surface action，避免恢复中的重复业务操作
+
+自定义 Catalog renderer 会收到同样的 `actionState`、`retryAction` 和
+`interactionDisabled` props，因此无需重新实现 transport 状态机。组合 helper 还通过
+`session.a2uiActionStates` 暴露会话级只读状态，方便宿主做埋点或全局提示。
 
 ## Catalog 与安全边界
 

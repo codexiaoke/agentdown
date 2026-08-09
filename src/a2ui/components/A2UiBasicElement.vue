@@ -20,6 +20,13 @@ const validationErrors = computed(() => Array.isArray(values.value.validationErr
   ? values.value.validationErrors.map(String)
   : []);
 const isInvalid = computed(() => values.value.isValid === false || validationErrors.value.length > 0);
+const actionPending = computed(() => props.actionState?.status === 'pending');
+const actionFailed = computed(() => props.actionState?.status === 'failed');
+const actionError = computed(() => props.actionState?.error ?? '操作失败，请重试。');
+const actionErrorId = computed(() => `${props.componentId}-action-error`);
+const actionDisabled = computed(() => (
+  isInvalid.value || actionPending.value || props.interactionDisabled === true
+));
 const weightStyle = computed(() => {
   const weight = Number(values.value.weight);
   return Number.isFinite(weight) && weight > 0 ? { flexGrow: weight } : undefined;
@@ -75,10 +82,20 @@ function safeUrl(value: unknown): string {
 }
 
 function invokeAction() {
+  if (actionDisabled.value) {
+    return;
+  }
   const action = values.value.action;
-  if (typeof action === 'function' && !isInvalid.value) {
+  if (typeof action === 'function') {
     void action();
   }
+}
+
+async function retryFailedAction() {
+  if (actionPending.value) {
+    return;
+  }
+  await props.retryAction?.();
 }
 
 function updateValue(value: unknown) {
@@ -257,18 +274,30 @@ function alignClass(value: unknown): string {
     :class="`agentdown-a2ui-divider--${String(values.axis ?? 'horizontal')}`"
   >
 
-  <button
-    v-else-if="componentType === 'Button'"
-    type="button"
-    class="agentdown-a2ui-button"
-    :class="`agentdown-a2ui-button--${String(values.variant ?? 'primary')}`"
-    :disabled="isInvalid"
-    :aria-label="ariaLabel || undefined"
-    :aria-describedby="ariaDescription ? `${componentId}-description` : undefined"
-    @click="invokeAction"
-  >
-    <slot />
-  </button>
+  <template v-else-if="componentType === 'Button'">
+    <button
+      type="button"
+      class="agentdown-a2ui-button"
+      :class="`agentdown-a2ui-button--${String(values.variant ?? 'primary')}`"
+      :disabled="actionDisabled"
+      :aria-busy="actionPending"
+      :aria-label="ariaLabel || undefined"
+      :aria-describedby="actionFailed ? actionErrorId : ariaDescription ? `${componentId}-description` : undefined"
+      @click="invokeAction"
+    >
+      <span v-if="actionPending" class="agentdown-a2ui-button__pending">处理中…</span>
+      <slot v-else />
+    </button>
+    <div
+      v-if="actionFailed"
+      :id="actionErrorId"
+      class="agentdown-a2ui-action-error"
+      role="alert"
+    >
+      <span>{{ actionError }}</span>
+      <button type="button" :disabled="interactionDisabled" @click="retryFailedAction">重试</button>
+    </div>
+  </template>
 
   <label v-else-if="componentType === 'TextField'" class="agentdown-a2ui-field">
     <span v-if="values.label">{{ String(values.label) }}</span>
@@ -375,6 +404,35 @@ function alignClass(value: unknown): string {
 .agentdown-a2ui-button--default { border-color: var(--agentdown-border, #d8dee9); background: var(--agentdown-surface, #fff); color: inherit; }
 .agentdown-a2ui-button--borderless { padding-inline: 0.2rem; border-color: transparent; background: transparent; color: var(--agentdown-accent, #4f46e5); }
 .agentdown-a2ui-button:disabled { cursor: not-allowed; opacity: 0.5; }
+.agentdown-a2ui-button__pending { display: inline-flex; align-items: center; gap: 0.45rem; }
+.agentdown-a2ui-button__pending::before {
+  width: 0.8rem;
+  height: 0.8rem;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 999px;
+  content: '';
+  animation: agentdown-a2ui-spin 0.75s linear infinite;
+}
+.agentdown-a2ui-action-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.45rem;
+  color: var(--agentdown-danger, #b42318);
+  font-size: 0.82rem;
+}
+.agentdown-a2ui-action-error button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+@keyframes agentdown-a2ui-spin { to { transform: rotate(360deg); } }
 .agentdown-a2ui-field { display: grid; gap: 0.38rem; color: var(--agentdown-text, #172033); }
 .agentdown-a2ui-field input, .agentdown-a2ui-field textarea { width: 100%; box-sizing: border-box; padding: 0.58rem 0.7rem; border: 1px solid var(--agentdown-border, #cbd5e1); border-radius: 0.6rem; background: var(--agentdown-surface, #fff); color: inherit; font: inherit; }
 .agentdown-a2ui-field textarea { min-height: 6rem; resize: vertical; }

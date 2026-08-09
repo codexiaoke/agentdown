@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
+from copy import deepcopy
+import hashlib
 import json
 from typing import Any
 
@@ -24,10 +27,63 @@ class A2UiGenerateRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     session_id: str = Field(alias="sessionId", min_length=1)
+    request_id: str | None = Field(default=None, alias="requestId", min_length=1)
     prompt: str = ""
     client_capabilities: dict[str, Any] = Field(alias="clientCapabilities")
     client_message: dict[str, Any] | None = Field(default=None, alias="clientMessage")
     client_data_model: dict[str, Any] | None = Field(default=None, alias="clientDataModel")
+
+
+class A2UiRequestConflictError(ValueError):
+    """Raised when one A2UI request id is reused with a different payload."""
+
+
+class A2UiIdempotencyStore:
+    """In-memory reference store for standalone A2UI request results."""
+
+    def __init__(self) -> None:
+        self._responses: dict[tuple[str, str], tuple[str, dict[str, Any]]] = {}
+        self._lock = asyncio.Lock()
+
+    async def get(
+        self,
+        session_id: str,
+        request_id: str,
+        fingerprint: str,
+    ) -> dict[str, Any] | None:
+        async with self._lock:
+            cached = self._responses.get((session_id, request_id))
+            if cached is None:
+                return None
+            cached_fingerprint, response = cached
+            if cached_fingerprint != fingerprint:
+                raise A2UiRequestConflictError(
+                    f"A2UI request id {request_id} was already used with a different payload."
+                )
+            return deepcopy(response)
+
+    async def put(
+        self,
+        session_id: str,
+        request_id: str,
+        fingerprint: str,
+        response: dict[str, Any],
+    ) -> None:
+        async with self._lock:
+            self._responses[(session_id, request_id)] = (fingerprint, deepcopy(response))
+
+    async def clear(self) -> None:
+        async with self._lock:
+            self._responses.clear()
+
+
+a2ui_idempotency_store = A2UiIdempotencyStore()
+
+
+def _request_fingerprint(request: A2UiGenerateRequest) -> str:
+    payload = request.model_dump(mode="json", by_alias=True, exclude={"request_id"})
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
 def _validate_capabilities(capabilities: dict[str, Any]) -> None:
@@ -80,8 +136,18 @@ async def generate_a2ui_response(
 
     generator = generator or generate_deepseek_surface
     latest_input = _latest_input(request)
+    fingerprint = _request_fingerprint(request)
     lock = await agui_agent_session_store.lock_for(request.session_id)
     async with lock:
+        if request.request_id:
+            cached = await a2ui_idempotency_store.get(
+                request.session_id,
+                request.request_id,
+                fingerprint,
+            )
+            if cached is not None:
+                return cached
+
         history = await agui_agent_session_store.history(request.session_id)
         generation: AgUiModelGeneration = await generator(settings, history, latest_input)
         await agui_agent_session_store.append_turn(
@@ -90,10 +156,19 @@ async def generate_a2ui_response(
             generation.surface.assistant_text,
         )
 
-    return {
-        "assistantText": generation.surface.assistant_text,
-        "messages": build_a2ui_surface_messages(generation.surface),
-        "model": generation.model,
-        "usage": generation.usage,
-        "responseId": generation.response_id,
-    }
+        response = {
+            "assistantText": generation.surface.assistant_text,
+            "messages": build_a2ui_surface_messages(generation.surface),
+            "model": generation.model,
+            "usage": generation.usage,
+            "responseId": generation.response_id,
+        }
+        if request.request_id:
+            await a2ui_idempotency_store.put(
+                request.session_id,
+                request.request_id,
+                fingerprint,
+                response,
+            )
+
+    return response

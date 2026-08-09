@@ -1,5 +1,13 @@
 import type { MaybeRefOrGetter, ShallowRef } from 'vue';
-import type { A2UiClientEnvelope, A2UiClientTransportEnvelope, A2UiSecurityPolicy, A2UiVersion, A2UiVueCatalog } from '../../a2ui';
+import type {
+  A2UiActionState,
+  A2UiActionStateMap,
+  A2UiClientEnvelope,
+  A2UiClientTransportEnvelope,
+  A2UiSecurityPolicy,
+  A2UiVersion,
+  A2UiVueCatalog
+} from '../../a2ui';
 import type { AgUiAdapterOptions, AgUiEvent, AgUiProtocolOptions, UseAgUiChatSessionOptions, UseAgUiChatSessionResult } from '../../adapters/agui';
 import type { FrameworkChatTransportContext } from '../../adapters/shared/chatFactory';
 import type { RuntimeProtocol } from '../../runtime/types';
@@ -11,6 +19,10 @@ export interface AgUiA2UiRendererOptions {
   version?: A2UiVersion;
   includeInlineCatalogs?: boolean;
   securityPolicy?: Partial<A2UiSecurityPolicy>;
+  onActionStateChange?: (
+    state: A2UiActionState,
+    states: A2UiActionStateMap
+  ) => void;
 }
 
 export interface AgUiA2UiAdapterOptions<
@@ -49,6 +61,8 @@ export interface UseAgUiA2UiChatSessionResult<TSource = FetchTransportSource>
   extends UseAgUiChatSessionResult<TSource> {
   sendA2UiClient: (envelope: A2UiClientEnvelope, source?: TSource) => Promise<void>;
   a2uiClientError: ShallowRef<Error | null>;
+  /** 当前会话内各 Surface 组件最近一次 action 状态。 */
+  a2uiActionStates: ShallowRef<A2UiActionStateMap>;
 }
 
 export type {

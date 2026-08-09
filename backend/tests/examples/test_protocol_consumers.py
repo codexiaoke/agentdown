@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import unittest
 
-from app.examples.a2ui_deepseek import A2UiGenerateRequest, generate_a2ui_response
+from app.examples.a2ui_deepseek import (
+    A2UiGenerateRequest,
+    A2UiRequestConflictError,
+    a2ui_idempotency_store,
+    generate_a2ui_response,
+)
 from app.examples.agui_a2ui_deepseek import (
     A2UI_BASIC_CATALOG_ID,
     AgUiGeneratedSurface,
@@ -43,9 +48,11 @@ def _surface() -> AgUiGeneratedSurface:
 class ProtocolConsumerBackendTest(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
         await agui_agent_session_store.clear()
+        await a2ui_idempotency_store.clear()
 
     async def asyncTearDown(self) -> None:
         await agui_agent_session_store.clear()
+        await a2ui_idempotency_store.clear()
 
     async def test_pure_agui_stream_contains_no_a2ui_events(self) -> None:
         calls: list[tuple[list[dict[str, str]], str]] = []
@@ -117,6 +124,31 @@ class ProtocolConsumerBackendTest(unittest.IsolatedAsyncioTestCase):
             A2UiGenerateRequest.model_validate(
                 {
                     "sessionId": "session:pure-a2ui",
+                    "requestId": "a2ui:action:confirmed",
+                    "clientCapabilities": capabilities,
+                    "clientMessage": {
+                        "version": "v0.9.1",
+                        "action": {
+                            "name": "confirmed",
+                            "surfaceId": "agent-surface",
+                            "sourceComponentId": "submit",
+                            "timestamp": "2026-08-10T00:00:00.000Z",
+                        },
+                    },
+                    "clientDataModel": {
+                        "version": "v0.9.1",
+                        "surfaces": {"agent-surface": {"title": "真实 A2UI 示例"}},
+                    },
+                }
+            ),
+            load_settings(),
+            fake_surface_generator,
+        )
+        retried = await generate_a2ui_response(
+            A2UiGenerateRequest.model_validate(
+                {
+                    "sessionId": "session:pure-a2ui",
+                    "requestId": "a2ui:action:confirmed",
                     "clientCapabilities": capabilities,
                     "clientMessage": {
                         "version": "v0.9.1",
@@ -142,6 +174,31 @@ class ProtocolConsumerBackendTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn('"name":"confirmed"', calls[1][1])
         self.assertEqual(3, len(first["messages"]))
         self.assertEqual("deepseek-test", second["model"])
+        self.assertEqual(second, retried)
+        self.assertEqual(2, len(calls))
+
+        with self.assertRaisesRegex(A2UiRequestConflictError, "different payload"):
+            await generate_a2ui_response(
+                A2UiGenerateRequest.model_validate(
+                    {
+                        "sessionId": "session:pure-a2ui",
+                        "requestId": "a2ui:action:confirmed",
+                        "clientCapabilities": capabilities,
+                        "clientMessage": {
+                            "version": "v0.9.1",
+                            "action": {
+                                "name": "confirmed",
+                                "surfaceId": "agent-surface",
+                                "sourceComponentId": "submit",
+                                "timestamp": "2026-08-10T00:00:00.000Z",
+                                "context": {"changed": True},
+                            },
+                        },
+                    }
+                ),
+                load_settings(),
+                fake_surface_generator,
+            )
 
     async def test_standalone_a2ui_rejects_an_unsupported_catalog(self) -> None:
         request = A2UiGenerateRequest.model_validate(
