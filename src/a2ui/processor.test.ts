@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createA2UiBasicCatalog } from './catalog';
 import { createA2UiProcessor } from './processor';
+import { createA2UiSurfaceController } from './surfaceController';
 import { A2UI_BASIC_COMPONENT_NAMES } from './catalog';
 import { A2UI_BASIC_CATALOG_ID } from './types';
 
@@ -83,11 +84,14 @@ describe('createA2UiProcessor', () => {
 
     const surface = controller.getSurface('planner');
     expect(surface?.dataModel.get('/city')).toBe('杭州');
-    expect(controller.processor.getClientDataModel()).toEqual({
-      version: 'v0.9',
+    expect(controller.getClientDataModel()).toEqual({
+      version: 'v0.9.1',
       surfaces: {
         planner: { title: '周末旅行', city: '杭州' }
       }
+    });
+    expect(controller.getClientCapabilities()).toEqual({
+      'v0.9.1': { supportedCatalogIds: [A2UI_BASIC_CATALOG_ID] }
     });
 
     controller.dispose();
@@ -190,6 +194,99 @@ describe('createA2UiProcessor', () => {
         catalogId: A2UI_BASIC_CATALOG_ID
       }
     })).toThrow('exceeds 170 bytes');
+
+    controller.dispose();
+  });
+
+  it('keeps browser-local data when server history only appends', () => {
+    const controller = createA2UiSurfaceController({
+      surfaceId: 'planner',
+      catalogs: [createA2UiBasicCatalog()]
+    });
+    const messages = createMessages();
+
+    expect(controller.sync(messages)).toMatchObject({ mode: 'rebuild', processed: 3 });
+    const originalSurface = controller.getSurface();
+    originalSurface?.dataModel.set('/city', '苏州');
+
+    const update = {
+      version: 'v0.9.1',
+      updateDataModel: {
+        surfaceId: 'planner',
+        path: '/title',
+        value: '新的周末计划'
+      }
+    };
+    expect(controller.sync([...messages, update])).toMatchObject({ mode: 'append', processed: 1 });
+    expect(controller.getSurface()).toBe(originalSurface);
+    expect(controller.getSurface()?.dataModel.get('/city')).toBe('苏州');
+    expect(controller.getSurface()?.dataModel.get('/title')).toBe('新的周末计划');
+
+    controller.dispose();
+  });
+
+  it('emits a complete client envelope for actions', async () => {
+    const onClientMessage = vi.fn();
+    const controller = createA2UiSurfaceController({
+      surfaceId: 'planner',
+      catalogs: [createA2UiBasicCatalog()],
+      onClientMessage
+    });
+    controller.sync(createMessages());
+
+    await controller.getSurface()?.dispatchAction({
+      event: { name: 'trip_submitted', context: { city: '杭州' } }
+    }, 'submit');
+
+    expect(onClientMessage).toHaveBeenCalledWith({
+      message: {
+        version: 'v0.9.1',
+        action: expect.objectContaining({
+          name: 'trip_submitted',
+          surfaceId: 'planner',
+          sourceComponentId: 'submit'
+        })
+      },
+      capabilities: {
+        'v0.9.1': { supportedCatalogIds: [A2UI_BASIC_CATALOG_ID] }
+      },
+      dataModel: {
+        version: 'v0.9.1',
+        surfaces: {
+          planner: { title: '周末旅行', city: '杭州' }
+        }
+      }
+    });
+
+    controller.dispose();
+  });
+
+  it('emits standard client error messages from the surface', async () => {
+    const onClientMessage = vi.fn();
+    const controller = createA2UiSurfaceController({
+      surfaceId: 'planner',
+      catalogs: [createA2UiBasicCatalog()],
+      onClientMessage
+    });
+    controller.sync(createMessages());
+
+    await controller.getSurface()?.dispatchError({
+      code: 'VALIDATION_FAILED',
+      path: '/city',
+      message: '城市不能为空'
+    });
+
+    expect(onClientMessage).toHaveBeenCalledWith(expect.objectContaining({
+      message: {
+        version: 'v0.9.1',
+        error: {
+          code: 'VALIDATION_FAILED',
+          surfaceId: 'planner',
+          path: '/city',
+          message: '城市不能为空'
+        }
+      }
+    }));
 
     controller.dispose();
   });

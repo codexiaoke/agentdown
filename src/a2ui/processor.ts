@@ -2,7 +2,11 @@ import {
   A2uiMessageSchema,
   MessageProcessor,
   type A2uiClientAction,
+  type A2uiClientCapabilities,
+  type A2uiClientDataModel,
+  type A2uiClientError,
   type A2uiMessage,
+  type CapabilitiesOptions,
   type ComponentApi,
   type SurfaceModel
 } from '@a2ui/web_core/v0_9';
@@ -10,20 +14,27 @@ import type { Subscription } from '@a2ui/web_core/v0_9';
 import {
   DEFAULT_A2UI_SECURITY_POLICY,
   type A2UiSecurityPolicy,
+  type A2UiVersion,
   type A2UiVueCatalog
 } from './types';
 
 export interface CreateA2UiProcessorOptions<T extends ComponentApi = ComponentApi> {
   catalogs: ReadonlyArray<A2UiVueCatalog<T>>;
+  /** 客户端能力和回传消息使用的协议版本，默认使用当前稳定补丁版 v0.9.1。 */
+  version?: A2UiVersion;
   policy?: Partial<A2UiSecurityPolicy>;
   onAction?: (action: A2uiClientAction) => void | Promise<void>;
+  onError?: (error: A2uiClientError) => void | Promise<void>;
 }
 
 export interface A2UiProcessor<T extends ComponentApi = ComponentApi> {
   readonly processor: MessageProcessor<T>;
   readonly policy: A2UiSecurityPolicy;
+  readonly version: A2UiVersion;
   process: (messageOrMessages: unknown | ReadonlyArray<unknown>) => A2uiMessage[];
   getSurface: (surfaceId: string) => SurfaceModel<T> | undefined;
+  getClientCapabilities: (options?: CapabilitiesOptions) => A2uiClientCapabilities;
+  getClientDataModel: (version?: A2UiVersion) => A2uiClientDataModel | undefined;
   dispose: () => void;
 }
 
@@ -65,14 +76,18 @@ function validateMessage<T extends ComponentApi>(
   policy: A2UiSecurityPolicy
 ): A2uiMessage {
   const serialized = JSON.stringify(input);
+  if (serialized === undefined) {
+    throw new Error('A2UI messages must be JSON-serializable values.');
+  }
   const messageBytes = new TextEncoder().encode(serialized).byteLength;
   if (messageBytes > policy.maxMessageBytes) {
     throw new Error(`A2UI message exceeds ${policy.maxMessageBytes} bytes.`);
   }
 
-  assertBoundedStrings(input, policy);
+  const isolatedInput = JSON.parse(serialized) as unknown;
+  assertBoundedStrings(isolatedInput, policy);
 
-  const parsed = A2uiMessageSchema.parse(input) as A2uiMessage;
+  const parsed = A2uiMessageSchema.parse(isolatedInput) as A2uiMessage;
 
   if ('createSurface' in parsed) {
     const catalog = catalogs.find((candidate) => candidate.id === parsed.createSurface.catalogId);
@@ -140,10 +155,11 @@ export function createA2UiProcessor<T extends ComponentApi = ComponentApi>(
   }
 
   const policy = resolvePolicy(options.policy);
+  const version = options.version ?? 'v0.9.1';
   const processor = new MessageProcessor<T>(
     options.catalogs.map((catalog) => catalog.protocol),
     options.onAction,
-    { version: 'v0.9' }
+    { version }
   );
   const subscriptions: Subscription[] = [];
 
@@ -151,11 +167,15 @@ export function createA2UiProcessor<T extends ComponentApi = ComponentApi>(
     if (countSurfaceComponents(surface) > policy.maxComponents) {
       throw new Error(`A2UI surface exceeds ${policy.maxComponents} components.`);
     }
+    if (options.onError) {
+      subscriptions.push(surface.onError.subscribe(options.onError));
+    }
   }));
 
   return {
     processor,
     policy,
+    version,
     process(messageOrMessages) {
       const inputs = Array.isArray(messageOrMessages) ? messageOrMessages : [messageOrMessages];
       if (inputs.length > policy.maxMessages) {
@@ -172,6 +192,12 @@ export function createA2UiProcessor<T extends ComponentApi = ComponentApi>(
     },
     getSurface(surfaceId) {
       return processor.model.getSurface(surfaceId);
+    },
+    getClientCapabilities(capabilitiesOptions) {
+      return processor.getClientCapabilities(capabilitiesOptions);
+    },
+    getClientDataModel(dataVersion) {
+      return processor.getClientDataModel(dataVersion);
     },
     dispose() {
       subscriptions.forEach((subscription) => subscription.unsubscribe());

@@ -1,5 +1,9 @@
 import type {
   A2uiClientAction,
+  A2uiClientCapabilities,
+  A2uiClientDataModel,
+  A2uiClientError,
+  A2uiClientMessage,
   A2uiMessage,
   Catalog,
   ComponentApi,
@@ -12,6 +16,9 @@ export const A2UI_BASIC_CATALOG_ID = 'https://a2ui.org/specification/v0_9/catalo
 
 /** RunSurface 中承载 A2UI Surface 的 renderer key。 */
 export const A2UI_SURFACE_RENDERER = 'a2ui.surface';
+
+/** A2UI v0.9 renderer 可处理的线协议版本。 */
+export type A2UiVersion = 'v0.9' | 'v0.9.1';
 
 /**
  * A2UI 消息进入浏览器前的资源和安全限制。
@@ -69,6 +76,17 @@ export interface A2UiSurfaceBlockData extends Record<string, unknown> {
 /** Renderer 向宿主上报的标准 A2UI 客户端动作。 */
 export type A2UiAction = A2uiClientAction;
 
+/**
+ * 交给宿主 transport 的标准客户端消息及协商元数据。
+ *
+ * Agentdown 不规定它最终位于 HTTP body、header 还是其他协议字段中。
+ */
+export interface A2UiClientEnvelope {
+  message: A2uiClientMessage;
+  capabilities: A2uiClientCapabilities;
+  dataModel?: A2uiClientDataModel;
+}
+
 /** A2UI Surface 处理错误的统一上下文。 */
 export interface A2UiErrorContext {
   phase: 'validation' | 'processing' | 'rendering' | 'action';
@@ -78,4 +96,13 @@ export interface A2UiErrorContext {
   componentId?: string;
 }
 
-export type { A2uiClientAction, A2uiMessage, ComponentApi, SurfaceModel };
+export type {
+  A2uiClientAction,
+  A2uiClientCapabilities,
+  A2uiClientDataModel,
+  A2uiClientError,
+  A2uiClientMessage,
+  A2uiMessage,
+  ComponentApi,
+  SurfaceModel
+};
