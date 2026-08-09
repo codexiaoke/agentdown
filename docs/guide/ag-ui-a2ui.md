@@ -40,16 +40,16 @@ Agent 可以决定“用哪些已允许组件、绑定什么数据、触发什�
 import { ref } from 'vue';
 import { RunSurface, useAgUiChatSession } from 'agentdown';
 
-const prompt = ref('帮我做一个杭州周末计划，用可交互表单展示。');
+const prompt = ref('生成一个读书计划表单，包含书名、每日分钟数和提交按钮。');
 
 const session = useAgUiChatSession<string>({
   source: 'http://127.0.0.1:8000/api/stream/agui',
   input: prompt,
-  conversationId: 'session:trip-planner',
+  conversationId: 'session:reading-planner',
   recovery: {},
   transport: {
     state: { locale: 'zh-CN' },
-    context: [{ description: '当前页面是旅行计划页', value: 'trip-planner' }]
+    context: [{ description: '当前页面是阅读计划页', value: 'reading-planner' }]
   }
 });
 </script>
@@ -72,13 +72,13 @@ Transport 发送的是 AG-UI 官方 `RunAgentInput`，不会往 body 塞入 Agen
 
 ```json
 {
-  "threadId": "session:trip-planner",
+  "threadId": "session:reading-planner",
   "runId": "request:01",
   "messages": [
     {
       "id": "message:user:request:01",
       "role": "user",
-      "content": "帮我做一个杭州周末计划"
+      "content": "生成一个读书计划表单"
     }
   ],
   "tools": [],
@@ -91,10 +91,34 @@ Transport 发送的是 AG-UI 官方 `RunAgentInput`，不会往 body 塞入 Agen
 
 ```http
 Idempotency-Key: request:01
-Last-Event-ID: session:trip-planner:12
+Last-Event-ID: session:reading-planner:12
 ```
 
 `createAgUiSseTransport()` 会使用 `@ag-ui/core` 的 `RunAgentInputSchema` 和 `EventSchemas` 在边界校验请求与事件。协议不合法时会直接失败，不会把未知 payload 静默渲染成可信 UI。
+
+## 仓库示例的真实模型边界
+
+`backend/app/providers/agui.py` 会真实调用配置的 DeepSeek Chat Completion JSON mode，而不是按关键词拼旅行卡片。模型返回受限的中间 JSON：
+
+```json
+{
+  "assistantText": "我为你生成了一个可调整的读书计划。",
+  "components": [],
+  "dataModel": {}
+}
+```
+
+后端负责固定 A2UI 版本、`surfaceId` 和 Catalog，并在发送前校验：
+
+- 组件与属性 allowlist、组件数量和消息大小
+- `root`、子组件引用、可达性和循环
+- DataModel 路径存在且类型匹配
+- Button 只能产生服务端 `event`，不能下发 `functionCall`
+- 原型污染键、客户端函数、URL/媒体和正则表达式均不允许
+
+模型偶尔会把单选值写成字符串，后端只做 A2UI 类型层面的窄标准化，例如把 `"moderate"` 转为 `["moderate"]`；业务标题、字段、选项、文案和 action 仍来自模型。无效输出会请求模型修复一次，仍不合规则返回标准 `RUN_ERROR`。
+
+调用方式遵循 DeepSeek 官方的 [JSON Output](https://api-docs.deepseek.com/guides/json_mode/) 和 [Chat Completion API](https://api-docs.deepseek.com/api/create-chat-completion)。`RUN_FINISHED.result` 会保留真实响应的 model、usage 和 response id，便于测试与审计。
 
 ## 后端发送 A2UI
 
@@ -286,7 +310,7 @@ GET /api/v1/conversations/{threadId}/events?request_id={activeRequestId}
 
 ## 运行仓库内示例
 
-这个示例是确定性的内存后端，不需要模型 API Key：
+这个示例会真实调用 DeepSeek，需要先在 `backend/.env` 配置 `DEEPSEEK_API_KEY`。进程内存只用于会话上下文、事件归档、幂等和恢复，不生成业务答案：
 
 ```bash
 npm run backend:dev
@@ -295,18 +319,18 @@ npm run dev
 
 打开 `http://localhost:5173/`，默认第一个适配器就是 **AG-UI + A2UI**：
 
-1. 点击任意旅行计划快捷提示。
-2. 修改目的地、天数和节奏。
-3. 点击“确认并生成计划”。
-4. 后端收到 A2UI action，返回新的 AG-UI run 和确认 Surface。
+1. 点击任意生成式界面快捷提示，例如读书计划。
+2. 修改书名、每日分钟数和阅读节奏。
+3. 点击模型生成的提交按钮。
+4. 后端把 A2UI action 和当前 context 交给 DeepSeek，返回新的 AG-UI run 和 Surface。
 5. 刷新页面，确认后端事件归档能恢复同一 Surface 和 DataModel。
 
 对应实现：
 
 - 前端：`src/demo/App.vue`
-- 内存 provider：`backend/app/providers/agui.py`
+- DeepSeek provider 与安全转换：`backend/app/providers/agui.py`
 - HTTP endpoint：`backend/app/main.py`
-- 后端全流程测试：`backend/tests/test_agui.py`
+- 后端协议/安全测试和显式在线测试：`backend/tests/test_agui.py`
 
 ## 线上落地建议
 
