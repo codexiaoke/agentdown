@@ -4,6 +4,7 @@ import {
   type AGUIEvent,
   type Context,
   type Message,
+  type ResumeEntry,
   type RunAgentInput,
   type Tool
 } from '@ag-ui/core';
@@ -70,6 +71,7 @@ async function resolveRunInput<TSource, TContext>(
   const state = await resolveValue(source, options.state, context) ?? {};
   const forwardedProps = await resolveValue(source, options.forwardedProps, context);
   const parentRunId = await resolveValue(source, options.parentRunId, context);
+  const resume = await resolveValue(source, options.resume, context) as ResumeEntry[] | undefined;
 
   return RunAgentInputSchema.parse({
     threadId,
@@ -79,7 +81,8 @@ async function resolveRunInput<TSource, TContext>(
     context: agUiContext,
     state,
     ...(forwardedProps !== undefined ? { forwardedProps } : {}),
-    ...(parentRunId ? { parentRunId } : {})
+    ...(parentRunId ? { parentRunId } : {}),
+    ...(resume !== undefined ? { resume } : {})
   });
 }
 

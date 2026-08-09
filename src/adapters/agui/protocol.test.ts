@@ -91,4 +91,48 @@ describe('createAgUiProtocol', () => {
 
     session.close();
   });
+
+  it('maps compact tool chunks and thinking lifecycle events', () => {
+    const adapter = createAgUiAdapter();
+    const session = adapter.createSession();
+
+    session.push([
+      { type: EventType.RUN_STARTED, threadId: 'thread-chunk', runId: 'run-chunk' },
+      { type: EventType.THINKING_START, title: '规划路线' },
+      {
+        type: EventType.TOOL_CALL_CHUNK,
+        toolCallId: 'tool-chunk',
+        toolCallName: 'draft_trip',
+        parentMessageId: 'assistant-chunk',
+        delta: '{"city"'
+      },
+      { type: EventType.TOOL_CALL_CHUNK, delta: ':"杭州"}' },
+      { type: EventType.TOOL_CALL_END, toolCallId: 'tool-chunk' },
+      {
+        type: EventType.TOOL_CALL_RESULT,
+        messageId: 'tool-result-chunk',
+        toolCallId: 'tool-chunk',
+        content: '{"ok":true}'
+      },
+      { type: EventType.THINKING_END },
+      { type: EventType.RUN_FINISHED, threadId: 'thread-chunk', runId: 'run-chunk' }
+    ] as AGUIEvent[]);
+    session.flush('compact-events');
+
+    expect(session.runtime.node('tool-chunk')).toMatchObject({
+      status: 'done',
+      title: 'draft_trip'
+    });
+    expect(session.runtime.block('block:tool-chunk')?.data).toMatchObject({
+      arguments: '{"city":"杭州"}',
+      result: '{"ok":true}'
+    });
+    expect(session.runtime.node('agui:thinking:run-chunk')).toMatchObject({
+      type: 'reasoning',
+      status: 'done',
+      title: '规划路线'
+    });
+
+    session.close();
+  });
 });

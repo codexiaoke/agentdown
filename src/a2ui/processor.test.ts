@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createA2UiBasicCatalog } from './catalog';
 import { createA2UiProcessor } from './processor';
+import { A2UI_BASIC_COMPONENT_NAMES } from './catalog';
 import { A2UI_BASIC_CATALOG_ID } from './types';
 
 function createMessages() {
@@ -158,5 +159,30 @@ describe('createA2UiProcessor', () => {
 
     expect(catalog.protocol.functions.has('formatString')).toBe(true);
     expect(catalog.protocol.functions.has('openUrl')).toBe(false);
+  });
+
+  it('registers a frontend-owned Vue renderer for every Basic Catalog component', () => {
+    const catalog = createA2UiBasicCatalog();
+
+    expect(Object.keys(catalog.renderers).sort()).toEqual(
+      [...A2UI_BASIC_COMPONENT_NAMES].sort()
+    );
+  });
+
+  it('measures message limits as UTF-8 bytes', () => {
+    const controller = createA2UiProcessor({
+      catalogs: [createA2UiBasicCatalog()],
+      policy: { maxMessageBytes: 170 }
+    });
+
+    expect(() => controller.process({
+      version: 'v0.9',
+      createSurface: {
+        surfaceId: `planner-${'杭'.repeat(20)}`,
+        catalogId: A2UI_BASIC_CATALOG_ID
+      }
+    })).toThrow('exceeds 170 bytes');
+
+    controller.dispose();
   });
 });

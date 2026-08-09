@@ -24,6 +24,42 @@ const weightStyle = computed(() => {
   const weight = Number(values.value.weight);
   return Number.isFinite(weight) && weight > 0 ? { flexGrow: weight } : undefined;
 });
+const iconName = computed(() => typeof values.value.name === 'string'
+  ? values.value.name
+  : 'custom');
+const iconSvgPath = computed(() => {
+  const name = values.value.name;
+  if (!name || typeof name !== 'object' || Array.isArray(name)) return '';
+  const path = (name as Record<string, unknown>).svgPath;
+  return typeof path === 'string' ? path.slice(0, props.securityPolicy.maxStringLength) : '';
+});
+
+const iconGlyphs: Readonly<Record<string, string>> = {
+  add: '+',
+  arrowBack: '←',
+  arrowForward: '→',
+  check: '✓',
+  close: '×',
+  delete: '⌫',
+  error: '!',
+  favorite: '♥',
+  favoriteOff: '♡',
+  help: '?',
+  info: 'i',
+  locationOn: '●',
+  menu: '☰',
+  moreHoriz: '…',
+  moreVert: '⋮',
+  pause: 'Ⅱ',
+  play: '▶',
+  search: '⌕',
+  send: '➤',
+  star: '★',
+  starHalf: '☆',
+  starOff: '☆',
+  stop: '■',
+  warning: '⚠'
+};
 
 function safeUrl(value: unknown): string {
   if (typeof value !== 'string' || !value.trim()) {
@@ -117,10 +153,13 @@ function alignClass(value: unknown): string {
     v-else-if="componentType === 'Icon'"
     class="agentdown-a2ui-icon"
     role="img"
-    :aria-label="ariaLabel || String(values.name ?? 'icon')"
-    :title="String(values.name ?? '')"
+    :aria-label="ariaLabel || iconName"
+    :title="iconName"
   >
-    {{ String(values.name ?? '●') }}
+    <svg v-if="iconSvgPath" viewBox="0 0 24 24" aria-hidden="true">
+      <path :d="iconSvgPath" />
+    </svg>
+    <span v-else aria-hidden="true">{{ iconGlyphs[iconName] ?? '●' }}</span>
   </span>
 
   <video
@@ -152,7 +191,7 @@ function alignClass(value: unknown): string {
   </div>
 
   <component
-    :is="values.listStyle === 'numbered' ? 'ol' : 'ul'"
+    :is="values.listStyle === 'ordered' ? 'ol' : 'ul'"
     v-else-if="componentType === 'List'"
     class="agentdown-a2ui-list"
     :class="`agentdown-a2ui-list--${String(values.direction ?? 'vertical')}`"
@@ -241,7 +280,7 @@ function alignClass(value: unknown): string {
     />
     <input
       v-else
-      :type="values.variant === 'obscured' ? 'password' : 'text'"
+      :type="values.variant === 'obscured' ? 'password' : values.variant === 'number' ? 'number' : 'text'"
       :value="String(values.value ?? '')"
       :aria-invalid="isInvalid"
       @input="updateTextField"
@@ -304,7 +343,8 @@ function alignClass(value: unknown): string {
 .agentdown-a2ui-media { display: grid; gap: 0.45rem; margin: 0; }
 .agentdown-a2ui-media img, .agentdown-a2ui-video { width: 100%; max-height: 24rem; border-radius: 0.75rem; }
 .agentdown-a2ui-media audio { width: 100%; }
-.agentdown-a2ui-icon { display: inline-flex; align-items: center; justify-content: center; }
+.agentdown-a2ui-icon { display: inline-flex; width: 1.2em; height: 1.2em; align-items: center; justify-content: center; }
+.agentdown-a2ui-icon svg { width: 100%; height: 100%; fill: currentColor; }
 .agentdown-a2ui-layout { display: flex; gap: 0.8rem; min-width: 0; }
 .agentdown-a2ui-layout--row { flex-direction: row; flex-wrap: wrap; }
 .agentdown-a2ui-layout--column { flex-direction: column; }
@@ -331,7 +371,8 @@ function alignClass(value: unknown): string {
 .agentdown-a2ui-divider--vertical { width: 1px; min-height: 2rem; border: 0; background: var(--agentdown-border, #d8dee9); }
 .agentdown-a2ui-button { min-height: 2.35rem; padding: 0.55rem 0.9rem; border: 1px solid transparent; border-radius: 0.7rem; font: inherit; cursor: pointer; }
 .agentdown-a2ui-button--primary { background: var(--agentdown-accent, #4f46e5); color: white; }
-.agentdown-a2ui-button--secondary { border-color: var(--agentdown-border, #d8dee9); background: var(--agentdown-surface, #fff); color: inherit; }
+.agentdown-a2ui-button--default { border-color: var(--agentdown-border, #d8dee9); background: var(--agentdown-surface, #fff); color: inherit; }
+.agentdown-a2ui-button--borderless { padding-inline: 0.2rem; border-color: transparent; background: transparent; color: var(--agentdown-accent, #4f46e5); }
 .agentdown-a2ui-button:disabled { cursor: not-allowed; opacity: 0.5; }
 .agentdown-a2ui-field { display: grid; gap: 0.38rem; color: var(--agentdown-text, #172033); }
 .agentdown-a2ui-field input, .agentdown-a2ui-field textarea { width: 100%; box-sizing: border-box; padding: 0.58rem 0.7rem; border: 1px solid var(--agentdown-border, #cbd5e1); border-radius: 0.6rem; background: var(--agentdown-surface, #fff); color: inherit; font: inherit; }

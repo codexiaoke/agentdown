@@ -15,6 +15,9 @@ describe('createAgUiSseTransport', () => {
         tools: [],
         context: []
       });
+      expect(body.resume).toEqual([
+        { interruptId: 'interrupt-1', status: 'resolved', payload: { approved: true } }
+      ]);
       expect(body).not.toHaveProperty('session_id');
       expect(body).not.toHaveProperty('client_request_id');
       expect(body).not.toHaveProperty('after_cursor');
@@ -37,6 +40,7 @@ describe('createAgUiSseTransport', () => {
       fetch: fetcher,
       message: '做一个周末计划',
       state: { locale: 'zh-CN' },
+      resume: [{ interruptId: 'interrupt-1', status: 'resolved', payload: { approved: true } }],
       resolveContext: () => ({
         requestText: '做一个周末计划',
         submission: null,
