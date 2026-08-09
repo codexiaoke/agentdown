@@ -76,6 +76,7 @@
     "backend:smoke:crewai": "uv run --project backend python backend/scripts/smoke_crewai.py",
     "benchmark:streaming-markdown": "node scripts/benchmark-streaming-markdown.mjs",
     "pack:check": "npm pack --dry-run",
+    "test:package-consumer": "npm run build && node scripts/test-package-consumer.mjs",
     "prepublishOnly": "npm run build",
     "test": "vitest run",
     "test:watch": "vitest",
