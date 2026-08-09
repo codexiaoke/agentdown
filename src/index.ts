@@ -388,6 +388,7 @@ export type {
   UseAgentChatResult
 } from './composables/useAgentChat';
 export type {
+  FrameworkChatContinuationOptions,
   FrameworkChatInputValue,
   FrameworkChatRecoveryEventsContext,
   FrameworkChatRecoveryLoadContext,

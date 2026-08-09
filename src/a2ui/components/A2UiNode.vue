@@ -6,7 +6,13 @@ import {
   type SurfaceModel
 } from '@a2ui/web_core/v0_9';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
-import type { A2UiChildReference, A2UiSecurityPolicy, A2UiVueCatalog } from '../types';
+import {
+  createA2UiActionStateKey,
+  type A2UiActionStateMap,
+  type A2UiChildReference,
+  type A2UiSecurityPolicy,
+  type A2UiVueCatalog
+} from '../types';
 
 interface Props {
   surface: SurfaceModel<ComponentApi>;
@@ -17,13 +23,19 @@ interface Props {
   ancestors?: string[];
   revision?: number;
   securityPolicy: A2UiSecurityPolicy;
+  actionStates?: A2UiActionStateMap;
+  retryAction?: (sourceComponentId: string) => Promise<boolean>;
+  interactionDisabled?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   basePath: '/',
   depth: 0,
   ancestors: () => [],
-  revision: 0
+  revision: 0,
+  actionStates: () => ({}),
+  retryAction: async () => false,
+  interactionDisabled: false
 });
 
 const resolvedProps = ref<Record<string, unknown>>({});
@@ -40,6 +52,10 @@ const renderer = computed(() => props.catalog.renderers[componentType.value]);
 const isCycle = computed(() => props.ancestors.includes(props.componentId));
 const exceedsDepth = computed(() => props.depth >= props.securityPolicy.maxDepth);
 const nextAncestors = computed(() => [...props.ancestors, props.componentId]);
+const actionState = computed(() => props.actionStates[
+  createA2UiActionStateKey(props.surface.id, props.componentId)
+]);
+const retryCurrentAction = () => props.retryAction?.(props.componentId) ?? Promise.resolve(false);
 
 function disposeBinder() {
   binderSubscription?.unsubscribe();
@@ -148,6 +164,9 @@ const modalContent = computed(() => normalizeChildReferences(resolvedProps.value
     :resolved-props="resolvedProps"
     :surface="surface"
     :security-policy="securityPolicy"
+    :action-state="actionState"
+    :retry-action="retryCurrentAction"
+    :interaction-disabled="interactionDisabled"
   >
     <A2UiNode
       v-for="child in defaultChildren"
@@ -160,6 +179,9 @@ const modalContent = computed(() => normalizeChildReferences(resolvedProps.value
       :ancestors="nextAncestors"
       :revision="revision"
       :security-policy="securityPolicy"
+      :action-states="actionStates"
+      :retry-action="retryAction"
+      :interaction-disabled="interactionDisabled"
     />
 
     <template v-for="(tab, index) in tabs" :key="index" #[`tab-${index}`]>
@@ -173,6 +195,9 @@ const modalContent = computed(() => normalizeChildReferences(resolvedProps.value
         :ancestors="nextAncestors"
         :revision="revision"
         :security-policy="securityPolicy"
+        :action-states="actionStates"
+        :retry-action="retryAction"
+        :interaction-disabled="interactionDisabled"
       />
     </template>
 
@@ -188,6 +213,9 @@ const modalContent = computed(() => normalizeChildReferences(resolvedProps.value
         :ancestors="nextAncestors"
         :revision="revision"
         :security-policy="securityPolicy"
+        :action-states="actionStates"
+        :retry-action="retryAction"
+        :interaction-disabled="interactionDisabled"
       />
     </template>
 
@@ -203,6 +231,9 @@ const modalContent = computed(() => normalizeChildReferences(resolvedProps.value
         :ancestors="nextAncestors"
         :revision="revision"
         :security-policy="securityPolicy"
+        :action-states="actionStates"
+        :retry-action="retryAction"
+        :interaction-disabled="interactionDisabled"
       />
     </template>
   </component>

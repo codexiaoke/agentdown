@@ -63,8 +63,8 @@ export class AgentdownBackendRecoveryTracker {
   cursor = 0;
   requestId = '';
 
-  beginRequest(): string {
-    this.requestId = createAgentdownClientRequestId();
+  beginRequest(requestId?: string): string {
+    this.requestId = requestId?.trim() || createAgentdownClientRequestId();
     return this.requestId;
   }
 

@@ -19,7 +19,11 @@ from app.models import (
 )
 from app.providers import PROVIDER_REGISTRY
 from app.providers.agno import stream_agno_requirement_resolution
-from app.examples.a2ui_deepseek import A2UiGenerateRequest, generate_a2ui_response
+from app.examples.a2ui_deepseek import (
+    A2UiGenerateRequest,
+    A2UiRequestConflictError,
+    generate_a2ui_response,
+)
 from app.examples.agui_a2ui_deepseek import stream_agui_events
 from app.examples.agui_deepseek import stream_agui_text_events
 from app.providers.base import ProviderContext, create_provider_descriptors
@@ -116,11 +120,21 @@ async def stream_pure_agui_example(request: AgUiRunAgentInput) -> object:
 
 
 @app.post("/api/examples/a2ui")
-async def generate_pure_a2ui_example(request: A2UiGenerateRequest) -> dict[str, object]:
+async def generate_pure_a2ui_example(
+    request: A2UiGenerateRequest,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> dict[str, object]:
     """Run the standalone A2UI consumer example without AG-UI transport semantics."""
 
+    if idempotency_key and request.request_id and idempotency_key != request.request_id:
+        raise HTTPException(status_code=409, detail="A2UI request id does not match Idempotency-Key.")
+    resolved_request = request.model_copy(
+        update={"request_id": idempotency_key or request.request_id}
+    )
     try:
-        return await generate_a2ui_response(request, settings)
+        return await generate_a2ui_response(resolved_request, settings)
+    except A2UiRequestConflictError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
 

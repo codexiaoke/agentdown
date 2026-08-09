@@ -1,9 +1,11 @@
-import { getCurrentScope, onScopeDispose, shallowRef } from 'vue';
+import { getCurrentScope, onScopeDispose, shallowRef, watch } from 'vue';
 import {
   A2UI_SURFACE_RENDERER,
   A2UiSurface,
   createA2UiClientCapabilities,
   defaultA2UiBasicCatalog,
+  type A2UiActionState,
+  type A2UiActionStateMap,
   type A2UiClientEnvelope,
   type A2UiClientTransportEnvelope
 } from '../../a2ui';
@@ -41,6 +43,7 @@ export function serializeAgUiA2UiForwardedProps<TSource>(
   context: AgUiA2UiSerializeContext<TSource>
 ): unknown {
   const a2ui = {
+    ...(context.client.requestId ? { requestId: context.client.requestId } : {}),
     ...(context.client.message ? { clientMessage: context.client.message } : {}),
     clientCapabilities: context.client.capabilities,
     ...(context.client.dataModel
@@ -60,6 +63,11 @@ export function useAgUiA2UiChatSession<TSource = RequestInfo | URL>(
 ): UseAgUiA2UiChatSessionResult<TSource> {
   const pendingEnvelope = shallowRef<A2UiClientEnvelope | null>(null);
   const a2uiClientError = shallowRef<Error | null>(null);
+  const a2uiActionStates = shallowRef<A2UiActionStateMap>({});
+  const a2uiTransportBusy = shallowRef(false);
+  const a2uiRecoveryInitializing = shallowRef(
+    options.recovery !== undefined && options.recovery !== false
+  );
   const configuredForwardedProps = options.transport?.forwardedProps;
   const serializeClient = options.serializeA2UiClient ?? serializeAgUiA2UiForwardedProps;
   const rendererOptions = options.a2uiRenderer;
@@ -74,6 +82,7 @@ export function useAgUiA2UiChatSession<TSource = RequestInfo | URL>(
     })
   };
   let sendQueue: Promise<void> = Promise.resolve();
+  const inFlightRequests = new Map<string, Promise<void>>();
 
   const transportOptions: Omit<
     AgUiSseTransportOptions<TSource, FrameworkChatTransportContext>,
@@ -115,8 +124,16 @@ export function useAgUiA2UiChatSession<TSource = RequestInfo | URL>(
           ...(rendererOptions?.securityPolicy
             ? { securityPolicy: rendererOptions.securityPolicy }
             : {}),
-          onClientMessage(envelope: A2UiClientEnvelope) {
-            void sendA2UiClient(envelope).catch(() => undefined);
+          interactionDisabled: a2uiTransportBusy.value,
+          sendClientMessage(envelope: A2UiClientEnvelope) {
+            return sendA2UiClient(envelope);
+          },
+          onActionStateChange(state: A2UiActionState, states: A2UiActionStateMap) {
+            a2uiActionStates.value = {
+              ...a2uiActionStates.value,
+              [state.key]: state
+            };
+            rendererOptions?.onActionStateChange?.(state, states);
           }
         })
       }
@@ -158,19 +175,49 @@ export function useAgUiA2UiChatSession<TSource = RequestInfo | URL>(
   const unsubscribe = protocol.store.subscribe((snapshot) => {
     agUiState.value = snapshot;
   });
+  const updateA2UiTransportBusy = () => {
+    const connection = base.connectionState.value;
+    a2uiTransportBusy.value = (
+      a2uiRecoveryInitializing.value
+      || base.busy.value
+      || connection === 'recovering'
+      || connection === 'connecting'
+      || connection === 'reconnecting'
+    );
+  };
+  const stopBusyWatch = watch(
+    [base.busy, base.connectionState],
+    updateA2UiTransportBusy,
+    { immediate: true }
+  );
+  void base.recoveryReady.finally(() => {
+    a2uiRecoveryInitializing.value = false;
+    updateA2UiTransportBusy();
+  }).catch(() => undefined);
   if (getCurrentScope()) {
-    onScopeDispose(unsubscribe);
+    onScopeDispose(() => {
+      unsubscribe();
+      stopBusyWatch();
+    });
   }
 
   function sendA2UiClient(
     envelope: A2UiClientEnvelope,
     source?: TSource
   ): Promise<void> {
+    const active = inFlightRequests.get(envelope.requestId);
+    if (active) {
+      return active;
+    }
+
     const task = sendQueue.then(async () => {
       pendingEnvelope.value = envelope;
       a2uiClientError.value = null;
       try {
-        await base.continueConversation(source);
+        await base.continueConversation(source, {
+          clientRequestId: envelope.requestId,
+          reportErrorToRuntime: false
+        });
       } catch (cause) {
         const error = cause instanceof Error ? cause : new Error(String(cause));
         a2uiClientError.value = error;
@@ -180,7 +227,13 @@ export function useAgUiA2UiChatSession<TSource = RequestInfo | URL>(
         pendingEnvelope.value = null;
       }
     });
+    inFlightRequests.set(envelope.requestId, task);
     sendQueue = task.catch(() => undefined);
+    void task.finally(() => {
+      if (inFlightRequests.get(envelope.requestId) === task) {
+        inFlightRequests.delete(envelope.requestId);
+      }
+    }).catch(() => undefined);
     return task;
   }
 
@@ -188,6 +241,7 @@ export function useAgUiA2UiChatSession<TSource = RequestInfo | URL>(
     ...base,
     agUiState,
     sendA2UiClient,
-    a2uiClientError
+    a2uiClientError,
+    a2uiActionStates
   };
 }

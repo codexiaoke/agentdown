@@ -7,15 +7,19 @@ export {
   defineA2UiCatalog
 } from './catalog';
 export { createA2UiClientCapabilities, createA2UiProcessor } from './processor';
-export { createA2UiSurfaceController } from './surfaceController';
+export { createA2UiClientRequestId, createA2UiSurfaceController } from './surfaceController';
 export { a2uiRunSurfaceRenderer, a2uiRunSurfaceRenderers } from './renderer';
 export {
   A2UI_BASIC_CATALOG_ID,
   A2UI_SURFACE_RENDERER,
-  DEFAULT_A2UI_SECURITY_POLICY
+  DEFAULT_A2UI_SECURITY_POLICY,
+  createA2UiActionStateKey
 } from './types';
 export type {
   A2UiAction,
+  A2UiActionState,
+  A2UiActionStateMap,
+  A2UiActionStatus,
   A2UiClientEnvelope,
   A2UiClientMetadata,
   A2UiClientTransportEnvelope,

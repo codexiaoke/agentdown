@@ -11,6 +11,8 @@ import {
   type A2UiSurfaceController
 } from '../surfaceController';
 import type {
+  A2UiActionState,
+  A2UiActionStateMap,
   A2UiClientEnvelope,
   A2UiErrorContext,
   A2UiSecurityPolicy,
@@ -31,6 +33,13 @@ interface Props {
   securityPolicy?: Partial<A2UiSecurityPolicy>;
   block?: SurfaceBlock<A2UiSurfaceBlockData>;
   emitIntent?: (intent: Omit<RuntimeIntent, 'id' | 'at'>) => RuntimeIntent;
+  /**
+   * 可等待的 transport 回调。与 `@client-message` 不同，它的 Promise 会直接驱动
+   * action pending / success / error 生命周期。
+   */
+  sendClientMessage?: (envelope: A2UiClientEnvelope) => void | Promise<void>;
+  /** 恢复连接或宿主执行互斥操作时统一禁止 Surface action。 */
+  interactionDisabled?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -40,6 +49,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{
   clientMessage: [envelope: A2UiClientEnvelope];
+  actionStateChange: [state: A2UiActionState, states: A2UiActionStateMap];
   error: [context: A2UiErrorContext];
 }>();
 
@@ -47,6 +57,7 @@ const controller = shallowRef<A2UiSurfaceController<ComponentApi> | null>(null);
 const surface = shallowRef<SurfaceModel<ComponentApi> | null>(null);
 const revision = ref(0);
 const errorMessage = ref<string | null>(null);
+const actionStates = shallowRef<A2UiActionStateMap>({});
 
 const blockData = computed<A2UiSurfaceBlockData | null>(() => {
   const data = props.block?.data;
@@ -63,6 +74,7 @@ function disposeController() {
   controller.value?.dispose();
   controller.value = null;
   surface.value = null;
+  actionStates.value = {};
 }
 
 function reportError(context: A2UiErrorContext) {
@@ -71,19 +83,19 @@ function reportError(context: A2UiErrorContext) {
   if (context.phase === 'validation' || context.phase === 'processing') {
     const activeController = controller.value;
     if (activeController) {
-      handleClientMessage(activeController.createClientEnvelope({
+      void handleClientMessage(activeController.createClientEnvelope({
         version: activeController.version,
         error: {
           code: 'CLIENT_PROCESSING_ERROR',
           surfaceId: context.surfaceId ?? resolvedSurfaceId.value,
           message: errorMessage.value
         }
-      }));
+      })).catch(() => undefined);
     }
   }
 }
 
-function handleClientMessage(envelope: A2UiClientEnvelope) {
+async function handleClientMessage(envelope: A2UiClientEnvelope): Promise<void> {
   emit('clientMessage', envelope);
   props.emitIntent?.({
     type: 'a2ui.client-message',
@@ -91,6 +103,7 @@ function handleClientMessage(envelope: A2UiClientEnvelope) {
     nodeId: props.block?.nodeId ?? null,
     payload: envelope as unknown as RuntimeData
   });
+  await props.sendClientMessage?.(envelope);
 }
 
 function rebuildController() {
@@ -108,7 +121,11 @@ function rebuildController() {
         surface.value = nextSurface ?? null;
         revision.value += 1;
       },
-      onClientMessage: handleClientMessage
+      onClientMessage: handleClientMessage,
+      onActionStateChange(state, states) {
+        actionStates.value = states;
+        emit('actionStateChange', state, states);
+      }
     });
     controller.value = nextController;
     nextController.sync(resolvedMessages.value);
@@ -171,6 +188,9 @@ onBeforeUnmount(disposeController);
       base-path="/"
       :revision="revision"
       :security-policy="controller!.policy"
+      :action-states="actionStates"
+      :retry-action="controller!.retryAction"
+      :interaction-disabled="interactionDisabled"
     />
   </section>
 </template>

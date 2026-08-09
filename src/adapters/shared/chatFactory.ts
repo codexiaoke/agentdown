@@ -222,6 +222,14 @@ export interface FrameworkChatTransportContext {
   replayOnly: boolean;
 }
 
+/** 协议级 continuation 的幂等与错误呈现配置。 */
+export interface FrameworkChatContinuationOptions {
+  /** 重试同一协议动作时沿用的稳定后端幂等键。 */
+  clientRequestId?: string;
+  /** 是否额外向聊天 runtime 写入错误块；默认开启。 */
+  reportErrorToRuntime?: boolean;
+}
+
 /** 自动读取后端会话归档时提供给自定义 loader 的上下文。 */
 export interface FrameworkChatRecoveryLoadContext<TSource = unknown> {
   conversationId: string;
@@ -433,7 +441,10 @@ export interface FrameworkChatSessionResult<
    *
    * 用于 A2UI action/error 等客户端事件，不应替代普通用户消息发送。
    */
-  continueConversation: (source?: TSource) => Promise<void>;
+  continueConversation: (
+    source?: TSource,
+    options?: FrameworkChatContinuationOptions
+  ) => Promise<void>;
   /** 重新生成上一条 assistant 回复。 */
   regenerate: (source?: TSource) => Promise<void>;
   /** 重新发起上一条输入；默认行为等价于 retry last input。 */
@@ -1513,7 +1524,10 @@ export function useFrameworkChatSession<
    *
    * continuation 仍创建独立 run / 幂等键，但不会覆盖 lastInput，也不会执行 runtime reset。
    */
-  async function continueConversation(source?: TSource) {
+  async function continueConversation(
+    source?: TSource,
+    options: FrameworkChatContinuationOptions = {}
+  ) {
     await recoveryReady;
 
     const conversationId = toValue(config.options.conversationId);
@@ -1544,20 +1558,22 @@ export function useFrameworkChatSession<
     recoveryError.value = null;
     replayOnly.value = false;
     activeRecoveryRequestId.value = '';
-    recoveryTracker.beginRequest();
+    recoveryTracker.beginRequest(options.clientRequestId);
     clientRequestId.value = recoveryTracker.requestId;
     sessionState.disconnect();
 
     try {
       await sessionState.connect(nextSource);
     } catch (error) {
-      upsertFrameworkAssistantErrorBlock({
-        frameworkName: config.frameworkName,
-        error: error as BridgeError<TRawPacket> | Error,
-        ids,
-        runtime: sessionState.runtime,
-        at: Date.now()
-      });
+      if (options.reportErrorToRuntime !== false) {
+        upsertFrameworkAssistantErrorBlock({
+          frameworkName: config.frameworkName,
+          error: error as BridgeError<TRawPacket> | Error,
+          ids,
+          runtime: sessionState.runtime,
+          at: Date.now()
+        });
+      }
       throw error;
     }
   }

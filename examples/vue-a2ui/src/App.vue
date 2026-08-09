@@ -29,7 +29,12 @@ async function request(payload: Record<string, unknown>) {
   try {
     const response = await fetch(`${apiBase}/api/examples/a2ui`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(typeof payload.requestId === 'string'
+          ? { 'Idempotency-Key': payload.requestId }
+          : {})
+      },
       body: JSON.stringify({
         sessionId: 'example:pure-a2ui',
         clientCapabilities: capabilities,
@@ -55,6 +60,7 @@ async function submit() {
 
 async function sendClient(envelope: A2UiClientEnvelope) {
   await request({
+    requestId: envelope.requestId,
     clientMessage: envelope.message,
     clientCapabilities: envelope.capabilities,
     ...(envelope.dataModel ? { clientDataModel: envelope.dataModel } : {})
@@ -85,7 +91,7 @@ async function sendClient(envelope: A2UiClientEnvelope) {
         surface-id="agent-surface"
         :messages="messages"
         :catalogs="catalogs"
-        @client-message="sendClient"
+        :send-client-message="sendClient"
       />
       <p v-else class="empty">输入需求后，真实 DeepSeek 会返回经过后端校验的 A2UI 消息。</p>
       <p v-if="error" class="error">{{ error }}</p>
