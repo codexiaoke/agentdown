@@ -22,6 +22,15 @@ class StreamRequest(BaseModel):
         default=None,
         description="Optional end-user id forwarded to the framework runtime.",
     )
+    client_request_id: str | None = Field(
+        default=None,
+        description="Stable client-generated idempotency key for one send/resume operation.",
+    )
+    after_cursor: int = Field(
+        default=0,
+        ge=0,
+        description="Latest event cursor already applied by the client.",
+    )
     mode: str | None = Field(
         default=None,
         description="Optional provider mode switch, for example `hitl` for Agno human-in-the-loop flows.",
@@ -150,3 +159,26 @@ class HealthResponse(BaseModel):
 
     service: str
     providers: list[ProviderDescriptor]
+
+
+class ConversationEventResponse(BaseModel):
+    """One immutable event returned from the backend conversation archive."""
+
+    cursor: int
+    event_id: str
+    request_id: str
+    event: str | None = None
+    data: dict[str, Any]
+    created_at: str
+
+
+class ConversationArchiveResponse(BaseModel):
+    """Backend-authoritative raw event archive for one conversation."""
+
+    format: Literal["agentdown.conversation/v1"] = "agentdown.conversation/v1"
+    conversation_id: str
+    provider_id: str
+    latest_cursor: int
+    status: str
+    updated_at: str
+    events: list[ConversationEventResponse]

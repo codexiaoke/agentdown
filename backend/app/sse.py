@@ -8,6 +8,8 @@ from typing import Any
 
 from fastapi.responses import StreamingResponse
 
+from app.conversation_state import StoredConversationEvent
+
 
 def encode_sse_frame(data: Any, *, event: str | None = None, event_id: str | None = None) -> bytes:
     """Encode a JSON payload into a single UTF-8 SSE frame."""
@@ -60,5 +62,37 @@ def create_sse_response(events: AsyncIterator[dict[str, Any]]) -> StreamingRespo
             "Cache-Control": "no-cache, no-transform",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
+        },
+    )
+
+
+async def encode_stored_sse_stream(
+    events: AsyncIterator[StoredConversationEvent],
+) -> AsyncIterator[bytes]:
+    """Encode stored events while preserving their stable backend event ids."""
+
+    async for event in events:
+        yield encode_sse_frame(event.data, event=event.event, event_id=event.event_id)
+
+
+def create_resumable_sse_response(
+    events: AsyncIterator[StoredConversationEvent],
+    *,
+    conversation_id: str,
+    request_id: str,
+    reused: bool,
+) -> StreamingResponse:
+    """Return a resumable SSE response with observable identity headers."""
+
+    return StreamingResponse(
+        encode_stored_sse_stream(events),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+            "X-Agentdown-Conversation-Id": conversation_id,
+            "X-Agentdown-Request-Id": request_id,
+            "X-Agentdown-Request-Reused": str(reused).lower(),
         },
     )
