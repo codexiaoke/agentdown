@@ -1,0 +1,20 @@
+{
+  "name": "@agentdown-example/vue-a2ui",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build"
+  },
+  "dependencies": {
+    "@a2ui/web_core": "^0.10.6",
+    "agentdown": "file:../..",
+    "vue": "^3.5.31"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.5",
+    "typescript": "^6.0.2",
+    "vite": "^8.0.3",
+    "vue-tsc": "^3.2.6"
+  }
+}

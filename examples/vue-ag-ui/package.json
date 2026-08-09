@@ -1,0 +1,20 @@
+{
+  "name": "@agentdown-example/vue-ag-ui",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build"
+  },
+  "dependencies": {
+    "@ag-ui/core": "^0.0.57",
+    "agentdown": "file:../..",
+    "vue": "^3.5.31"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.5",
+    "typescript": "^6.0.2",
+    "vite": "^8.0.3",
+    "vue-tsc": "^3.2.6"
+  }
+}

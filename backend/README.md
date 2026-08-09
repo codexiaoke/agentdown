@@ -12,6 +12,8 @@
 当前提供这些 endpoint：
 
 - `/api/stream/agui`：参考示例；DeepSeek 生成、后端校验并通过标准 AG-UI `CUSTOM` 发送 A2UI v0.9.1 Surface
+- `/api/examples/agui`：纯 AG-UI 消费者示例；DeepSeek 文本回复，只发送标准 lifecycle/text events
+- `/api/examples/a2ui`：独立 A2UI 消费者示例；普通 JSON transport 返回 A2UI messages，不依赖 AG-UI
 - `/api/stream/agno`
 - `/api/stream/langchain`
 - `/api/stream/autogen`
@@ -114,6 +116,8 @@ curl http://127.0.0.1:8000/api/health
 ```
 
 ## 请求示例
+
+仓库的三个独立 Vue 消费者位于 `examples/vue-ag-ui`、`examples/vue-a2ui` 和 `examples/vue-ag-ui-a2ui`。它们分别连接上面三个真实端点，用于验证公开 npm subpath 的依赖边界。
 
 ### AG-UI + A2UI 参考示例（真实 DeepSeek）
 

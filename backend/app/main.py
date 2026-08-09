@@ -19,7 +19,9 @@ from app.models import (
 )
 from app.providers import PROVIDER_REGISTRY
 from app.providers.agno import stream_agno_requirement_resolution
+from app.examples.a2ui_deepseek import A2UiGenerateRequest, generate_a2ui_response
 from app.examples.agui_a2ui_deepseek import stream_agui_events
+from app.examples.agui_deepseek import stream_agui_text_events
 from app.providers.base import ProviderContext, create_provider_descriptors
 from app.settings import load_settings
 from app.conversation_state import ConversationConflictError, conversation_event_store
@@ -104,6 +106,23 @@ async def stream_agui_provider(
         request_id=request_id,
         reused=reused,
     )
+
+
+@app.post("/api/examples/agui")
+async def stream_pure_agui_example(request: AgUiRunAgentInput) -> object:
+    """Run the pure AG-UI consumer example against a real DeepSeek completion."""
+
+    return create_sse_response(stream_agui_text_events(request, settings))
+
+
+@app.post("/api/examples/a2ui")
+async def generate_pure_a2ui_example(request: A2UiGenerateRequest) -> dict[str, object]:
+    """Run the standalone A2UI consumer example without AG-UI transport semantics."""
+
+    try:
+        return await generate_a2ui_response(request, settings)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
 
 
 @app.post("/api/stream/{provider_id}")
