@@ -42,6 +42,21 @@
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
+    "./ag-ui": {
+      "types": "./dist/entries/ag-ui.d.ts",
+      "import": "./dist/ag-ui.js",
+      "require": "./dist/ag-ui.cjs"
+    },
+    "./a2ui": {
+      "types": "./dist/entries/a2ui.d.ts",
+      "import": "./dist/a2ui.js",
+      "require": "./dist/a2ui.cjs"
+    },
+    "./ag-ui-a2ui": {
+      "types": "./dist/entries/ag-ui-a2ui.d.ts",
+      "import": "./dist/ag-ui-a2ui.js",
+      "require": "./dist/ag-ui-a2ui.cjs"
+    },
     "./style.css": "./dist/style.css"
   },
   "sideEffects": [
@@ -68,11 +83,19 @@
     "preview": "vite preview"
   },
   "peerDependencies": {
-    "vue": "^3.5.0"
-  },
-  "dependencies": {
     "@a2ui/web_core": "^0.10.6",
     "@ag-ui/core": "^0.0.57",
+    "vue": "^3.5.0"
+  },
+  "peerDependenciesMeta": {
+    "@a2ui/web_core": {
+      "optional": true
+    },
+    "@ag-ui/core": {
+      "optional": true
+    }
+  },
+  "dependencies": {
     "@chenglou/pretext": "^0.0.8",
     "highlight.js": "^11.11.1",
     "katex": "^0.16.44",
@@ -82,6 +105,8 @@
     "mermaid": "^11.16.0"
   },
   "devDependencies": {
+    "@a2ui/web_core": "^0.10.6",
+    "@ag-ui/core": "^0.0.57",
     "@types/markdown-it": "^14.1.2",
     "@types/markdown-it-container": "^4.0.0",
     "@types/node": "^25.5.0",
