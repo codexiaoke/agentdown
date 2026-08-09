@@ -41,6 +41,7 @@ export default defineConfig({
             { text: '快速开始', link: '/guide/getting-started' },
             { text: '核心概念', link: '/guide/core-concepts' },
             { text: '内部架构边界', link: '/guide/architecture' },
+            { text: '后端会话恢复', link: '/guide/backend-conversation-recovery' },
             { text: '官方框架适配', link: '/guide/framework-adapters' },
             { text: '自定义协议接入', link: '/guide/custom-framework' },
             { text: 'RunSurface 定制', link: '/guide/run-surface' },

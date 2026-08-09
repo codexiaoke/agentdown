@@ -21,6 +21,7 @@ raw packet -> transport -> protocol -> bridge -> assembler -> runtime -> surface
 | `runtime` | 命令、节点、surface block、流式组装、事件消费 | Vue 组件、框架专用事件判断 |
 | `adapters` | 把框架原生事件映射成 RuntimeCommand | 重新定义 runtime 状态模型 |
 | `persisted` | 校验 archive、把 records 恢复成 RuntimeCommand | 保存数据库、重放原始 SSE |
+| `recovery` | 描述后端事件归档、跟踪 SSE 游标和重复事件 | 在浏览器持久化会话、替代后端事件日志 |
 | `surface` | 定义 RunSurface 的渲染和交互契约 | 消费网络事件 |
 | `components` | Vue 页面组件和 block renderer | 解析框架原生 packet |
 | `devtools` | 观察、记录、比较和回放 runtime 行为 | 修改业务协议语义 |
@@ -34,6 +35,7 @@ components -> surface -> runtime
     core      persisted ---+
 
 adapters -> runtime
+recovery -> runtime types
 devtools -> runtime
 ```
 

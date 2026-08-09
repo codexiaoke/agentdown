@@ -5,11 +5,14 @@
 当前这版已经切到一套不依赖 LangChain4j 的真实流式链路，核心能力包括：
 
 - 正式 SSE 入口：`POST /api/stream/springai`
-- 兼容迁移入口：`POST /api/stream/langchain`
+- 会话归档入口：`GET /api/v1/conversations/{conversation_id}`
 - 直接调用 `DeepSeekApi.chatCompletionStream(...)` 获取真实流式 chunk
 - 使用真实 `Open-Meteo` 天气工具
 - 支持工具调用前的 HITL 暂停与恢复
 - 通过 `SSE` 持续输出文本、工具、审批、完成等事件
+- 支持幂等请求、稳定 SSE 事件 id 与按游标断线续传
+
+`SpringAiConversationEventStore` 是进程内参考实现：浏览器不是会话真相源，但服务重启仍会清空数据。线上应替换为 PostgreSQL/Redis 等持久化存储，同时保持当前 HTTP 契约。
 
 ## 环境变量
 
@@ -48,7 +51,10 @@ export SERVER_PORT="8080"
 curl -N -X POST 'http://127.0.0.1:8080/api/stream/springai' \
   -H 'Content-Type: application/json' \
   -d '{
-    "message": "帮我查一下北京天气，并说明工具调用过程。"
+    "message": "帮我查一下北京天气，并说明工具调用过程。",
+    "session_id": "session:weather-demo",
+    "client_request_id": "request:weather-demo-1",
+    "after_cursor": 0
   }'
 ```
 
