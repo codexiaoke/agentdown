@@ -17,6 +17,8 @@ import jakarta.validation.constraints.AssertTrue;
  * @param message        当前用户输入的问题；恢复 HITL 时可以为空。
  * @param sessionId      前端已持有的 sessionId；为空时后端会自动创建。
  * @param mode           可选的运行模式标记，例如 `hitl`。
+ * @param clientRequestId 同一发送/恢复操作稳定不变的幂等键。
+ * @param afterCursor    客户端已经应用的最后事件游标。
  * @param springAiResume 使用同一个 SSE 入口继续已暂停 interrupt 时提交的人工决策。
  */
 public record ChatStreamRequest(
@@ -24,11 +26,37 @@ public record ChatStreamRequest(
         @JsonProperty("session_id")
         String sessionId,
         String mode,
+        @JsonProperty("client_request_id")
+        String clientRequestId,
+        @JsonProperty("after_cursor")
+        Long afterCursor,
         @Valid
         @JsonProperty("springai_resume")
         @JsonAlias("langchain_resume")
         SpringAiResumeRequest springAiResume
 ) {
+
+    /** Java 调用方使用的便捷构造器；HTTP JSON 契约仍包含恢复字段。 */
+    public ChatStreamRequest(
+            String message,
+            String sessionId,
+            String mode,
+            SpringAiResumeRequest springAiResume
+    ) {
+        this(message, sessionId, mode, null, 0L, springAiResume);
+    }
+
+    /** 创建由控制器补齐后端会话身份后的请求副本。 */
+    public ChatStreamRequest withRecoveryIdentity(String resolvedSessionId, String resolvedRequestId) {
+        return new ChatStreamRequest(
+                message,
+                resolvedSessionId,
+                mode,
+                resolvedRequestId,
+                0L,
+                springAiResume
+        );
+    }
 
     /**
      * 校验当前请求至少要包含一类有效输入：

@@ -26,6 +26,11 @@ public class SpringAiConversationStore {
         return conversations.computeIfAbsent(sessionId, ignored -> new Conversation());
     }
 
+    /** 判断会话是否已经拥有模型消息历史。 */
+    public boolean has(String sessionId) {
+        return conversations.containsKey(sessionId);
+    }
+
     /**
      * 单个会话的消息历史容器。
      */

@@ -107,10 +107,11 @@ public class SpringAiChatService {
      */
     public void stream(ChatStreamRequest request, Consumer<Map<String, Object>> emit) {
         String sessionId = resolveSessionId(request);
+        boolean existingConversation = conversationStore.has(sessionId);
         SpringAiConversationStore.Conversation conversation = conversationStore.get(sessionId);
 
         emit.accept(createSessionEvent(
-                StringUtils.hasText(request.sessionId()) ? "session.resumed" : "session.created",
+                existingConversation ? "session.resumed" : "session.created",
                 sessionId
         ));
 

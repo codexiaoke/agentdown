@@ -4,132 +4,160 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xiaoke.springbackend.model.ChatStreamRequest;
 import com.xiaoke.springbackend.service.SpringAiChatService;
+import com.xiaoke.springbackend.service.SpringAiConversationEventStore;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Flux;
-import reactor.core.publisher.Sinks;
 import reactor.core.scheduler.Schedulers;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.UUID;
 
-/**
- * Spring AI SSE 控制器。
- *
- * 目前把 `/api/stream/springai` 作为正式入口，
- * 同时临时保留 `/api/stream/langchain` 兼容旧前端联调，
- * 但底层实现已经全部切到 Spring AI。
- */
+/** Spring AI 的后端权威会话、归档和可恢复 SSE 控制器。 */
 @RestController
-@RequestMapping("/api/stream")
-@CrossOrigin
+@CrossOrigin(exposedHeaders = {
+        "X-Agentdown-Conversation-Id",
+        "X-Agentdown-Request-Id",
+        "X-Agentdown-Request-Reused"
+})
 public class SpringAiSseController {
 
     private static final Logger log = LoggerFactory.getLogger(SpringAiSseController.class);
 
-    private final SpringAiChatService springAiChatService;
+    private final SpringAiChatService chatService;
+    private final SpringAiConversationEventStore eventStore;
     private final ObjectMapper objectMapper;
 
-    /**
-     * 构造 Spring AI SSE 控制器。
-     *
-     * @param springAiChatService 负责执行 DeepSeek 流式对话与 HITL 的服务。
-     * @param objectMapper        Spring 注入的 JSON 序列化器。
-     */
     public SpringAiSseController(
-            SpringAiChatService springAiChatService,
+            SpringAiChatService chatService,
+            SpringAiConversationEventStore eventStore,
             ObjectMapper objectMapper
     ) {
-        this.springAiChatService = springAiChatService;
+        this.chatService = chatService;
+        this.eventStore = eventStore;
         this.objectMapper = objectMapper;
     }
 
     /**
-     * 以 SSE 形式返回一轮 Spring AI 对话。
-     *
-     * 当前支持：
-     * - 首轮 `message`
-     * - `mode=hitl` 时的人工确认暂停
-     * - `session_id + springai_resume` 恢复已暂停流程
-     *
-     * @param request 前端发来的请求体。
-     * @return 持续输出 JSON 事件的 SSE Flux。
+     * 首次请求启动后台生产；相同幂等键的后续请求只订阅已有运行并按游标补发。
      */
     @PostMapping(
-            path = {"/springai", "/langchain"},
+            path = "/api/stream/springai",
             consumes = MediaType.APPLICATION_JSON_VALUE,
             produces = MediaType.TEXT_EVENT_STREAM_VALUE
     )
-    public Flux<ServerSentEvent<String>> stream(@Valid @RequestBody ChatStreamRequest request) {
-        Sinks.Many<ServerSentEvent<String>> sink = Sinks.many().unicast().onBackpressureBuffer();
+    public Flux<ServerSentEvent<String>> stream(
+            @Valid @RequestBody ChatStreamRequest request,
+            @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
+            @RequestHeader(name = "Last-Event-ID", required = false) String lastEventId
+    ) {
+        String conversationId = StringUtils.hasText(request.sessionId())
+                ? request.sessionId().trim()
+                : "session:" + UUID.randomUUID();
+        String requestId = StringUtils.hasText(idempotencyKey)
+                ? idempotencyKey.trim()
+                : StringUtils.hasText(request.clientRequestId())
+                ? request.clientRequestId().trim()
+                : "request:" + UUID.randomUUID();
+        long afterCursor = resolveAfterCursor(lastEventId, request.afterCursor());
+        ChatStreamRequest normalized = request.withRecoveryIdentity(conversationId, requestId);
+        String fingerprint = serialize(normalized);
 
-        Schedulers.boundedElastic().schedule(() -> {
-            try {
-                springAiChatService.stream(request, payload -> emit(sink, payload));
-                sink.tryEmitComplete();
-            } catch (Throwable error) {
-                log.error("Spring AI SSE stream failed.", error);
-                emit(sink, createErrorPayload(error));
-                sink.tryEmitComplete();
-            }
-        });
+        SpringAiConversationEventStore.OpenRunResult opened;
+        try {
+            opened = eventStore.openRun(conversationId, requestId, fingerprint);
+        } catch (SpringAiConversationEventStore.IdempotencyConflictException error) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, error.getMessage(), error);
+        }
 
-        return sink.asFlux();
+        if (!opened.reused()) {
+            Schedulers.boundedElastic().schedule(() -> produce(opened, normalized));
+        }
+
+        return eventStore.subscribe(opened, afterCursor)
+                .map(stored -> ServerSentEvent.<String>builder()
+                        .id(stored.eventId())
+                        .event(stored.event())
+                        .data(serialize(stored.data()))
+                        .build());
     }
 
-    /**
-     * 安全地向 SSE sink 推送一条 JSON 事件。
-     *
-     * @param sink    当前请求对应的 sink。
-     * @param payload 一条完整事件。
-     */
-    private void emit(
-            Sinks.Many<ServerSentEvent<String>> sink,
-            Map<String, Object> payload
+    /** 返回刷新页面时使用的完整后端事件归档。 */
+    @GetMapping("/api/v1/conversations/{conversationId}")
+    public SpringAiConversationEventStore.ConversationArchive archive(
+            @PathVariable String conversationId
     ) {
-        String event = resolveEventName(payload);
-        String jsonPayload = serialize(payload);
-        Sinks.EmitResult result = sink.tryEmitNext(
-                ServerSentEvent.<String>builder()
-                        .event(event)
-                        .data(jsonPayload)
-                        .build()
-        );
+        SpringAiConversationEventStore.ConversationArchive archive = eventStore.load(conversationId);
+        if (archive == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Conversation not found: " + conversationId);
+        }
+        return archive;
+    }
 
-        if (result.isFailure()) {
-            log.debug("Skipping SSE event {} because sink emission failed: {}", event, result);
+    private void produce(
+            SpringAiConversationEventStore.OpenRunResult opened,
+            ChatStreamRequest request
+    ) {
+        try {
+            chatService.stream(
+                    request,
+                    payload -> eventStore.append(opened, resolveEventName(payload), payload)
+            );
+            eventStore.complete(opened, "completed");
+        } catch (Throwable error) {
+            log.error("Spring AI backend producer failed.", error);
+            Map<String, Object> payload = createErrorPayload(error);
+            eventStore.append(opened, "error", payload);
+            eventStore.complete(opened, "failed");
         }
     }
 
-    /**
-     * 解析当前 payload 对应的 SSE 事件名。
-     *
-     * @param payload 一条完整事件。
-     * @return `payload.event`，缺失时回退成 `message`。
-     */
-    private String resolveEventName(Map<String, Object> payload) {
-        Object event = payload.get("event");
-
-        return event instanceof String value && !value.isBlank()
-                ? value
-                : "message";
+    private long resolveAfterCursor(String lastEventId, Long bodyCursor) {
+        if (!StringUtils.hasText(lastEventId)) {
+            return bodyCursor == null ? 0L : requireNonNegative(bodyCursor);
+        }
+        String[] parts = lastEventId.trim().split(":");
+        try {
+            return requireNonNegative(Long.parseLong(parts[parts.length - 1]));
+        } catch (NumberFormatException error) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNPROCESSABLE_ENTITY,
+                    "Last-Event-ID must end in a non-negative cursor.",
+                    error
+            );
+        }
     }
 
-    /**
-     * 把事件对象序列化成 JSON。
-     *
-     * @param payload 当前事件对象。
-     * @return JSON 字符串。
-     */
-    private String serialize(Map<String, Object> payload) {
+    private long requireNonNegative(long cursor) {
+        if (cursor < 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNPROCESSABLE_ENTITY,
+                    "Event cursor must be non-negative."
+            );
+        }
+        return cursor;
+    }
+
+    private String resolveEventName(Map<String, Object> payload) {
+        Object event = payload.get("event");
+        return event instanceof String value && !value.isBlank() ? value : "message";
+    }
+
+    private String serialize(Object payload) {
         try {
             return objectMapper.writeValueAsString(payload);
         } catch (JsonProcessingException exception) {
@@ -137,33 +165,14 @@ public class SpringAiSseController {
         }
     }
 
-    /**
-     * 把异常转换成前端易消费的 `error` 事件。
-     *
-     * @param error 当前异常。
-     * @return 标准 error payload。
-     */
     private Map<String, Object> createErrorPayload(Throwable error) {
         Map<String, Object> data = new LinkedHashMap<>();
-        data.put("message", resolveErrorMessage(error));
-
+        data.put("message", StringUtils.hasText(error.getMessage())
+                ? error.getMessage()
+                : error.getClass().getSimpleName());
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("event", "error");
         payload.put("data", data);
         return payload;
-    }
-
-    /**
-     * 生成更适合直接返回给前端的错误文案。
-     *
-     * @param error 原始异常。
-     * @return 简洁错误提示。
-     */
-    private String resolveErrorMessage(Throwable error) {
-        if (error.getMessage() != null && !error.getMessage().isBlank()) {
-            return error.getMessage();
-        }
-
-        return error.getClass().getSimpleName();
     }
 }
