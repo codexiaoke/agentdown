@@ -80,7 +80,7 @@ async def stream_agui_provider(
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     last_event_id: str | None = Header(default=None, alias="Last-Event-ID"),
 ) -> object:
-    """Run the standard AG-UI + A2UI in-memory example with backend recovery."""
+    """Run the real DeepSeek AG-UI + A2UI agent with backend recovery."""
 
     conversation_id = request.thread_id
     request_id = idempotency_key or request.run_id
@@ -93,7 +93,7 @@ async def stream_agui_provider(
             provider_id="agui",
             request_id=request_id,
             request_payload=request_payload,
-            event_factory=lambda: stream_agui_events(request),
+            event_factory=lambda: stream_agui_events(request, settings),
         )
     except ConversationConflictError as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
