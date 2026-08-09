@@ -1,18 +1,21 @@
 <script setup lang="ts">
 import type {
-  A2uiClientAction,
   ComponentApi,
-  Subscription,
   SurfaceModel
 } from '@a2ui/web_core/v0_9';
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
-import type { RuntimeIntent, SurfaceBlock } from '../../runtime/types';
+import type { RuntimeData, RuntimeIntent, SurfaceBlock } from '../../runtime/types';
 import { defaultA2UiBasicCatalog } from '../catalog';
-import { createA2UiProcessor, type A2UiProcessor } from '../processor';
+import {
+  createA2UiSurfaceController,
+  type A2UiSurfaceController
+} from '../surfaceController';
 import type {
+  A2UiClientEnvelope,
   A2UiErrorContext,
   A2UiSecurityPolicy,
   A2UiSurfaceBlockData,
+  A2UiVersion,
   A2UiVueCatalog
 } from '../types';
 import A2UiNode from './A2UiNode.vue';
@@ -22,26 +25,28 @@ interface Props {
   messages?: ReadonlyArray<unknown>;
   surfaceId?: string;
   rootId?: string;
-  catalog?: A2UiVueCatalog<ComponentApi>;
+  catalogs?: ReadonlyArray<A2UiVueCatalog<ComponentApi>>;
+  version?: A2UiVersion;
+  includeInlineCatalogs?: boolean;
   securityPolicy?: Partial<A2UiSecurityPolicy>;
   block?: SurfaceBlock<A2UiSurfaceBlockData>;
   emitIntent?: (intent: Omit<RuntimeIntent, 'id' | 'at'>) => RuntimeIntent;
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  catalog: () => defaultA2UiBasicCatalog
+  catalogs: () => [defaultA2UiBasicCatalog],
+  version: 'v0.9.1'
 });
 
 const emit = defineEmits<{
-  action: [action: A2uiClientAction];
+  clientMessage: [envelope: A2UiClientEnvelope];
   error: [context: A2UiErrorContext];
 }>();
 
-const controller = shallowRef<A2UiProcessor<ComponentApi> | null>(null);
+const controller = shallowRef<A2UiSurfaceController<ComponentApi> | null>(null);
 const surface = shallowRef<SurfaceModel<ComponentApi> | null>(null);
 const revision = ref(0);
 const errorMessage = ref<string | null>(null);
-let subscriptions: Subscription[] = [];
 
 const blockData = computed<A2UiSurfaceBlockData | null>(() => {
   const data = props.block?.data;
@@ -50,14 +55,11 @@ const blockData = computed<A2UiSurfaceBlockData | null>(() => {
 const resolvedMessages = computed<ReadonlyArray<unknown>>(() => props.messages ?? blockData.value?.messages ?? []);
 const resolvedSurfaceId = computed(() => props.surfaceId ?? blockData.value?.surfaceId ?? 'root');
 const resolvedRootId = computed(() => props.rootId ?? blockData.value?.rootId ?? 'root');
-
-function clearSubscriptions() {
-  subscriptions.forEach((subscription) => subscription.unsubscribe());
-  subscriptions = [];
-}
+const resolvedCatalog = computed(() => props.catalogs.find(
+  (catalog) => catalog.id === surface.value?.catalog.id
+));
 
 function disposeController() {
-  clearSubscriptions();
   controller.value?.dispose();
   controller.value = null;
   surface.value = null;
@@ -66,64 +68,50 @@ function disposeController() {
 function reportError(context: A2UiErrorContext) {
   errorMessage.value = context.error instanceof Error ? context.error.message : String(context.error);
   emit('error', context);
+  if (context.phase === 'validation' || context.phase === 'processing') {
+    const activeController = controller.value;
+    if (activeController) {
+      handleClientMessage(activeController.createClientEnvelope({
+        version: activeController.version,
+        error: {
+          code: 'CLIENT_PROCESSING_ERROR',
+          surfaceId: context.surfaceId ?? resolvedSurfaceId.value,
+          message: errorMessage.value
+        }
+      }));
+    }
+  }
 }
 
-function handleAction(action: A2uiClientAction) {
-  emit('action', action);
+function handleClientMessage(envelope: A2UiClientEnvelope) {
+  emit('clientMessage', envelope);
   props.emitIntent?.({
-    type: 'a2ui.action',
+    type: 'a2ui.client-message',
     blockId: props.block?.id ?? null,
     nodeId: props.block?.nodeId ?? null,
-    payload: action
+    payload: envelope as unknown as RuntimeData
   });
 }
 
-function subscribeSurface(nextSurface: SurfaceModel<ComponentApi>) {
-  clearSubscriptions();
-  subscriptions.push(nextSurface.componentsModel.onCreated.subscribe((component) => {
-    revision.value += 1;
-    subscriptions.push(component.onUpdated.subscribe(() => {
-      revision.value += 1;
-    }));
-  }));
-  subscriptions.push(nextSurface.componentsModel.onDeleted.subscribe(() => {
-    revision.value += 1;
-  }));
-  subscriptions.push(nextSurface.dataModel.subscribe('/', () => {
-    revision.value += 1;
-  }));
-
-  for (const [, component] of nextSurface.componentsModel.entries) {
-    subscriptions.push(component.onUpdated.subscribe(() => {
-      revision.value += 1;
-    }));
-  }
-}
-
-function rebuild(messages: ReadonlyArray<unknown>) {
+function rebuildController() {
   disposeController();
   errorMessage.value = null;
 
-  if (messages.length === 0) {
-    return;
-  }
-
   try {
-    const nextController = createA2UiProcessor<ComponentApi>({
-      catalogs: [props.catalog],
+    const nextController = createA2UiSurfaceController<ComponentApi>({
+      surfaceId: resolvedSurfaceId.value,
+      catalogs: props.catalogs,
+      version: props.version,
+      includeInlineCatalogs: props.includeInlineCatalogs,
       ...(props.securityPolicy ? { policy: props.securityPolicy } : {}),
-      onAction: handleAction
+      onChange(nextSurface) {
+        surface.value = nextSurface ?? null;
+        revision.value += 1;
+      },
+      onClientMessage: handleClientMessage
     });
-    nextController.process(messages);
-    const nextSurface = nextController.getSurface(resolvedSurfaceId.value);
-    if (!nextSurface) {
-      throw new Error(`A2UI surface not found: ${resolvedSurfaceId.value}.`);
-    }
-
     controller.value = nextController;
-    surface.value = nextSurface;
-    subscribeSurface(nextSurface);
-    revision.value += 1;
+    nextController.sync(resolvedMessages.value);
   } catch (error) {
     reportError({
       phase: 'processing',
@@ -134,8 +122,31 @@ function rebuild(messages: ReadonlyArray<unknown>) {
 }
 
 watch(
-  () => [resolvedMessages.value, resolvedSurfaceId.value, props.catalog, props.securityPolicy] as const,
-  ([messages]) => rebuild(messages),
+  () => [
+    resolvedSurfaceId.value,
+    props.catalogs,
+    props.version,
+    props.includeInlineCatalogs,
+    props.securityPolicy
+  ] as const,
+  rebuildController,
+  { immediate: true }
+);
+
+watch(
+  resolvedMessages,
+  (messages) => {
+    errorMessage.value = null;
+    try {
+      controller.value?.sync(messages);
+    } catch (error) {
+      reportError({
+        phase: 'processing',
+        error,
+        surfaceId: resolvedSurfaceId.value
+      });
+    }
+  },
   { immediate: true, deep: true }
 );
 
@@ -153,9 +164,9 @@ onBeforeUnmount(disposeController);
       <span>{{ errorMessage }}</span>
     </div>
     <A2UiNode
-      v-else-if="surface"
+      v-else-if="surface && resolvedCatalog"
       :surface="surface"
-      :catalog="catalog"
+      :catalog="resolvedCatalog"
       :component-id="resolvedRootId"
       base-path="/"
       :revision="revision"

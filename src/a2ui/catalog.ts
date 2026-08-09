@@ -22,6 +22,30 @@ export interface CreateA2UiBasicCatalogOptions {
   renderers?: Readonly<Record<string, Component>>;
 }
 
+/** 声明业务自己的协议 Catalog 与 Vue Renderer 映射。 */
+export function defineA2UiCatalog<T extends ComponentApi>(
+  catalog: A2UiVueCatalog<T>
+): A2UiVueCatalog<T> {
+  if (catalog.id !== catalog.protocol.id) {
+    throw new Error(`A2UI catalog id mismatch: ${catalog.id} !== ${catalog.protocol.id}.`);
+  }
+
+  const renderers: Record<string, Raw<Component>> = {};
+  for (const componentName of catalog.protocol.components.keys()) {
+    const renderer = catalog.renderers[componentName];
+    if (!renderer) {
+      throw new Error(`A2UI Vue renderer is missing: ${componentName}.`);
+    }
+    renderers[componentName] = markRaw(renderer);
+  }
+
+  return {
+    id: catalog.id,
+    protocol: catalog.protocol,
+    renderers
+  };
+}
+
 /**
  * 创建安全的 A2UI v0.9 Basic Catalog。
  *
@@ -43,11 +67,11 @@ export function createA2UiBasicCatalog(
     renderers[name] = markRaw(options.renderers?.[name] ?? A2UiBasicElement);
   }
 
-  return {
+  return defineA2UiCatalog({
     id: A2UI_BASIC_CATALOG_ID,
     protocol,
     renderers
-  };
+  });
 }
 
 /** 供零配置 Renderer 复用的默认 Catalog。 */
