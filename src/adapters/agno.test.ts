@@ -810,7 +810,9 @@ describe('useAgnoChatSession', () => {
     });
 
     expect(capturedBodies[0]).toEqual({
-      message: '请根据我上传的附件，再帮我查一下北京天气。'
+      message: '请根据我上传的附件，再帮我查一下北京天气。',
+      client_request_id: expect.any(String),
+      after_cursor: 0
     });
     expect(sessionState.lastInput.value).toBe('请根据我上传的附件，再帮我查一下北京天气。');
     expect(userBlocks.map((block) => block.type)).toEqual([
@@ -830,7 +832,9 @@ describe('useAgnoChatSession', () => {
 
     expect(requestCount).toBe(2);
     expect(capturedBodies[1]).toEqual({
-      message: '请根据我上传的附件，再帮我查一下北京天气。'
+      message: '请根据我上传的附件，再帮我查一下北京天气。',
+      client_request_id: expect.any(String),
+      after_cursor: 0
     });
 
     scope.stop();
@@ -904,11 +908,15 @@ describe('useAgnoChatSession', () => {
     expect(capturedBodies).toEqual([
       {
         message: '请根据 file-weather-1 查北京天气',
-        file_ids: ['file-weather-1']
+        file_ids: ['file-weather-1'],
+        client_request_id: expect.any(String),
+        after_cursor: 0
       },
       {
         message: '请根据 file-weather-1 查北京天气',
-        file_ids: ['file-weather-1']
+        file_ids: ['file-weather-1'],
+        client_request_id: expect.any(String),
+        after_cursor: 0
       }
     ]);
 
@@ -1178,7 +1186,9 @@ describe('useAgnoChatSession', () => {
     expect(sessionState.statusLabel.value).toBe('等待人工确认');
     expect(capturedBodies[0]).toEqual({
       message: '帮我查一下北京天气',
-      mode: 'hitl'
+      mode: 'hitl',
+      client_request_id: expect.any(String),
+      after_cursor: 0
     });
 
     if (!approvalBlock || !approvalHandler) {
@@ -1226,6 +1236,8 @@ describe('useAgnoChatSession', () => {
     expect(capturedBodies[1]).toEqual({
       session_id: 'backend-session-hitl-1',
       mode: 'hitl',
+      client_request_id: expect.any(String),
+      after_cursor: 0,
       agno_resume: {
         run_id: 'run-hitl-approve-1',
         requirement_id: 'requirement-hitl-1',
@@ -1516,6 +1528,8 @@ describe('useAgnoChatSession', () => {
     expect(capturedBodies[1]).toEqual({
       session_id: 'backend-session-hitl-fallback-1',
       mode: 'hitl',
+      client_request_id: expect.any(String),
+      after_cursor: 0,
       agno_resume: {
         run_id: 'run-hitl-fallback-1',
         requirement_id: 'call-hitl-fallback-1',
@@ -1671,6 +1685,8 @@ describe('useAgnoChatSession', () => {
     expect(capturedBodies[1]).toEqual({
       session_id: 'backend-session-hitl-custom-1',
       mode: 'hitl',
+      client_request_id: expect.any(String),
+      after_cursor: 0,
       agno_resume: {
         run_id: 'run-hitl-custom-1',
         requirement_id: 'requirement-hitl-custom-1',

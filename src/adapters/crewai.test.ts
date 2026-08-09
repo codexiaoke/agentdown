@@ -647,7 +647,9 @@ describe('useCrewAIChatSession', () => {
     expect(sessionState.sessionId.value).toBe('crewai-session-1');
     expect(sessionState.busy.value).toBe(false);
     expect(capturedBodies[0]).toEqual({
-      message: '帮我查一下北京天气，并说明工具调用过程。'
+      message: '帮我查一下北京天气，并说明工具调用过程。',
+      client_request_id: expect.any(String),
+      after_cursor: 0
     });
     expect(userBlock?.content).toBe('帮我查一下北京天气，并说明工具调用过程。');
     expect(assistantBlock?.content).toBe('我来为你查询天气');
@@ -674,7 +676,9 @@ describe('useCrewAIChatSession', () => {
     expect(sessionState.sessionId.value).toBe('crewai-session-1');
     expect(capturedBodies[1]).toEqual({
       message: '再查一遍',
-      session_id: 'crewai-session-1'
+      session_id: 'crewai-session-1',
+      client_request_id: expect.any(String),
+      after_cursor: 0
     });
 
     scope.stop();

@@ -25,6 +25,12 @@ import type { EventActionRegistryResult } from '../../runtime/eventActions';
 import type { RunSurfaceMessageActionItem, RunSurfaceMessageActionsRoleOptions, RunSurfaceOptions } from '../../surface/types';
 import type { FrameworkAdapterOptionsLike, FrameworkAdapterProtocolOptionsLike, FrameworkEventRegistryLike, FrameworkToolRegistryLike } from './adapterFactory';
 import type { FrameworkJsonSseTransportOptionsLike } from './jsonSseTransportFactory';
+import {
+  AgentdownBackendRecoveryTracker,
+  attachAgentdownRecoveryMetadata,
+  type AgentdownBackendConversationArchive,
+  type AgentdownEventRecoveryMetadata
+} from '../../recovery/backendConversation';
 
 /**
  * 内置框架 chat helper 共享的最小消息语义 id 结构。
@@ -206,7 +212,21 @@ export interface FrameworkChatTransportContext {
   requestText: string;
   /** 当前轮完整的结构化提交内容。 */
   submission: FrameworkChatResolvedSubmission | null;
+  /** 后端已确认的会话 id。 */
+  sessionId: string;
+  /** 当前发送/恢复操作的幂等键。 */
+  clientRequestId: string;
+  /** 当前 runtime 已应用的最后后端游标。 */
+  afterCursor: number;
 }
+
+export type FrameworkChatConnectionState =
+  | 'idle'
+  | 'recovering'
+  | 'connecting'
+  | 'reconnecting'
+  | 'recovered'
+  | 'failed';
 
 /**
  * 共享 chat helper 的 assistant 操作栏配置。
@@ -340,6 +360,12 @@ export interface FrameworkChatSessionResult<
   transportError: ComputedRef<string>;
   /** 最近一次成功抓到的后端 sessionId。 */
   sessionId: ShallowRef<string>;
+  /** 当前已应用的后端事件游标。 */
+  eventCursor: ShallowRef<number>;
+  /** 当前发送或恢复操作的幂等键。 */
+  clientRequestId: ShallowRef<string>;
+  /** 面向页面提示的恢复连接状态。 */
+  connectionState: ComputedRef<FrameworkChatConnectionState>;
   /** 最近一次真正发给后端的输入文本。 */
   lastInput: ShallowRef<string>;
   /** 当前这次请求真正送给 transport 的输入文本。 */
@@ -362,6 +388,12 @@ export interface FrameworkChatSessionResult<
   resume: (source?: TSource) => Promise<void>;
   /** 在执行 HITL 决策恢复流程时，临时暴露“处理中”状态。 */
   withPendingHumanResolution: <TResult>(task: () => Promise<TResult>) => Promise<TResult>;
+  /** 使用后端原始事件归档重建当前 adapter runtime。 */
+  restoreConversation: (archive: AgentdownBackendConversationArchive<TRawPacket>) => void;
+  /** 从业务提供的后端 loader 加载并恢复会话。 */
+  loadConversation: (
+    loader: (conversationId: string) => Promise<AgentdownBackendConversationArchive<TRawPacket>>
+  ) => Promise<AgentdownBackendConversationArchive<TRawPacket>>;
 }
 
 /**
@@ -1089,6 +1121,11 @@ export function useFrameworkChatSession<
   const lastInput = shallowRef('');
   const lastSubmission = shallowRef<ResolvedFrameworkChatInput | null>(null);
   const sessionId = shallowRef('');
+  const eventCursor = shallowRef(0);
+  const clientRequestId = shallowRef('');
+  const recoveryTracker = new AgentdownBackendRecoveryTracker();
+  const recoveringArchive = shallowRef(false);
+  const restoredFromBackend = shallowRef(false);
   const initialSource = resolveFrameworkChatInitialSource(config.options.source);
   const interrupted = shallowRef(false);
   const pendingHumanResolutionCount = shallowRef(0);
@@ -1100,8 +1137,20 @@ export function useFrameworkChatSession<
     message: () => requestInput.value,
     resolveContext: () => ({
       requestText: requestInput.value,
-      submission: lastSubmission.value
-    })
+      submission: lastSubmission.value,
+      sessionId: sessionId.value,
+      clientRequestId: clientRequestId.value,
+      afterCursor: eventCursor.value
+    }),
+    recovery: {
+      isDuplicate(metadata: AgentdownEventRecoveryMetadata) {
+        return recoveryTracker.isDuplicate(metadata);
+      },
+      onEvent(metadata: AgentdownEventRecoveryMetadata) {
+        recoveryTracker.observe(metadata);
+        eventCursor.value = recoveryTracker.cursor;
+      }
+    }
   } as unknown as TTransportOptions);
   const sessionIdResolver = resolveFrameworkChatSessionIdResolver(
     config.options.sessionId,
@@ -1225,6 +1274,24 @@ export function useFrameworkChatSession<
 
     return resolveFrameworkChatErrorMessage(sessionState.error.value, config.frameworkName);
   });
+  const connectionState = computed<FrameworkChatConnectionState>(() => {
+    if (recoveringArchive.value) {
+      return 'recovering';
+    }
+    if (sessionState.reconnecting.value) {
+      return 'reconnecting';
+    }
+    if (sessionState.status.value.phase === 'errored') {
+      return 'failed';
+    }
+    if (sessionState.status.value.phase === 'consuming') {
+      return 'connecting';
+    }
+    if (restoredFromBackend.value || eventCursor.value > 0) {
+      return 'recovered';
+    }
+    return 'idle';
+  });
 
   /**
    * 发送一次新的用户输入。
@@ -1263,6 +1330,8 @@ export function useFrameworkChatSession<
     chatIds.value = ids;
     activeSource.value = nextSource;
     interrupted.value = false;
+    recoveryTracker.beginRequest();
+    clientRequestId.value = recoveryTracker.requestId;
     sessionState.disconnect();
     sessionState.reset();
     seedFrameworkUserMessage(normalizedInput, ids, sessionState.runtime, config.options.userMessage, at);
@@ -1356,11 +1425,53 @@ export function useFrameworkChatSession<
     task: () => Promise<TResult>
   ): Promise<TResult> {
     pendingHumanResolutionCount.value += 1;
+    recoveryTracker.beginRequest();
+    clientRequestId.value = recoveryTracker.requestId;
 
     try {
       return await task();
     } finally {
       pendingHumanResolutionCount.value = Math.max(0, pendingHumanResolutionCount.value - 1);
+    }
+  }
+
+  /** 用后端事件归档恢复 runtime，并把游标推进到后端最新位置。 */
+  function restoreConversation(archive: AgentdownBackendConversationArchive<TRawPacket>) {
+    if (archive.format !== 'agentdown.conversation/v1') {
+      throw new Error(`Unsupported backend conversation archive: ${String(archive.format)}`);
+    }
+
+    sessionState.disconnect();
+    sessionState.reset();
+    recoveryTracker.reset();
+    recoveryTracker.restore(archive);
+    sessionId.value = archive.conversation_id;
+    eventCursor.value = recoveryTracker.cursor;
+    clientRequestId.value = '';
+    chatIds.value = null;
+
+    for (const event of [...archive.events].sort((left, right) => left.cursor - right.cursor)) {
+      sessionState.push(attachAgentdownRecoveryMetadata(event.data, {
+        eventId: event.event_id,
+        cursor: event.cursor
+      }));
+    }
+
+    sessionState.flush('backend-archive-restored');
+    restoredFromBackend.value = true;
+  }
+
+  /** 调用业务后端 loader 后恢复会话。 */
+  async function loadConversation(
+    loader: (conversationId: string) => Promise<AgentdownBackendConversationArchive<TRawPacket>>
+  ) {
+    recoveringArchive.value = true;
+    try {
+      const archive = await loader(toValue(config.options.conversationId));
+      restoreConversation(archive);
+      return archive;
+    } finally {
+      recoveringArchive.value = false;
     }
   }
 
@@ -1403,6 +1514,9 @@ export function useFrameworkChatSession<
     statusLabel,
     transportError,
     sessionId,
+    eventCursor,
+    clientRequestId,
+    connectionState,
     lastInput,
     requestInput,
     chatIds,
@@ -1413,6 +1527,8 @@ export function useFrameworkChatSession<
     retry,
     interrupt,
     resume,
-    withPendingHumanResolution
+    withPendingHumanResolution,
+    restoreConversation,
+    loadConversation
   };
 }
