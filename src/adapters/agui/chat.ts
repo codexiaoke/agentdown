@@ -4,6 +4,7 @@ import { computed, getCurrentScope, onScopeDispose, shallowRef } from 'vue';
 import type { FrameworkChatTransportContext } from '../shared/chatFactory';
 import { useFrameworkChatSession } from '../shared/chatFactory';
 import type { FrameworkJsonTransportResolvable } from '../shared/jsonSseTransportFactory';
+import type { RunSurfaceRendererContext } from '../../surface/types';
 import { createAgUiAdapter } from './adapter';
 import { createAgUiSseTransport } from './transport';
 import type {
@@ -107,11 +108,12 @@ export function useAgUiChatSession<TSource = RequestInfo | URL>(
       [A2UI_SURFACE_RENDERER]: {
         component: A2UiSurface,
         mode: 'context' as const,
-        props: {
+        props: (context: RunSurfaceRendererContext) => ({
+          ...context,
           onAction(action: A2UiAction) {
             void sendA2UiAction(action).catch(() => undefined);
           }
-        }
+        })
       }
     }
   }));
