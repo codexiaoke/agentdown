@@ -705,6 +705,8 @@ Agentdown 在 `stream -> assembler -> block` 这一步会尽量把未闭合结�
 - `/api/stream/langchain`
 - `/api/stream/autogen`
 - `/api/stream/crewai`
+- `GET /api/v1/conversations/{conversation_id}`
+- `GET /api/v1/conversations/{conversation_id}/events?request_id=...`
 
 启动方式：
 
@@ -726,6 +728,7 @@ python3 backend/run.py
 - [快速开始](https://codexiaoke.github.io/agentdown/guide/getting-started)
 - [核心概念](https://codexiaoke.github.io/agentdown/guide/core-concepts)
 - [官方框架适配](https://codexiaoke.github.io/agentdown/guide/framework-adapters)
+- [后端会话恢复与断线续传](https://codexiaoke.github.io/agentdown/guide/backend-conversation-recovery)
 - [自定义协议接入](https://codexiaoke.github.io/agentdown/guide/custom-framework)
 - [RunSurface](https://codexiaoke.github.io/agentdown/guide/run-surface)
 - [流式 Markdown](https://codexiaoke.github.io/agentdown/guide/streaming-markdown)

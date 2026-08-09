@@ -613,6 +613,8 @@ The repository also includes a real FastAPI backend for adapter integration test
 - `/api/stream/langchain`
 - `/api/stream/autogen`
 - `/api/stream/crewai`
+- `GET /api/v1/conversations/{conversation_id}`
+- `GET /api/v1/conversations/{conversation_id}/events?request_id=...`
 
 Setup:
 
@@ -628,6 +630,7 @@ See [backend/README.md](./backend/README.md) for details.
 - [Getting Started](https://codexiaoke.github.io/agentdown/guide/getting-started)
 - [Core Concepts](https://codexiaoke.github.io/agentdown/guide/core-concepts)
 - [Framework Adapters](https://codexiaoke.github.io/agentdown/guide/framework-adapters)
+- [Backend Conversation Recovery](https://codexiaoke.github.io/agentdown/guide/backend-conversation-recovery)
 - [Custom Framework Mapping](https://codexiaoke.github.io/agentdown/guide/custom-framework)
 - [RunSurface](https://codexiaoke.github.io/agentdown/guide/run-surface)
 - [Streaming Markdown](https://codexiaoke.github.io/agentdown/guide/streaming-markdown)

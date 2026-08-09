@@ -6,6 +6,7 @@
 
 - 正式 SSE 入口：`POST /api/stream/springai`
 - 会话归档入口：`GET /api/v1/conversations/{conversation_id}`
+- 已有运行只读续接入口：`GET /api/v1/conversations/{conversation_id}/events?request_id=...`
 - 直接调用 `DeepSeekApi.chatCompletionStream(...)` 获取真实流式 chunk
 - 使用真实 `Open-Meteo` 天气工具
 - 支持工具调用前的 HITL 暂停与恢复
@@ -67,6 +68,13 @@ curl -N -X POST 'http://127.0.0.1:8080/api/stream/springai' \
     "session_id": "上一次 SSE 返回的 session_id",
     "message": "那上海呢？"
   }'
+```
+
+刷新页面后如果归档仍是 `running`，使用响应里的 `active_request_id` 只读续接，不要重新提交原始 prompt：
+
+```bash
+curl -N 'http://127.0.0.1:8080/api/v1/conversations/session%3Aweather-demo/events?request_id=request%3Aweather-demo-1' \
+  -H 'Last-Event-ID: 4'
 ```
 
 开启 HITL，先暂停等待审批：

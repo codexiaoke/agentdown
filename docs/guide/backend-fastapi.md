@@ -22,12 +22,15 @@ description: 使用仓库内置 backend 联调真实 Agno、LangChain、AutoGen�
 | `/api/stream/langchain` | LangChain | interrupt / review |
 | `/api/stream/autogen` | AutoGen | handoff / 人机接力 |
 | `/api/stream/crewai` | CrewAI | 官方 SSE chunk + 工具展示 + `CrewOutput` |
+| `/api/v1/conversations/{conversation_id}` | 通用 | 后端权威原始事件归档 |
+| `/api/v1/conversations/{conversation_id}/events` | 通用 | 按 request id 与游标只读续接已有运行 |
 
 ## 设计原则
 
 - 后端直接返回官方风格事件
 - 不再额外包一层 Agentdown 专属后端协议
 - 前端适配层直接消费这些事件
+- 页面刷新读取后端事件归档；运行中的会话通过 GET 事件接口续接，不重复 POST prompt
 
 ## 环境变量
 

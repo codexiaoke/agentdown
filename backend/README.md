@@ -16,6 +16,7 @@
 - `/api/stream/autogen`
 - `/api/stream/crewai`
 - `GET /api/v1/conversations/{conversation_id}`：读取后端权威事件归档
+- `GET /api/v1/conversations/{conversation_id}/events?request_id=...`：只读续接已有运行
 
 所有 stream endpoint 都支持：
 
@@ -24,6 +25,8 @@
 - SSE `id`：格式为 `{conversation_id}:{cursor}`
 
 客户端断开后，provider 生产任务仍在后端继续运行。详细契约见 `docs/guide/backend-conversation-recovery.md`。
+
+归档响应为 `running` 时会提供 `active_request_id`。刷新后的页面使用 events GET 接口和 `Last-Event-ID` 继续读取，不能为了恢复而重新 POST 原始 prompt。
 
 ## 设计原则
 
