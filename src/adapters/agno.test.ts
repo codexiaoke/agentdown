@@ -811,6 +811,7 @@ describe('useAgnoChatSession', () => {
 
     expect(capturedBodies[0]).toEqual({
       message: '请根据我上传的附件，再帮我查一下北京天气。',
+      session_id: 'session:demo:agno-structured',
       client_request_id: expect.any(String),
       after_cursor: 0
     });
@@ -833,6 +834,7 @@ describe('useAgnoChatSession', () => {
     expect(requestCount).toBe(2);
     expect(capturedBodies[1]).toEqual({
       message: '请根据我上传的附件，再帮我查一下北京天气。',
+      session_id: 'session:demo:agno-structured',
       client_request_id: expect.any(String),
       after_cursor: 0
     });
@@ -909,12 +911,14 @@ describe('useAgnoChatSession', () => {
       {
         message: '请根据 file-weather-1 查北京天气',
         file_ids: ['file-weather-1'],
+        session_id: 'session:demo:agno-file-id-body',
         client_request_id: expect.any(String),
         after_cursor: 0
       },
       {
         message: '请根据 file-weather-1 查北京天气',
         file_ids: ['file-weather-1'],
+        session_id: 'session:demo:agno-file-id-body',
         client_request_id: expect.any(String),
         after_cursor: 0
       }
@@ -1187,6 +1191,7 @@ describe('useAgnoChatSession', () => {
     expect(capturedBodies[0]).toEqual({
       message: '帮我查一下北京天气',
       mode: 'hitl',
+      session_id: 'session:demo:agno-hitl-approve',
       client_request_id: expect.any(String),
       after_cursor: 0
     });
