@@ -7,6 +7,7 @@ interface RecoveryContext {
   sessionId: string;
   clientRequestId: string;
   afterCursor: number;
+  replayOnly?: boolean;
 }
 
 function sseResponse(frames: string): Response {
@@ -82,5 +83,57 @@ describe('createFrameworkJsonSseTransport recovery', () => {
       }
     });
     expect(observed).toEqual([{ eventId: 'session:test:5', cursor: 5 }]);
+  });
+
+  it('uses a bodyless GET and the latest cursor when reconnecting an existing run', async () => {
+    const fetcher = vi.fn(async (_source: RequestInfo | URL, init?: RequestInit) => {
+      const headers = new Headers(init?.headers);
+
+      expect(init?.method).toBe('GET');
+      expect(init?.body).toBeUndefined();
+      expect(headers.get('Authorization')).toBe('Bearer test');
+      expect(headers.get('Last-Event-ID')).toBe('7');
+      expect(headers.get('Idempotency-Key')).toBeNull();
+
+      return sseResponse([
+        'id: session:test:8',
+        'event: response.delta',
+        'data: {"event":"response.delta","data":{"content":"B"}}',
+        '',
+        ''
+      ].join('\n'));
+    });
+    const transport = createFrameworkJsonSseTransport<
+      Record<string, unknown>,
+      string,
+      RuntimeData,
+      RecoveryContext
+    >({
+      options: {
+        fetch: fetcher as typeof fetch,
+        message: 'must-not-be-sent',
+        body: { mode: 'hitl' },
+        request: {
+          headers: {
+            Authorization: 'Bearer test'
+          }
+        },
+        resolveContext: () => ({
+          sessionId: 'session:test',
+          clientRequestId: 'request:test',
+          afterCursor: 7,
+          replayOnly: true
+        })
+      }
+    });
+    const packets = [];
+
+    for await (const packet of transport.connect('/api/v1/conversations/session%3Atest/events', {
+      signal: new AbortController().signal
+    })) {
+      packets.push(packet);
+    }
+
+    expect(packets).toHaveLength(1);
   });
 });

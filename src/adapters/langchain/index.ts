@@ -28,6 +28,7 @@ export type {
   LangChainChatHitlOptions,
   LangChainChatIdFactory,
   LangChainChatIds,
+  LangChainChatRecoveryOptions,
   LangChainChatReconnectOptions,
   LangChainChatSessionIdOptions,
   LangChainChatUserMessageOptions,

@@ -9,6 +9,7 @@ import {
   type FrameworkChatDevtoolsOptions,
   type FrameworkChatInputValue,
   type FrameworkChatIds,
+  type FrameworkChatRecoveryOptions,
   type FrameworkChatReconnectOptions,
   type FrameworkChatSessionIdOptions,
   type FrameworkChatSessionResult,
@@ -58,6 +59,10 @@ export interface CrewAIChatUserMessageOptions extends FrameworkChatUserMessageOp
 export interface CrewAIChatReconnectOptions<TSource = FetchTransportSource>
   extends FrameworkChatReconnectOptions<CrewAIEvent, TSource> {}
 
+/** CrewAI chat helper 的后端权威会话恢复配置。 */
+export interface CrewAIChatRecoveryOptions<TSource = FetchTransportSource>
+  extends FrameworkChatRecoveryOptions<CrewAIEvent, TSource> {}
+
 /**
  * CrewAI chat helper 对 assistant 操作栏的快捷配置。
  */
@@ -103,6 +108,8 @@ export interface UseCrewAIChatSessionOptions<
   userMessage?: false | CrewAIChatUserMessageOptions;
   /** 当前 chat helper 是否在连接失败后自动重试。 */
   reconnect?: false | CrewAIChatReconnectOptions<TSource>;
+  /** 自动恢复后端会话归档，并续接仍在运行的 run。 */
+  recovery?: false | CrewAIChatRecoveryOptions<TSource>;
   /** assistant 默认消息操作栏的快捷配置；默认开启。 */
   assistantActions?: false | CrewAIChatAssistantActionsOptions;
 }

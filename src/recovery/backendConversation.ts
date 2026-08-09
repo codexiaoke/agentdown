@@ -23,6 +23,8 @@ export interface AgentdownBackendConversationArchive<TRawPacket = RuntimeData> {
   provider_id: string;
   latest_cursor: number;
   status: string;
+  /** 当前仍在执行、可通过只读事件接口续接的请求 id。 */
+  active_request_id?: string | null;
   updated_at: string;
   events: AgentdownBackendConversationEvent<TRawPacket>[];
 }

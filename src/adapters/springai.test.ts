@@ -51,6 +51,49 @@ function createSpringAiSseResponse(events: SpringAiEvent[]): Response {
   });
 }
 
+function createSpringAiRecoverySseResponse(input: Array<{
+  cursor: number;
+  event: SpringAiEvent;
+}>): Response {
+  return new Response(input.map(({ cursor, event }) => [
+    `id: session:springai-auto:${cursor}`,
+    `event: ${String(event.event ?? 'message')}`,
+    `data: ${JSON.stringify(event)}`,
+    '',
+    ''
+  ].join('\n')).join(''), {
+    headers: {
+      'Content-Type': 'text/event-stream'
+    }
+  });
+}
+
+function createSpringAiBackendArchive(input: {
+  conversationId: string;
+  requestId: string;
+  events: SpringAiEvent[];
+  status: string;
+  activeRequestId?: string | null;
+}): AgentdownBackendConversationArchive<SpringAiEvent> {
+  return {
+    format: 'agentdown.conversation/v1',
+    conversation_id: input.conversationId,
+    provider_id: 'springai',
+    latest_cursor: input.events.length,
+    status: input.status,
+    active_request_id: input.activeRequestId ?? null,
+    updated_at: '2026-08-09T00:00:00Z',
+    events: input.events.map((data, index) => ({
+      cursor: index + 1,
+      event_id: `${input.conversationId}:${index + 1}`,
+      request_id: input.requestId,
+      event: typeof data.event === 'string' ? data.event : null,
+      data,
+      created_at: '2026-08-09T00:00:00Z'
+    }))
+  };
+}
+
 describe('createSpringAiProtocol', () => {
   it('maps a Spring AI stream into assistant messages and a tool card', () => {
     const bridge = createSpringAiTestBridge();
@@ -1080,6 +1123,345 @@ describe('useSpringAiChatSession', () => {
     expect(resumedToolNode?.message).toBe('已拒绝执行');
     expect(resumedToolBlock?.data.status).toBe('rejected');
     expect(resumedToolBlock?.data.message).toBe('已拒绝执行');
+
+    scope.stop();
+  });
+
+  it('treats a missing backend archive as a clean new conversation', async () => {
+    const scope = effectScope();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(input)).toBe(
+        'http://springai.test/api/v1/conversations/session%3Aspringai-new'
+      );
+      expect(init?.method).toBe('GET');
+      return new Response('{"detail":"not found"}', { status: 404 });
+    });
+    const sessionState = scope.run(() => useSpringAiChatSession<string>({
+      source: 'http://springai.test/api/stream/springai',
+      conversationId: 'session:springai-new',
+      recovery: {},
+      transport: {
+        fetch: fetchMock as typeof fetch
+      }
+    }));
+
+    if (!sessionState) {
+      throw new Error('Failed to create Spring AI new recovery session.');
+    }
+
+    await sessionState.recoveryReady;
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(sessionState.recoveryError.value).toBeNull();
+    expect(sessionState.connectionState.value).toBe('idle');
+    expect(sessionState.runtime.snapshot().blocks).toEqual([]);
+
+    scope.stop();
+  });
+
+  it('automatically restores and reconnects a running backend conversation', async () => {
+    const scope = effectScope();
+    const conversationId = 'session:springai-auto';
+    const requestId = 'request:springai-auto';
+    const metadata = {
+      session_id: conversationId,
+      conversation_id: conversationId,
+      run_id: 'run:springai-auto',
+      turn_id: 'turn:springai-auto',
+      group_id: 'turn:springai-auto',
+      message_id: 'message:springai-auto'
+    };
+    const archivedEvents: SpringAiEvent[] = [
+      {
+        event: 'session.created',
+        metadata,
+        data: { session_id: conversationId, conversation_id: conversationId }
+      },
+      { event: 'run.started', metadata, data: { mode: 'chat' } },
+      { event: 'response.started', metadata, data: { role: 'assistant', step: 0 } },
+      { event: 'response.delta', metadata, data: { content: 'A' } }
+    ];
+    const archive = createSpringAiBackendArchive({
+      conversationId,
+      requestId,
+      events: archivedEvents,
+      status: 'running',
+      activeRequestId: requestId
+    });
+    const liveEvents: SpringAiEvent[] = [
+      { event: 'response.delta', metadata, data: { content: 'B' } },
+      {
+        event: 'response.completed',
+        metadata,
+        data: { status: 'completed', content: 'AB' }
+      },
+      { event: 'run.completed', metadata, data: { status: 'completed' } }
+    ];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+
+      if (url.endsWith(`/api/v1/conversations/${encodeURIComponent(conversationId)}`)) {
+        return Response.json(archive);
+      }
+
+      expect(url).toBe(
+        `http://springai.test/api/v1/conversations/${encodeURIComponent(conversationId)}`
+        + `/events?request_id=${encodeURIComponent(requestId)}`
+      );
+      expect(init?.method).toBe('GET');
+      expect(init?.body).toBeUndefined();
+      expect(new Headers(init?.headers).get('Last-Event-ID')).toBe('4');
+
+      return createSpringAiRecoverySseResponse(liveEvents.map((event, index) => ({
+        cursor: archivedEvents.length + index + 1,
+        event
+      })));
+    });
+    const sessionState = scope.run(() => useSpringAiChatSession<string>({
+      source: 'http://springai.test/api/stream/springai',
+      conversationId,
+      recovery: {},
+      transport: {
+        fetch: fetchMock as typeof fetch
+      }
+    }));
+
+    if (!sessionState) {
+      throw new Error('Failed to create Spring AI automatic recovery session.');
+    }
+
+    await sessionState.recoveryReady;
+    await nextTick();
+
+    const textBlocks = sessionState.runtime.snapshot().blocks.filter((block) => block.type === 'text');
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(sessionState.eventCursor.value).toBe(7);
+    expect(sessionState.connectionState.value).toBe('recovered');
+    expect(sessionState.recoveryError.value).toBeNull();
+    expect(textBlocks).toEqual(expect.arrayContaining([
+      expect.objectContaining({ content: 'AB' })
+    ]));
+
+    scope.stop();
+  });
+
+  it('automatically restores pending approval without executing it', async () => {
+    const scope = effectScope();
+    const conversationId = 'session:springai-pending-auto';
+    const requestId = 'request:springai-pending-auto';
+    const metadata = {
+      session_id: conversationId,
+      conversation_id: conversationId,
+      run_id: 'run:springai-pending-auto',
+      turn_id: 'turn:springai-pending-auto',
+      group_id: 'turn:springai-pending-auto',
+      message_id: 'message:springai-pending-auto'
+    };
+    const archive = createSpringAiBackendArchive({
+      conversationId,
+      requestId,
+      status: 'completed',
+      events: [
+        { event: 'run.started', metadata, data: { mode: 'hitl' } },
+        { event: 'response.started', metadata, data: { role: 'assistant', step: 0 } },
+        { event: 'response.delta', metadata, data: { content: '准备查询。' } },
+        {
+          event: 'approval.required',
+          metadata,
+          data: {
+            interrupt_id: 'run:springai-pending-auto',
+            action_requests: [{
+              requirement_id: 'requirement:springai-pending-auto',
+              tool_call_id: 'call:springai-pending-auto',
+              name: 'lookup_weather',
+              args: { city: '北京' },
+              allowed_decisions: ['approve', 'reject']
+            }]
+          }
+        },
+        {
+          event: 'response.completed',
+          metadata,
+          data: { status: 'paused', content: '准备查询。' }
+        },
+        { event: 'run.completed', metadata, data: { status: 'paused' } }
+      ]
+    });
+    const fetchMock = vi.fn(async () => Response.json(archive));
+    const sessionState = scope.run(() => useSpringAiChatSession<string>({
+      source: 'http://springai.test/api/stream/springai',
+      conversationId,
+      mode: 'hitl',
+      recovery: {},
+      transport: {
+        fetch: fetchMock as typeof fetch
+      }
+    }));
+
+    if (!sessionState) {
+      throw new Error('Failed to create Spring AI pending recovery session.');
+    }
+
+    await sessionState.recoveryReady;
+    await nextTick();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(sessionState.awaitingHumanInput.value).toBe(true);
+    expect(sessionState.runtime.snapshot().blocks).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        type: 'approval',
+        data: expect.objectContaining({ status: 'pending' })
+      })
+    ]));
+
+    scope.stop();
+  });
+
+  it('automatically reconnects a broken live stream with the same request and latest cursor', async () => {
+    const scope = effectScope();
+    const conversationId = 'session:springai-network-retry';
+    const metadata = {
+      session_id: conversationId,
+      conversation_id: conversationId,
+      run_id: 'run:springai-network-retry',
+      turn_id: 'turn:springai-network-retry',
+      group_id: 'turn:springai-network-retry',
+      message_id: 'message:springai-network-retry'
+    };
+    const runStarted: SpringAiEvent = {
+      event: 'run.started',
+      metadata,
+      data: { mode: 'chat' }
+    };
+    const requestBodies: Array<Record<string, unknown>> = [];
+    const requestHeaders: Headers[] = [];
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      requestBodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      requestHeaders.push(new Headers(init?.headers));
+
+      if (requestBodies.length === 1) {
+        const encoder = new TextEncoder();
+        return new Response(new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode([
+              `id: ${conversationId}:1`,
+              'event: run.started',
+              `data: ${JSON.stringify(runStarted)}`,
+              '',
+              ''
+            ].join('\n')));
+            globalThis.setTimeout(() => {
+              controller.error(new Error('simulated network disconnect'));
+            }, 0);
+          }
+        }), {
+          headers: { 'Content-Type': 'text/event-stream' }
+        });
+      }
+
+      return createSpringAiRecoverySseResponse([
+        { cursor: 1, event: runStarted },
+        {
+          cursor: 2,
+          event: { event: 'response.started', metadata, data: { role: 'assistant', step: 0 } }
+        },
+        {
+          cursor: 3,
+          event: { event: 'response.delta', metadata, data: { content: '重连成功' } }
+        },
+        {
+          cursor: 4,
+          event: {
+            event: 'response.completed',
+            metadata,
+            data: { status: 'completed', content: '重连成功' }
+          }
+        },
+        {
+          cursor: 5,
+          event: { event: 'run.completed', metadata, data: { status: 'completed' } }
+        }
+      ]);
+    });
+    const sessionState = scope.run(() => useSpringAiChatSession<string>({
+      source: 'http://springai.test/api/stream/springai',
+      input: '测试网络重连',
+      conversationId,
+      recovery: {
+        autoRestore: false
+      },
+      transport: {
+        fetch: fetchMock as typeof fetch
+      }
+    }));
+
+    if (!sessionState) {
+      throw new Error('Failed to create Spring AI network recovery session.');
+    }
+
+    await sessionState.send();
+    await nextTick();
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(requestBodies[0]).toMatchObject({
+      message: '测试网络重连',
+      session_id: conversationId,
+      after_cursor: 0
+    });
+    expect(requestBodies[1]).toMatchObject({
+      message: '测试网络重连',
+      session_id: conversationId,
+      after_cursor: 1
+    });
+    expect(requestBodies[1]?.client_request_id).toBe(requestBodies[0]?.client_request_id);
+    expect(requestHeaders[0]?.get('Idempotency-Key')).toBe(requestBodies[0]?.client_request_id);
+    expect(requestHeaders[1]?.get('Idempotency-Key')).toBe(requestBodies[0]?.client_request_id);
+    expect(sessionState.eventCursor.value).toBe(5);
+    expect(sessionState.runtime.snapshot().blocks).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: 'text', content: '重连成功' })
+    ]));
+
+    scope.stop();
+  });
+
+  it('keeps an explicit interrupt manual and cancels the pending automatic retry', async () => {
+    const scope = effectScope();
+    const fetchMock = vi.fn(async () => new Response(new ReadableStream({
+      start(controller) {
+        controller.error(new Error('simulated persistent disconnect'));
+      }
+    }), {
+      headers: { 'Content-Type': 'text/event-stream' }
+    }));
+    const sessionState = scope.run(() => useSpringAiChatSession<string>({
+      source: 'http://springai.test/api/stream/springai',
+      input: '等待手动中断',
+      conversationId: 'session:springai-manual-interrupt',
+      recovery: {
+        autoRestore: false
+      },
+      transport: {
+        fetch: fetchMock as typeof fetch
+      }
+    }));
+
+    if (!sessionState) {
+      throw new Error('Failed to create Spring AI manual interrupt session.');
+    }
+
+    const sendPromise = sessionState.send();
+
+    await vi.waitFor(() => {
+      expect(sessionState.reconnecting.value).toBe(true);
+    });
+
+    sessionState.interrupt();
+    await sendPromise;
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(sessionState.interrupted.value).toBe(true);
+    expect(sessionState.reconnecting.value).toBe(false);
 
     scope.stop();
   });

@@ -218,6 +218,50 @@ export interface FrameworkChatTransportContext {
   clientRequestId: string;
   /** 当前 runtime 已应用的最后后端游标。 */
   afterCursor: number;
+  /** 当前连接是否只是在续接已有后端 run，而不是提交新请求。 */
+  replayOnly: boolean;
+}
+
+/** 自动读取后端会话归档时提供给自定义 loader 的上下文。 */
+export interface FrameworkChatRecoveryLoadContext<TSource = unknown> {
+  conversationId: string;
+  source: TSource;
+  fetch: typeof fetch;
+}
+
+/** 自动续接已有后端 run 时提供给自定义 source resolver 的上下文。 */
+export interface FrameworkChatRecoveryEventsContext<
+  TRawPacket = unknown,
+  TSource = unknown
+> extends FrameworkChatRecoveryLoadContext<TSource> {
+  archive: AgentdownBackendConversationArchive<TRawPacket>;
+  activeRequestId: string;
+  afterCursor: number;
+}
+
+/**
+ * chat helper 的后端权威会话恢复配置。
+ *
+ * 传入空对象即可启用默认归档读取和运行中会话续接；不传时完全不访问恢复接口。
+ */
+export interface FrameworkChatRecoveryOptions<
+  TRawPacket = unknown,
+  TSource = unknown
+> {
+  /** setup 后是否自动读取会话归档；默认开启。 */
+  autoRestore?: boolean;
+  /** 是否自动续接运行中的 run，并为普通发送启用网络断线重试；默认开启。 */
+  autoReconnect?: boolean;
+  /** 覆写归档读取使用的 fetch；默认沿用 transport.fetch 或全局 fetch。 */
+  fetch?: typeof fetch;
+  /** 自定义会话归档读取逻辑；返回 null 表示后端还没有该会话。 */
+  loadArchive?: (
+    context: FrameworkChatRecoveryLoadContext<TSource>
+  ) => Promise<AgentdownBackendConversationArchive<TRawPacket> | null>;
+  /** 自定义已有 run 的只读事件 source。 */
+  resolveEventsSource?: (
+    context: FrameworkChatRecoveryEventsContext<TRawPacket, TSource>
+  ) => TSource;
 }
 
 export type FrameworkChatConnectionState =
@@ -334,6 +378,8 @@ export interface FrameworkChatSessionOptionsLike<
   userMessage?: false | FrameworkChatUserMessageOptions | undefined;
   /** 当前 chat helper 是否在连接失败后自动重试。 */
   reconnect?: false | FrameworkChatReconnectOptions<TRawPacket, TSource> | undefined;
+  /** 后端权威会话的自动归档恢复与运行中 run 续接。 */
+  recovery?: false | FrameworkChatRecoveryOptions<TRawPacket, TSource> | undefined;
   /** assistant 默认消息操作栏的快捷配置。 */
   assistantActions?: false | FrameworkChatAssistantActionsOptions | undefined;
 }
@@ -366,6 +412,10 @@ export interface FrameworkChatSessionResult<
   clientRequestId: ShallowRef<string>;
   /** 面向页面提示的恢复连接状态。 */
   connectionState: ComputedRef<FrameworkChatConnectionState>;
+  /** 自动恢复初始化完成；失败会写入 recoveryError，不会产生未处理 Promise。 */
+  recoveryReady: Promise<void>;
+  /** 自动恢复阶段最近一次错误；404 不视为错误。 */
+  recoveryError: ShallowRef<Error | null>;
   /** 最近一次真正发给后端的输入文本。 */
   lastInput: ShallowRef<string>;
   /** 当前这次请求真正送给 transport 的输入文本。 */
@@ -434,6 +484,86 @@ export function createFrameworkChatIds(input: {
     userMessageId: `message:user:${input.conversationId}:${seed}`,
     assistantMessageId: `message:assistant:${input.conversationId}:${seed}`
   };
+}
+
+/**
+ * 从内置框架流地址推导统一后端会话归档或事件地址。
+ */
+export function resolveFrameworkChatRecoveryUrl(
+  source: unknown,
+  conversationId: string,
+  kind: 'archive' | 'events',
+  requestId?: string
+): string {
+  let sourceText: string | null = null;
+
+  if (typeof source === 'string') {
+    sourceText = source;
+  } else if (source instanceof URL) {
+    sourceText = source.toString();
+  } else if (typeof globalThis.Request === 'function' && source instanceof globalThis.Request) {
+    sourceText = source.url;
+  }
+
+  if (!sourceText) {
+    throw new Error(
+      'Automatic conversation recovery requires a string, URL, or Request source. '
+      + 'Provide recovery.loadArchive and recovery.resolveEventsSource for a custom transport source.'
+    );
+  }
+
+  const streamMarker = '/api/stream/';
+  const markerIndex = sourceText.indexOf(streamMarker);
+
+  if (markerIndex < 0) {
+    throw new Error(
+      `Cannot derive the conversation recovery endpoint from source: ${sourceText}. `
+      + 'Provide recovery.loadArchive and recovery.resolveEventsSource.'
+    );
+  }
+
+  const archiveUrl = `${sourceText.slice(0, markerIndex)}/api/v1/conversations/${encodeURIComponent(conversationId)}`;
+
+  if (kind === 'archive') {
+    return archiveUrl;
+  }
+
+  if (!requestId) {
+    throw new Error('A backend request id is required to reconnect conversation events.');
+  }
+
+  return `${archiveUrl}/events?request_id=${encodeURIComponent(requestId)}`;
+}
+
+/** 把非 2xx 的归档响应转成明确错误，同时把 404 视为新会话。 */
+async function loadDefaultFrameworkChatArchive<TRawPacket>(input: {
+  source: unknown;
+  conversationId: string;
+  fetch: typeof fetch;
+}): Promise<AgentdownBackendConversationArchive<TRawPacket> | null> {
+  const archiveUrl = resolveFrameworkChatRecoveryUrl(
+    input.source,
+    input.conversationId,
+    'archive'
+  );
+  const response = await input.fetch(archiveUrl, {
+    method: 'GET',
+    headers: {
+      Accept: 'application/json'
+    }
+  });
+
+  if (response.status === 404) {
+    return null;
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      `Conversation archive request failed with ${response.status} ${response.statusText}.`
+    );
+  }
+
+  return await response.json() as AgentdownBackendConversationArchive<TRawPacket>;
 }
 
 /**
@@ -1124,8 +1254,15 @@ export function useFrameworkChatSession<
   const eventCursor = shallowRef(0);
   const clientRequestId = shallowRef('');
   const recoveryTracker = new AgentdownBackendRecoveryTracker();
+  const recoveryOptions = config.options.recovery === false
+    ? null
+    : (config.options.recovery ?? null);
   const recoveringArchive = shallowRef(false);
   const restoredFromBackend = shallowRef(false);
+  const recoveryError = shallowRef<Error | null>(null);
+  const replayOnly = shallowRef(false);
+  const activeRecoveryRequestId = shallowRef('');
+  let recoveryReady: Promise<void> = Promise.resolve();
   const initialSource = resolveFrameworkChatInitialSource(config.options.source);
   const interrupted = shallowRef(false);
   const pendingHumanResolutionCount = shallowRef(0);
@@ -1140,7 +1277,8 @@ export function useFrameworkChatSession<
       submission: lastSubmission.value,
       sessionId: sessionId.value || toValue(config.options.conversationId),
       clientRequestId: clientRequestId.value,
-      afterCursor: eventCursor.value
+      afterCursor: eventCursor.value,
+      replayOnly: replayOnly.value
     }),
     recovery: {
       isDuplicate(metadata: AgentdownEventRecoveryMetadata) {
@@ -1232,11 +1370,16 @@ export function useFrameworkChatSession<
     };
   }
 
+  const resolvedReconnectOptions = config.options.reconnect !== undefined
+    ? config.options.reconnect
+    : recoveryOptions && recoveryOptions.autoReconnect !== false
+      ? { retries: 4 }
+      : undefined;
   const sessionState = useAdapterSession(adapter, {
     overrides: sessionOverrides,
-    ...(config.options.reconnect !== undefined
+    ...(resolvedReconnectOptions !== undefined
       ? {
-          reconnect: config.options.reconnect
+          reconnect: resolvedReconnectOptions
         }
       : {})
   });
@@ -1268,11 +1411,13 @@ export function useFrameworkChatSession<
     awaitingHumanInput.value
   ));
   const transportError = computed(() => {
-    if (!sessionState.error.value) {
-      return '';
+    if (recoveryError.value) {
+      return resolveFrameworkChatErrorMessage(recoveryError.value, config.frameworkName);
     }
 
-    return resolveFrameworkChatErrorMessage(sessionState.error.value, config.frameworkName);
+    return sessionState.error.value
+      ? resolveFrameworkChatErrorMessage(sessionState.error.value, config.frameworkName)
+      : '';
   });
   const connectionState = computed<FrameworkChatConnectionState>(() => {
     if (recoveringArchive.value) {
@@ -1281,7 +1426,7 @@ export function useFrameworkChatSession<
     if (sessionState.reconnecting.value) {
       return 'reconnecting';
     }
-    if (sessionState.status.value.phase === 'errored') {
+    if (recoveryError.value || sessionState.status.value.phase === 'errored') {
       return 'failed';
     }
     if (sessionState.status.value.phase === 'consuming') {
@@ -1297,6 +1442,8 @@ export function useFrameworkChatSession<
    * 发送一次新的用户输入。
    */
   async function send(input?: FrameworkChatInputValue, source?: TSource) {
+    await recoveryReady;
+
     let nextInput = input;
 
     if (nextInput === undefined) {
@@ -1330,6 +1477,9 @@ export function useFrameworkChatSession<
     chatIds.value = ids;
     activeSource.value = nextSource;
     interrupted.value = false;
+    recoveryError.value = null;
+    replayOnly.value = false;
+    activeRecoveryRequestId.value = '';
     recoveryTracker.beginRequest();
     clientRequestId.value = recoveryTracker.requestId;
     sessionState.disconnect();
@@ -1400,9 +1550,14 @@ export function useFrameworkChatSession<
 
     activeSource.value = nextSource;
     interrupted.value = false;
+    const isRecoveryResume = activeRecoveryRequestId.value.length > 0;
+    replayOnly.value = isRecoveryResume;
 
     try {
       await sessionState.connect(nextSource);
+      if (isRecoveryResume && !interrupted.value) {
+        activeRecoveryRequestId.value = '';
+      }
     } catch (error) {
       if (chatIds.value) {
         upsertFrameworkAssistantErrorBlock({
@@ -1415,6 +1570,8 @@ export function useFrameworkChatSession<
       }
       interrupted.value = true;
       throw error;
+    } finally {
+      replayOnly.value = false;
     }
   }
 
@@ -1425,6 +1582,8 @@ export function useFrameworkChatSession<
     task: () => Promise<TResult>
   ): Promise<TResult> {
     pendingHumanResolutionCount.value += 1;
+    replayOnly.value = false;
+    activeRecoveryRequestId.value = '';
     recoveryTracker.beginRequest();
     clientRequestId.value = recoveryTracker.requestId;
 
@@ -1448,6 +1607,8 @@ export function useFrameworkChatSession<
     sessionId.value = archive.conversation_id;
     eventCursor.value = recoveryTracker.cursor;
     clientRequestId.value = '';
+    replayOnly.value = false;
+    activeRecoveryRequestId.value = '';
     chatIds.value = null;
 
     for (const event of [...archive.events].sort((left, right) => left.cursor - right.cursor)) {
@@ -1470,6 +1631,103 @@ export function useFrameworkChatSession<
       const archive = await loader(toValue(config.options.conversationId));
       restoreConversation(archive);
       return archive;
+    } finally {
+      recoveringArchive.value = false;
+    }
+  }
+
+  /** setup 后自动读取后端权威归档，并按需只读续接仍在执行的 run。 */
+  async function initializeAutomaticRecovery() {
+    if (!recoveryOptions || recoveryOptions.autoRestore === false) {
+      return;
+    }
+
+    const resolvedSource = toValue(config.options.source);
+
+    if (resolvedSource === null || resolvedSource === undefined) {
+      return;
+    }
+
+    const configuredFetch = recoveryOptions.fetch ?? config.options.transport?.fetch;
+    const fetcher = configuredFetch
+      ?? (typeof globalThis.fetch === 'function' ? globalThis.fetch.bind(globalThis) : undefined);
+
+    if (!fetcher) {
+      recoveryError.value = new Error(
+        'Automatic conversation recovery requires fetch. Provide recovery.fetch.'
+      );
+      return;
+    }
+
+    try {
+      recoveringArchive.value = true;
+      const conversationId = toValue(config.options.conversationId);
+      const loadContext: FrameworkChatRecoveryLoadContext<TSource> = {
+        conversationId,
+        source: resolvedSource as TSource,
+        fetch: fetcher
+      };
+      const archive = recoveryOptions.loadArchive
+        ? await recoveryOptions.loadArchive(loadContext)
+        : await loadDefaultFrameworkChatArchive<TRawPacket>({
+            source: resolvedSource,
+            conversationId,
+            fetch: fetcher
+          });
+
+      if (!archive) {
+        return;
+      }
+
+      restoreConversation(archive);
+
+      if (archive.status !== 'running' || recoveryOptions.autoReconnect === false) {
+        return;
+      }
+
+      const activeRequestId = archive.active_request_id;
+
+      if (!activeRequestId) {
+        throw new Error(
+          'The backend marked the conversation as running without active_request_id.'
+        );
+      }
+
+      const eventsContext: FrameworkChatRecoveryEventsContext<TRawPacket, TSource> = {
+        ...loadContext,
+        archive,
+        activeRequestId,
+        afterCursor: eventCursor.value
+      };
+      const eventsSource = recoveryOptions.resolveEventsSource
+        ? recoveryOptions.resolveEventsSource(eventsContext)
+        : resolveFrameworkChatRecoveryUrl(
+            resolvedSource,
+            conversationId,
+            'events',
+            activeRequestId
+          ) as TSource;
+
+      recoveryTracker.requestId = activeRequestId;
+      clientRequestId.value = activeRequestId;
+      activeRecoveryRequestId.value = activeRequestId;
+      activeSource.value = eventsSource;
+      interrupted.value = false;
+      replayOnly.value = true;
+      recoveringArchive.value = false;
+
+      try {
+        await sessionState.connect(eventsSource);
+        if (!interrupted.value) {
+          activeRecoveryRequestId.value = '';
+        }
+      } finally {
+        replayOnly.value = false;
+      }
+    } catch (error) {
+      recoveryError.value = error instanceof Error
+        ? error
+        : new Error('Automatic conversation recovery failed.');
     } finally {
       recoveringArchive.value = false;
     }
@@ -1505,6 +1763,8 @@ export function useFrameworkChatSession<
     );
   });
 
+  recoveryReady = initializeAutomaticRecovery();
+
   return {
     ...sessionState,
     surface,
@@ -1517,6 +1777,8 @@ export function useFrameworkChatSession<
     eventCursor,
     clientRequestId,
     connectionState,
+    recoveryReady,
+    recoveryError,
     lastInput,
     requestInput,
     chatIds,

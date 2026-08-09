@@ -15,6 +15,7 @@ import {
   type FrameworkChatDevtoolsOptions,
   type FrameworkChatInputValue,
   type FrameworkChatIds,
+  type FrameworkChatRecoveryOptions,
   type FrameworkChatReconnectOptions,
   type FrameworkChatSessionIdOptions,
   type FrameworkChatSessionResult,
@@ -68,6 +69,10 @@ export interface SpringAiChatUserMessageOptions extends FrameworkChatUserMessage
  */
 export interface SpringAiChatReconnectOptions<TSource = FetchTransportSource>
   extends FrameworkChatReconnectOptions<SpringAiEvent, TSource> {}
+
+/** Spring AI chat helper 的后端权威会话恢复配置。 */
+export interface SpringAiChatRecoveryOptions<TSource = FetchTransportSource>
+  extends FrameworkChatRecoveryOptions<SpringAiEvent, TSource> {}
 
 /**
  * Spring AI chat helper 对 assistant 操作栏的快捷配置。
@@ -163,6 +168,8 @@ export interface UseSpringAiChatSessionOptions<
   userMessage?: false | SpringAiChatUserMessageOptions;
   /** 当前 chat helper 是否在连接失败后自动重试。 */
   reconnect?: false | SpringAiChatReconnectOptions<TSource>;
+  /** 自动恢复后端会话归档，并续接仍在运行的 run。 */
+  recovery?: false | SpringAiChatRecoveryOptions<TSource>;
   /** assistant 默认消息操作栏的快捷配置；默认开启。 */
   assistantActions?: false | SpringAiChatAssistantActionsOptions;
 }

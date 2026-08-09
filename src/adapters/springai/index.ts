@@ -28,6 +28,7 @@ export type {
   SpringAiChatHitlOptions,
   SpringAiChatIdFactory,
   SpringAiChatIds,
+  SpringAiChatRecoveryOptions,
   SpringAiChatReconnectOptions,
   SpringAiChatSessionIdOptions,
   SpringAiChatUserMessageOptions,

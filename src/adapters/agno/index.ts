@@ -27,6 +27,7 @@ export type {
   AgnoChatHitlOptions,
   AgnoChatIdFactory,
   AgnoChatIds,
+  AgnoChatRecoveryOptions,
   AgnoChatReconnectOptions,
   AgnoChatSessionIdOptions,
   AgnoChatUserMessageOptions,
