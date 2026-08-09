@@ -15,6 +15,7 @@ import {
   type FrameworkChatDevtoolsOptions,
   type FrameworkChatInputValue,
   type FrameworkChatIds,
+  type FrameworkChatRecoveryOptions,
   type FrameworkChatReconnectOptions,
   type FrameworkChatSessionIdOptions,
   type FrameworkChatSessionResult,
@@ -68,6 +69,10 @@ export interface LangChainChatUserMessageOptions extends FrameworkChatUserMessag
  */
 export interface LangChainChatReconnectOptions<TSource = FetchTransportSource>
   extends FrameworkChatReconnectOptions<LangChainEvent, TSource> {}
+
+/** LangChain chat helper 的后端权威会话恢复配置。 */
+export interface LangChainChatRecoveryOptions<TSource = FetchTransportSource>
+  extends FrameworkChatRecoveryOptions<LangChainEvent, TSource> {}
 
 /**
  * LangChain chat helper 对 assistant 操作栏的快捷配置。
@@ -166,6 +171,8 @@ export interface UseLangChainChatSessionOptions<
   userMessage?: false | LangChainChatUserMessageOptions;
   /** 当前 chat helper 是否在连接失败后自动重试。 */
   reconnect?: false | LangChainChatReconnectOptions<TSource>;
+  /** 自动恢复后端会话归档，并续接仍在运行的 run。 */
+  recovery?: false | LangChainChatRecoveryOptions<TSource>;
   /** assistant 默认消息操作栏的快捷配置；默认开启。 */
   assistantActions?: false | LangChainChatAssistantActionsOptions;
 }

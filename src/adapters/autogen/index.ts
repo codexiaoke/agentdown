@@ -29,6 +29,7 @@ export type {
   AutoGenChatHitlOptions,
   AutoGenChatIdFactory,
   AutoGenChatIds,
+  AutoGenChatRecoveryOptions,
   AutoGenChatReconnectOptions,
   AutoGenChatSessionIdOptions,
   AutoGenChatUserMessageOptions,

@@ -47,9 +47,10 @@ function readRecoveryRequestContext(value: unknown): {
   sessionId?: string;
   clientRequestId?: string;
   afterCursor?: number;
+  replayOnly: boolean;
 } {
   if (typeof value !== 'object' || value === null) {
-    return {};
+    return { replayOnly: false };
   }
 
   const record = value as Record<string, unknown>;
@@ -62,7 +63,8 @@ function readRecoveryRequestContext(value: unknown): {
       : {}),
     ...(typeof record.afterCursor === 'number' && Number.isSafeInteger(record.afterCursor)
       ? { afterCursor: record.afterCursor }
-      : {})
+      : {}),
+    replayOnly: record.replayOnly === true
   };
 }
 
@@ -164,13 +166,48 @@ export function createFrameworkJsonSseTransport<
     },
     ...(config.options.init ? { init: config.options.init } : {}),
     request: {
-      method: config.options.request?.method ?? 'POST',
-      ...(config.options.request?.headers ? { headers: config.options.request.headers } : {}),
+      method: async (source: TSource) => {
+        const context = config.options.resolveContext?.();
+        const recovery = readRecoveryRequestContext(context);
+
+        if (recovery.replayOnly) {
+          return 'GET';
+        }
+
+        return await resolveFrameworkTransportValue(
+          source,
+          config.options.request?.method,
+          context
+        ) ?? 'POST';
+      },
+      headers: async (source: TSource) => {
+        const context = config.options.resolveContext?.();
+        const recovery = readRecoveryRequestContext(context);
+        const configuredHeaders = await resolveFrameworkTransportValue(
+          source,
+          config.options.request?.headers,
+          context
+        );
+        const headers = new Headers(configuredHeaders);
+
+        if (recovery.replayOnly && recovery.afterCursor !== undefined) {
+          headers.set('Last-Event-ID', String(recovery.afterCursor));
+        } else if (recovery.clientRequestId) {
+          headers.set('Idempotency-Key', recovery.clientRequestId);
+        }
+
+        return headers;
+      },
       body: async (source: TSource) => {
         const context = config.options.resolveContext?.();
+        const recovery = readRecoveryRequestContext(context);
+
+        if (recovery.replayOnly) {
+          return undefined;
+        }
+
         const resolvedBody = await resolveFrameworkTransportValue(source, config.options.body, context);
         const resolvedMessage = await resolveFrameworkTransportValue(source, config.options.message, context);
-        const recovery = readRecoveryRequestContext(context);
 
         if (resolvedBody === undefined && resolvedMessage === undefined) {
           return undefined;

@@ -15,6 +15,7 @@ import {
   type FrameworkChatDevtoolsOptions,
   type FrameworkChatInputValue,
   type FrameworkChatIds,
+  type FrameworkChatRecoveryOptions,
   type FrameworkChatReconnectOptions,
   type FrameworkChatSessionIdOptions,
   type FrameworkChatSessionResult,
@@ -67,6 +68,10 @@ export interface AutoGenChatUserMessageOptions extends FrameworkChatUserMessageO
  */
 export interface AutoGenChatReconnectOptions<TSource = FetchTransportSource>
   extends FrameworkChatReconnectOptions<AutoGenEvent, TSource> {}
+
+/** AutoGen chat helper 的后端权威会话恢复配置。 */
+export interface AutoGenChatRecoveryOptions<TSource = FetchTransportSource>
+  extends FrameworkChatRecoveryOptions<AutoGenEvent, TSource> {}
 
 /**
  * AutoGen chat helper 对 assistant 操作栏的快捷配置。
@@ -174,6 +179,8 @@ export interface UseAutoGenChatSessionOptions<
   userMessage?: false | AutoGenChatUserMessageOptions;
   /** 当前 chat helper 是否在连接失败后自动重试。 */
   reconnect?: false | AutoGenChatReconnectOptions<TSource>;
+  /** 自动恢复后端会话归档，并续接仍在运行的 run。 */
+  recovery?: false | AutoGenChatRecoveryOptions<TSource>;
   /** assistant 默认消息操作栏的快捷配置；默认开启。 */
   assistantActions?: false | AutoGenChatAssistantActionsOptions;
 }

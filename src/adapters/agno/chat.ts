@@ -15,6 +15,7 @@ import {
   type FrameworkChatDevtoolsOptions,
   type FrameworkChatInputValue,
   type FrameworkChatIds,
+  type FrameworkChatRecoveryOptions,
   type FrameworkChatReconnectOptions,
   type FrameworkChatSessionIdOptions,
   type FrameworkChatSessionResult,
@@ -67,6 +68,10 @@ export interface AgnoChatUserMessageOptions extends FrameworkChatUserMessageOpti
  */
 export interface AgnoChatReconnectOptions<TSource = FetchTransportSource>
   extends FrameworkChatReconnectOptions<AgnoEvent, TSource> {}
+
+/** Agno chat helper 的后端权威会话恢复配置。 */
+export interface AgnoChatRecoveryOptions<TSource = FetchTransportSource>
+  extends FrameworkChatRecoveryOptions<AgnoEvent, TSource> {}
 
 /**
  * Agno chat helper 对 assistant 操作栏的快捷配置。
@@ -174,6 +179,8 @@ export interface UseAgnoChatSessionOptions<
   userMessage?: false | AgnoChatUserMessageOptions;
   /** 当前 chat helper 是否在连接失败后自动重试。 */
   reconnect?: false | AgnoChatReconnectOptions<TSource>;
+  /** 自动恢复后端会话归档，并续接仍在运行的 run。 */
+  recovery?: false | AgnoChatRecoveryOptions<TSource>;
   /** assistant 默认消息操作栏的快捷配置；默认开启。 */
   assistantActions?: false | AgnoChatAssistantActionsOptions;
 }

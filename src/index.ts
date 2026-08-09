@@ -256,6 +256,7 @@ export {
   createAgentdownClientRequestId,
   parseAgentdownEventCursor
 } from './recovery/backendConversation';
+export { resolveFrameworkChatRecoveryUrl } from './adapters/shared/chatFactory';
 export {
   buildAgentChatInputValue,
   buildAgentChatRequestText,
@@ -388,6 +389,9 @@ export type {
 } from './composables/useAgentChat';
 export type {
   FrameworkChatInputValue,
+  FrameworkChatRecoveryEventsContext,
+  FrameworkChatRecoveryLoadContext,
+  FrameworkChatRecoveryOptions,
   FrameworkChatReconnectOptions,
   FrameworkChatResolvedSubmission,
   FrameworkChatStructuredInput,
@@ -463,6 +467,7 @@ export type {
   AgnoChatHitlOptions,
   AgnoChatIdFactory,
   AgnoChatIds,
+  AgnoChatRecoveryOptions,
   AgnoChatReconnectOptions,
   AgnoChatSessionIdOptions,
   AgnoChatUserMessageOptions,
@@ -553,6 +558,7 @@ export type {
   CrewAIChatAssistantActionsOptions,
   CrewAIChatIdFactory,
   CrewAIChatIds,
+  CrewAIChatRecoveryOptions,
   CrewAIChatReconnectOptions,
   CrewAIChatSessionIdOptions,
   CrewAIChatUserMessageOptions,
@@ -594,6 +600,7 @@ export type {
   AutoGenChatHitlOptions,
   AutoGenChatIdFactory,
   AutoGenChatIds,
+  AutoGenChatRecoveryOptions,
   AutoGenChatReconnectOptions,
   AutoGenChatSessionIdOptions,
   AutoGenChatUserMessageOptions,
@@ -631,6 +638,7 @@ export type {
   LangChainChatHitlOptions,
   LangChainChatIdFactory,
   LangChainChatIds,
+  LangChainChatRecoveryOptions,
   LangChainChatReconnectOptions,
   LangChainChatSessionIdOptions,
   LangChainChatUserMessageOptions,
@@ -674,6 +682,7 @@ export type {
   SpringAiChatHitlOptions,
   SpringAiChatIdFactory,
   SpringAiChatIds,
+  SpringAiChatRecoveryOptions,
   SpringAiChatReconnectOptions,
   SpringAiChatSessionIdOptions,
   SpringAiChatUserMessageOptions,
