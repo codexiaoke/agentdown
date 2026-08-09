@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from fastapi import FastAPI, HTTPException
+from uuid import uuid4
+
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.agno_state import get_agno_paused_run_store
@@ -11,12 +13,15 @@ from app.models import (
     AgnoRequirementResolutionRequest,
     HealthResponse,
     StreamRequest,
+    ConversationArchiveResponse,
+    ConversationEventResponse,
 )
 from app.providers import PROVIDER_REGISTRY
 from app.providers.agno import stream_agno_requirement_resolution
 from app.providers.base import ProviderContext, create_provider_descriptors
 from app.settings import load_settings
-from app.sse import create_sse_response
+from app.conversation_state import ConversationConflictError, conversation_event_store
+from app.sse import create_resumable_sse_response, create_sse_response
 
 settings = load_settings()
 provider_descriptors = create_provider_descriptors()
@@ -52,16 +57,92 @@ async def read_health() -> HealthResponse:
     return await read_root()
 
 
+def parse_event_cursor(value: str | None) -> int | None:
+    """Parse either a plain numeric cursor or the suffix of an SSE event id."""
+
+    if not value:
+        return None
+    candidate = value.rsplit(":", maxsplit=1)[-1]
+    try:
+        cursor = int(candidate)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail="Last-Event-ID must end in a non-negative cursor.") from error
+    if cursor < 0:
+        raise HTTPException(status_code=422, detail="Last-Event-ID cursor must be non-negative.")
+    return cursor
+
+
 @app.post("/api/stream/{provider_id}")
-async def stream_provider(provider_id: str, request: StreamRequest) -> object:
-    """Open an SSE stream for the requested real provider endpoint."""
+async def stream_provider(
+    provider_id: str,
+    request: StreamRequest,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    last_event_id: str | None = Header(default=None, alias="Last-Event-ID"),
+) -> object:
+    """Start or reconnect to an idempotent, backend-owned provider run."""
 
     factory = PROVIDER_REGISTRY.get(provider_id)
 
     if factory is None:
         raise HTTPException(status_code=404, detail=f"Unknown provider: {provider_id}")
 
-    return create_sse_response(factory(ProviderContext(request=request, settings=settings)))
+    conversation_id = request.session_id or f"session:{uuid4()}"
+    request_id = idempotency_key or request.client_request_id or f"request:{uuid4()}"
+    after_cursor = parse_event_cursor(last_event_id)
+    if after_cursor is None:
+        after_cursor = request.after_cursor
+
+    provider_request = request.model_copy(update={
+        "session_id": conversation_id,
+        "client_request_id": request_id,
+        "after_cursor": 0,
+    })
+    request_payload = provider_request.model_dump(
+        mode="json",
+        exclude={"after_cursor"},
+        exclude_none=True,
+    )
+
+    try:
+        conversation, run, reused = await conversation_event_store.open_run(
+            conversation_id=conversation_id,
+            provider_id=provider_id,
+            request_id=request_id,
+            request_payload=request_payload,
+            event_factory=lambda: factory(ProviderContext(request=provider_request, settings=settings)),
+        )
+    except ConversationConflictError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+
+    return create_resumable_sse_response(
+        conversation_event_store.subscribe(conversation, run, after_cursor=after_cursor),
+        conversation_id=conversation_id,
+        request_id=request_id,
+        reused=reused,
+    )
+
+
+@app.get(
+    "/api/v1/conversations/{conversation_id}",
+    response_model=ConversationArchiveResponse,
+)
+async def read_conversation_archive(conversation_id: str) -> ConversationArchiveResponse:
+    """Return the authoritative raw event archive used for page recovery."""
+
+    conversation = await conversation_event_store.get(conversation_id)
+    if conversation is None:
+        raise HTTPException(status_code=404, detail=f"Conversation not found: {conversation_id}")
+
+    statuses = [run.status for run in conversation.runs.values()]
+    status = "running" if "running" in statuses else (statuses[-1] if statuses else "empty")
+    return ConversationArchiveResponse(
+        conversation_id=conversation.conversation_id,
+        provider_id=conversation.provider_id,
+        latest_cursor=conversation.latest_cursor,
+        status=status,
+        updated_at=conversation.updated_at,
+        events=[ConversationEventResponse(**event.as_dict()) for event in conversation.events],
+    )
 
 
 @app.get("/api/agno/runs/{run_id}", response_model=AgnoPausedRunResponse)
