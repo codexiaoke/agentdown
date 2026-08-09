@@ -45,16 +45,16 @@ raw packet / SSE -> protocol -> bridge -> assembler -> runtime -> Agent UI
 ```ts
 const session = useAgUiChatSession({
   source: '/api/stream/agui',
-  conversationId: 'session:trip-planner',
+  conversationId: 'session:reading-planner',
   recovery: {}
 });
 
-await session.send('帮我做一个杭州周末计划，用可交互表单展示');
+await session.send('生成一个读书计划表单，包含书名、每日分钟数和提交按钮');
 ```
 
 Agent 只发送声明式组件和 DataModel；Catalog、Vue 实现、URL 策略和资源上限都由前端控制。按钮等交互会作为标准 A2UI action 自动放进下一次 AG-UI `RunAgentInput.forwardedProps`。
 
-完整说明和无需 API Key 的浏览器示例见 [AG-UI 与 A2UI](https://codexiaoke.github.io/agentdown/guide/ag-ui-a2ui)。
+仓库示例会真实调用 DeepSeek 生成界面，进程内存只保存会话和事件，不提供硬编码业务结果。完整说明和浏览器验证步骤见 [AG-UI 与 A2UI](https://codexiaoke.github.io/agentdown/guide/ag-ui-a2ui)。
 
 ## 最快接入官方框架
 
