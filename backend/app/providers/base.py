@@ -28,7 +28,7 @@ def create_provider_descriptors() -> list[ProviderDescriptor]:
             id="agui",
             path="/api/stream/agui",
             label="AG-UI + A2UI",
-            note="标准 AG-UI RunAgentInput/Event SSE 与 A2UI v0.9 交互 Surface 的纯内存示例。",
+            note="基于 DeepSeek 的真实生成式 UI Agent：输出标准 AG-UI events 和经后端校验的 A2UI v0.9 Surface。",
         ),
         ProviderDescriptor(
             id="agno",

@@ -363,9 +363,9 @@ const providerStateMap: Record<DemoFrameworkId, DemoProviderState> = {
     label: 'AG-UI + A2UI',
     subtitle: 'Generative UI',
     suggestions: [
-      '帮我生成一个杭州周末旅行计划，直接用可交互表单展示',
-      '做一个成都三日游计划，我想在页面里调整偏好',
-      '用生成式 UI 帮我规划厦门周末旅行'
+      '生成一个读书计划表单，包含书名、每日分钟数、阅读节奏和提交按钮',
+      '做一个产品需求优先级面板，让我选择重要程度、紧急程度和负责人',
+      '生成一个健身打卡界面，包含训练目标、时长、强度和确认按钮'
     ],
     prompt: agUiPrompt,
     pendingUploads: agUiPendingUploads,
