@@ -41,6 +41,7 @@ class SpringAiConversationEventStoreTest {
                 })
                 .verifyComplete();
         assertEquals(2L, store.load("session:test").latestCursor());
+        assertTrue(store.loadRun("session:test", "request:1").reused());
     }
 
     @Test
@@ -70,6 +71,7 @@ class SpringAiConversationEventStoreTest {
         assertTrue(json.contains("\"conversation_id\":\"session:test\""));
         assertTrue(json.contains("\"provider_id\":\"springai\""));
         assertTrue(json.contains("\"latest_cursor\":1"));
+        assertTrue(json.contains("\"active_request_id\""));
         assertTrue(json.contains("\"event_id\":\"session:test:1\""));
         assertTrue(json.contains("\"request_id\":\"request:1\""));
     }

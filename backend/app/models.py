@@ -180,5 +180,6 @@ class ConversationArchiveResponse(BaseModel):
     provider_id: str
     latest_cursor: int
     status: str
+    active_request_id: str | None = None
     updated_at: str
     events: list[ConversationEventResponse]

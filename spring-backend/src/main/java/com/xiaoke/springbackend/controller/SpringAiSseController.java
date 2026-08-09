@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Flux;
@@ -106,6 +107,30 @@ public class SpringAiSseController {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Conversation not found: " + conversationId);
         }
         return archive;
+    }
+
+    /** 只读订阅已有运行，不要求浏览器在刷新后重建原始 POST 请求体。 */
+    @GetMapping(path = "/api/v1/conversations/{conversationId}/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public Flux<ServerSentEvent<String>> reconnect(
+            @PathVariable String conversationId,
+            @RequestParam(name = "request_id") String requestId,
+            @RequestParam(name = "after_cursor", defaultValue = "0") long afterCursor,
+            @RequestHeader(name = "Last-Event-ID", required = false) String lastEventId
+    ) {
+        long resolvedCursor = resolveAfterCursor(lastEventId, afterCursor);
+        SpringAiConversationEventStore.OpenRunResult opened = eventStore.loadRun(conversationId, requestId);
+        if (opened == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "Conversation run not found: " + conversationId + "/" + requestId
+            );
+        }
+        return eventStore.subscribe(opened, resolvedCursor)
+                .map(stored -> ServerSentEvent.<String>builder()
+                        .id(stored.eventId())
+                        .event(stored.event())
+                        .data(serialize(stored.data()))
+                        .build());
     }
 
     private void produce(

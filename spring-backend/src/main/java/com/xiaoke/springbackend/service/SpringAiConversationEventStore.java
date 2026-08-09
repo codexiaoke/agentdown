@@ -53,6 +53,12 @@ public class SpringAiConversationEventStore {
         return conversation == null ? null : conversation.archive();
     }
 
+    /** 读取已有运行，用于不重复提交原始请求的只读 SSE 重连。 */
+    public OpenRunResult loadRun(String conversationId, String requestId) {
+        ConversationState conversation = conversations.get(conversationId);
+        return conversation == null ? null : conversation.loadRun(requestId);
+    }
+
     /** 一次 openRun 的结果。 */
     public record OpenRunResult(ConversationState conversation, RunState run, boolean reused) {
     }
@@ -81,6 +87,8 @@ public class SpringAiConversationEventStore {
             @JsonProperty("latest_cursor")
             long latestCursor,
             String status,
+            @JsonProperty("active_request_id")
+            String activeRequestId,
             @JsonProperty("updated_at")
             String updatedAt,
             List<StoredEvent> events
@@ -128,6 +136,11 @@ public class SpringAiConversationEventStore {
             return new OpenRunResult(this, run, false);
         }
 
+        private synchronized OpenRunResult loadRun(String requestId) {
+            RunState run = runs.get(requestId);
+            return run == null ? null : new OpenRunResult(this, run, true);
+        }
+
         private synchronized StoredEvent append(
                 RunState run,
                 String event,
@@ -158,12 +171,18 @@ public class SpringAiConversationEventStore {
             String status = runs.values().stream().anyMatch(run -> "running".equals(run.status))
                     ? "running"
                     : runs.values().stream().reduce((first, second) -> second).map(run -> run.status).orElse("empty");
+            String activeRequestId = runs.values().stream()
+                    .filter(run -> "running".equals(run.status))
+                    .reduce((first, second) -> second)
+                    .map(run -> run.requestId)
+                    .orElse(null);
             return new ConversationArchive(
                     "agentdown.conversation/v1",
                     conversationId,
                     "springai",
                     latestCursor,
                     status,
+                    activeRequestId,
                     updatedAt,
                     List.copyOf(events)
             );

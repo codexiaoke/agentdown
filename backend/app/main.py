@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from uuid import uuid4
 
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.agno_state import get_agno_paused_run_store
@@ -135,13 +135,49 @@ async def read_conversation_archive(conversation_id: str) -> ConversationArchive
 
     statuses = [run.status for run in conversation.runs.values()]
     status = "running" if "running" in statuses else (statuses[-1] if statuses else "empty")
+    active_request_id = next(
+        (
+            run.request_id
+            for run in reversed(list(conversation.runs.values()))
+            if run.status == "running"
+        ),
+        None,
+    )
     return ConversationArchiveResponse(
         conversation_id=conversation.conversation_id,
         provider_id=conversation.provider_id,
         latest_cursor=conversation.latest_cursor,
         status=status,
+        active_request_id=active_request_id,
         updated_at=conversation.updated_at,
         events=[ConversationEventResponse(**event.as_dict()) for event in conversation.events],
+    )
+
+
+@app.get("/api/v1/conversations/{conversation_id}/events")
+async def reconnect_conversation_events(
+    conversation_id: str,
+    request_id: str = Query(min_length=1),
+    after_cursor: int = Query(default=0, ge=0),
+    last_event_id: str | None = Header(default=None, alias="Last-Event-ID"),
+) -> object:
+    """Attach to an existing run without resubmitting its original request."""
+
+    resolved_cursor = parse_event_cursor(last_event_id)
+    if resolved_cursor is None:
+        resolved_cursor = after_cursor
+    loaded = await conversation_event_store.get_run(conversation_id, request_id)
+    if loaded is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Conversation run not found: {conversation_id}/{request_id}",
+        )
+    conversation, run = loaded
+    return create_resumable_sse_response(
+        conversation_event_store.subscribe(conversation, run, after_cursor=resolved_cursor),
+        conversation_id=conversation_id,
+        request_id=request_id,
+        reused=True,
     )
 
 
