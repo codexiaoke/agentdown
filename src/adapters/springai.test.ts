@@ -3,6 +3,7 @@ import { effectScope, nextTick, ref } from 'vue';
 import { createMarkdownAssembler } from '../runtime/assemblers';
 import { createBridge } from '../runtime/createBridge';
 import type { RunSurfaceApprovalActionContext } from '../surface/types';
+import type { AgentdownBackendConversationArchive } from '../recovery/backendConversation';
 import {
   createSpringAiChatIds,
   createSpringAiProtocol,
@@ -767,6 +768,8 @@ describe('useSpringAiChatSession', () => {
     expect(capturedBodies[1]).toEqual({
       session_id: 'session-springai-edit-1',
       mode: 'hitl',
+      client_request_id: expect.any(String),
+      after_cursor: 0,
       springai_resume: {
         decisions: [
           {
@@ -1061,6 +1064,8 @@ describe('useSpringAiChatSession', () => {
     expect(capturedBodies[1]).toEqual({
       session_id: 'session-springai-reject-1',
       mode: 'hitl',
+      client_request_id: expect.any(String),
+      after_cursor: 0,
       springai_resume: {
         decisions: [
           {
@@ -1075,6 +1080,113 @@ describe('useSpringAiChatSession', () => {
     expect(resumedToolNode?.message).toBe('已拒绝执行');
     expect(resumedToolBlock?.data.status).toBe('rejected');
     expect(resumedToolBlock?.data.message).toBe('已拒绝执行');
+
+    scope.stop();
+  });
+
+  it('restores a pending approval from the backend archive after a page refresh', async () => {
+    const scope = effectScope();
+    const sessionState = scope.run(() => useSpringAiChatSession<string>({
+      source: 'http://springai.test/api/stream/springai',
+      conversationId: 'session:springai-restored',
+      mode: 'hitl'
+    }));
+
+    if (!sessionState) {
+      throw new Error('Failed to create Spring AI recovery session.');
+    }
+
+    const metadata = {
+      session_id: 'session:springai-restored',
+      conversation_id: 'session:springai-restored',
+      run_id: 'run:springai-restored',
+      turn_id: 'turn:springai-restored',
+      group_id: 'turn:springai-restored',
+      message_id: 'message:springai-restored'
+    };
+    const rawEvents: SpringAiEvent[] = [
+      {
+        event: 'session.created',
+        metadata,
+        data: {
+          session_id: 'session:springai-restored',
+          conversation_id: 'session:springai-restored'
+        }
+      },
+      {
+        event: 'run.started',
+        metadata,
+        data: { mode: 'hitl' }
+      },
+      {
+        event: 'response.started',
+        metadata,
+        data: { role: 'assistant', step: 0 }
+      },
+      {
+        event: 'response.delta',
+        metadata,
+        data: { content: '我准备查询天气。' }
+      },
+      {
+        event: 'approval.required',
+        metadata,
+        data: {
+          interrupt_id: 'run:springai-restored',
+          assistant_text: '我准备查询天气。',
+          action_requests: [
+            {
+              requirement_id: 'requirement:springai-restored',
+              tool_call_id: 'call:springai-restored',
+              name: 'lookup_weather',
+              args: { city: '北京' },
+              allowed_decisions: ['approve', 'edit', 'reject']
+            }
+          ],
+          reason_required_decisions: ['edit', 'reject']
+        }
+      },
+      {
+        event: 'response.completed',
+        metadata,
+        data: { status: 'paused', content: '我准备查询天气。' }
+      },
+      {
+        event: 'run.completed',
+        metadata,
+        data: { status: 'paused' }
+      }
+    ];
+    const archive: AgentdownBackendConversationArchive<SpringAiEvent> = {
+      format: 'agentdown.conversation/v1',
+      conversation_id: 'session:springai-restored',
+      provider_id: 'springai',
+      latest_cursor: rawEvents.length,
+      status: 'completed',
+      updated_at: '2026-08-09T00:00:00Z',
+      events: rawEvents.map((data, index) => ({
+        cursor: index + 1,
+        event_id: `session:springai-restored:${index + 1}`,
+        request_id: 'request:springai-restored',
+        event: typeof data.event === 'string' ? data.event : null,
+        data,
+        created_at: '2026-08-09T00:00:00Z'
+      }))
+    };
+
+    sessionState.restoreConversation(archive);
+    await nextTick();
+
+    expect(sessionState.sessionId.value).toBe('session:springai-restored');
+    expect(sessionState.eventCursor.value).toBe(rawEvents.length);
+    expect(sessionState.connectionState.value).toBe('recovered');
+    expect(sessionState.awaitingHumanInput.value).toBe(true);
+    expect(sessionState.runtime.snapshot().blocks).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        type: 'approval',
+        data: expect.objectContaining({ status: 'pending' })
+      })
+    ]));
 
     scope.stop();
   });

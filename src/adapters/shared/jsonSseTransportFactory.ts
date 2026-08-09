@@ -1,5 +1,10 @@
 import { createJsonSseTransport, type FetchTransportSource, type JsonRequestOptions, type JsonSseTransportOptions, type TransportResolvable } from '../../runtime/transports';
 import type { RuntimeData } from '../../runtime/types';
+import {
+  attachAgentdownRecoveryMetadata,
+  parseAgentdownEventCursor,
+  type AgentdownEventRecoveryMetadata
+} from '../../recovery/backendConversation';
 
 /**
  * 共享 JSON SSE transport 支持的可解析配置值。
@@ -31,6 +36,42 @@ export interface FrameworkJsonSseTransportOptionsLike<
   resolveContext?: () => TContext | undefined;
   /** 少数场景下覆写 method / headers 等请求细节。 */
   request?: Omit<JsonRequestOptions<TSource, TBody>, 'body'>;
+  /** 内部恢复协调器；负责游标推进与重复事件过滤。 */
+  recovery?: {
+    isDuplicate?: (metadata: AgentdownEventRecoveryMetadata) => boolean;
+    onEvent?: (metadata: AgentdownEventRecoveryMetadata) => void;
+  };
+}
+
+function readRecoveryRequestContext(value: unknown): {
+  sessionId?: string;
+  clientRequestId?: string;
+  afterCursor?: number;
+} {
+  if (typeof value !== 'object' || value === null) {
+    return {};
+  }
+
+  const record = value as Record<string, unknown>;
+  return {
+    ...(typeof record.sessionId === 'string' && record.sessionId.length > 0
+      ? { sessionId: record.sessionId }
+      : {}),
+    ...(typeof record.clientRequestId === 'string' && record.clientRequestId.length > 0
+      ? { clientRequestId: record.clientRequestId }
+      : {}),
+    ...(typeof record.afterCursor === 'number' && Number.isSafeInteger(record.afterCursor)
+      ? { afterCursor: record.afterCursor }
+      : {})
+  };
+}
+
+function toPacketArray<TPacket>(value: TPacket | TPacket[] | null | void): TPacket[] {
+  if (value === null || value === undefined) {
+    return [];
+  }
+
+  return Array.isArray(value) ? value : [value];
 }
 
 /**
@@ -92,13 +133,35 @@ export function createFrameworkJsonSseTransport<
 >(
   config: CreateFrameworkJsonSseTransportOptions<TRawPacket, TSource, TBody, TContext, TOptions>
  ) {
+  const configuredParser = config.options.parse ?? config.parse;
+
   return createJsonSseTransport<TRawPacket, TSource, TBody>({
     ...(config.options.fetch ? { fetch: config.options.fetch } : {}),
-    ...(config.options.parse
-      ? { parse: config.options.parse }
-      : config.parse
-        ? { parse: config.parse }
-        : {}),
+    parse: async (message, context) => {
+      const parsed = configuredParser
+        ? await configuredParser(message, context)
+        : JSON.parse(message.data) as TRawPacket;
+      const cursor = parseAgentdownEventCursor(message.id);
+
+      if (cursor === null || !message.id) {
+        return parsed;
+      }
+
+      const metadata: AgentdownEventRecoveryMetadata = {
+        eventId: message.id,
+        cursor
+      };
+
+      if (config.options.recovery?.isDuplicate?.(metadata)) {
+        return null;
+      }
+
+      const packets = toPacketArray(parsed).map((packet) => (
+        attachAgentdownRecoveryMetadata(packet, metadata)
+      ));
+      config.options.recovery?.onEvent?.(metadata);
+      return packets;
+    },
     ...(config.options.init ? { init: config.options.init } : {}),
     request: {
       method: config.options.request?.method ?? 'POST',
@@ -107,6 +170,7 @@ export function createFrameworkJsonSseTransport<
         const context = config.options.resolveContext?.();
         const resolvedBody = await resolveFrameworkTransportValue(source, config.options.body, context);
         const resolvedMessage = await resolveFrameworkTransportValue(source, config.options.message, context);
+        const recovery = readRecoveryRequestContext(context);
 
         if (resolvedBody === undefined && resolvedMessage === undefined) {
           return undefined;
@@ -116,7 +180,10 @@ export function createFrameworkJsonSseTransport<
           ...(resolvedBody ?? {}),
           ...(shouldIncludeFrameworkTransportMessage(resolvedMessage)
             ? { message: resolvedMessage }
-            : {})
+            : {}),
+          ...(recovery.sessionId ? { session_id: recovery.sessionId } : {}),
+          ...(recovery.clientRequestId ? { client_request_id: recovery.clientRequestId } : {}),
+          ...(recovery.afterCursor !== undefined ? { after_cursor: recovery.afterCursor } : {})
         } as TBody;
       }
     }

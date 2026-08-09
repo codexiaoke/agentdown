@@ -637,7 +637,9 @@ describe('useLangChainChatSession', () => {
     expect(sessionState.statusLabel.value).toBe('等待人工确认');
     expect(capturedBodies[0]).toEqual({
       message: '帮我查一下北京天气',
-      mode: 'hitl'
+      mode: 'hitl',
+      client_request_id: expect.any(String),
+      after_cursor: 0
     });
 
     if (!approvalBlock || !approvalHandler) {
@@ -685,6 +687,8 @@ describe('useLangChainChatSession', () => {
     expect(capturedBodies[1]).toEqual({
       session_id: 'langchain-thread-1',
       mode: 'hitl',
+      client_request_id: expect.any(String),
+      after_cursor: 0,
       langchain_resume: {
         decisions: [
           {
@@ -871,6 +875,8 @@ describe('useLangChainChatSession', () => {
     expect(capturedBodies[1]).toEqual({
       session_id: 'langchain-thread-custom-1',
       mode: 'hitl',
+      client_request_id: expect.any(String),
+      after_cursor: 0,
       langchain_resume: {
         decisions: [
           {
@@ -1054,6 +1060,8 @@ describe('useLangChainChatSession', () => {
     expect(capturedBodies[1]).toEqual({
       session_id: 'langchain-thread-edit-1',
       mode: 'hitl',
+      client_request_id: expect.any(String),
+      after_cursor: 0,
       langchain_resume: {
         decisions: [
           {

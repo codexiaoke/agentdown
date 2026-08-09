@@ -251,6 +251,12 @@ export {
 } from './runtime/defineProtocol';
 export { createAgentRuntime } from './runtime/createAgentRuntime';
 export {
+  AgentdownBackendRecoveryTracker,
+  attachAgentdownRecoveryMetadata,
+  createAgentdownClientRequestId,
+  parseAgentdownEventCursor
+} from './recovery/backendConversation';
+export {
   buildAgentChatInputValue,
   buildAgentChatRequestText,
   createAgentChatComposerSendPayload,
@@ -266,6 +272,11 @@ export {
 export type {
   AgentdownRecordsAdapter
 } from './persisted/adapter';
+export type {
+  AgentdownBackendConversationArchive,
+  AgentdownBackendConversationEvent,
+  AgentdownEventRecoveryMetadata
+} from './recovery/backendConversation';
 export type {
   BuiltinAgentdownRenderApprovalContent,
   BuiltinAgentdownRenderApprovalStatus,
