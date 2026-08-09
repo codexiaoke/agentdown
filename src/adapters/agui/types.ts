@@ -6,8 +6,7 @@ import type {
   RunAgentInput,
   Tool
 } from '@ag-ui/core';
-import type { ComputedRef, MaybeRefOrGetter, ShallowRef } from 'vue';
-import type { A2UiAction } from '../../a2ui';
+import type { MaybeRefOrGetter, ShallowRef } from 'vue';
 import type { AgentdownAdapterOptions } from '../../runtime/defineAdapter';
 import type { BridgeHooks, ProtocolContext, RuntimeProtocol, StreamAssembler } from '../../runtime/types';
 import type { FetchTransportSource } from '../../runtime/transports';
@@ -50,8 +49,6 @@ export interface AgUiProtocolOptions {
     toolCallName?: string;
     context: ProtocolContext;
   }) => string | undefined);
-  /** A2UI custom event 名 allowlist。 */
-  a2uiEventNames?: ReadonlySet<string>;
 }
 
 export interface AgUiProtocol extends RuntimeProtocol<AgUiEvent> {
@@ -105,10 +102,6 @@ export interface UseAgUiChatSessionResult<TSource = FetchTransportSource>
   extends FrameworkChatSessionResult<AgUiEvent, TSource, FrameworkChatIds> {
   /** AG-UI 的 shared state / messages / activities 响应式快照。 */
   agUiState: ShallowRef<AgUiStateSnapshot>;
-  /** 把 A2UI client action 放进下一次标准 RunAgentInput.forwardedProps 并提交。 */
-  sendA2UiAction: (action: A2UiAction, source?: TSource) => Promise<void>;
-  /** 已自动接入 A2UI action 回传的最终 surface。 */
-  surface: ComputedRef<RunSurfaceOptions>;
 }
 
 export type {
