@@ -15,12 +15,24 @@
 - `/api/stream/langchain`
 - `/api/stream/autogen`
 - `/api/stream/crewai`
+- `GET /api/v1/conversations/{conversation_id}`：读取后端权威事件归档
+
+所有 stream endpoint 都支持：
+
+- `client_request_id` / `Idempotency-Key`：避免重连时重复执行模型调用
+- `after_cursor` / `Last-Event-ID`：只补发尚未应用的事件
+- SSE `id`：格式为 `{conversation_id}:{cursor}`
+
+客户端断开后，provider 生产任务仍在后端继续运行。详细契约见 `docs/guide/backend-conversation-recovery.md`。
 
 ## 设计原则
 
 - 后端直接返回各框架官方事件风格
 - 不再包一层“Agentdown 统一后端协议”
 - 前端通过官方 adapter 直接消费这些事件
+- 会话原始事件、游标和幂等运行由后端负责
+
+当前 `ConversationEventStore` 是进程内参考实现，服务重启后归档会清空。线上应替换成 PostgreSQL/Redis 持久化实现，保持 HTTP 契约不变。
 
 也就是说，推荐前端入口分别是：
 
@@ -104,7 +116,10 @@ curl -N \
   -X POST http://127.0.0.1:8000/api/stream/agno \
   -H 'Content-Type: application/json' \
   -d '{
-    "message": "帮我查一下北京天气，并说明工具调用过程。"
+    "message": "帮我查一下北京天气，并说明工具调用过程。",
+    "session_id": "session:weather-demo",
+    "client_request_id": "request:weather-demo-1",
+    "after_cursor": 0
   }'
 ```
 
