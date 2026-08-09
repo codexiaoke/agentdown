@@ -157,6 +157,14 @@ export {
   defineSpringAiToolComponents,
   useSpringAiChatSession
 } from './adapters/springai';
+export {
+  applyAgUiJsonPatch,
+  createAgUiAdapter,
+  createAgUiProtocol,
+  createAgUiSseTransport,
+  createAgUiStateStore,
+  useAgUiChatSession
+} from './adapters/agui';
 export { createEventComponentRegistry, eventToBlock } from './adapters/eventComponentRegistry';
 export { createToolNameRegistry, toolByName } from './adapters/toolNameRegistry';
 export {
@@ -739,6 +747,20 @@ export type {
   CreateA2UiBasicCatalogOptions,
   CreateA2UiProcessorOptions
 } from './a2ui';
+export type {
+  AgUiActivityState,
+  AgUiAdapterOptions,
+  AgUiEvent,
+  AgUiJsonPatchOperation,
+  AgUiProtocol,
+  AgUiProtocolOptions,
+  AgUiSseTransportOptions,
+  AgUiStateSnapshot,
+  AgUiStateStore,
+  AgUiValueResolver,
+  UseAgUiChatSessionOptions,
+  UseAgUiChatSessionResult
+} from './adapters/agui';
 export type {
   AgentdownAdapter,
   AgentdownAdapterBridgeOptions,
