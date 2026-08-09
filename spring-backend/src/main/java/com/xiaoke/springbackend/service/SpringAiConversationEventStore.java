@@ -1,5 +1,6 @@
 package com.xiaoke.springbackend.service;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Sinks;
@@ -59,10 +60,13 @@ public class SpringAiConversationEventStore {
     /** 对外返回的不可变事件。 */
     public record StoredEvent(
             long cursor,
+            @JsonProperty("event_id")
             String eventId,
+            @JsonProperty("request_id")
             String requestId,
             String event,
             Map<String, Object> data,
+            @JsonProperty("created_at")
             String createdAt
     ) {
     }
@@ -70,10 +74,14 @@ public class SpringAiConversationEventStore {
     /** 对外返回的会话归档。 */
     public record ConversationArchive(
             String format,
+            @JsonProperty("conversation_id")
             String conversationId,
+            @JsonProperty("provider_id")
             String providerId,
+            @JsonProperty("latest_cursor")
             long latestCursor,
             String status,
+            @JsonProperty("updated_at")
             String updatedAt,
             List<StoredEvent> events
     ) {
