@@ -1,5 +1,5 @@
 import type { MaybeRefOrGetter, ShallowRef } from 'vue';
-import type { A2UiClientEnvelope, A2UiSecurityPolicy, A2UiVersion, A2UiVueCatalog } from '../../a2ui';
+import type { A2UiClientEnvelope, A2UiClientTransportEnvelope, A2UiSecurityPolicy, A2UiVersion, A2UiVueCatalog } from '../../a2ui';
 import type { AgUiAdapterOptions, AgUiEvent, AgUiProtocolOptions, UseAgUiChatSessionOptions, UseAgUiChatSessionResult } from '../../adapters/agui';
 import type { FrameworkChatTransportContext } from '../../adapters/shared/chatFactory';
 import type { RuntimeProtocol } from '../../runtime/types';
@@ -25,7 +25,7 @@ export interface AgUiA2UiAdapterOptions<
 }
 
 export interface AgUiA2UiSerializeContext<TSource = unknown> {
-  envelope: A2UiClientEnvelope;
+  client: A2UiClientTransportEnvelope;
   forwardedProps: unknown;
   source: TSource;
   transportContext: FrameworkChatTransportContext | undefined;
@@ -57,5 +57,6 @@ export type {
   AgUiEvent,
   AgUiProtocolOptions,
   A2UiClientEnvelope,
+  A2UiClientTransportEnvelope,
   MaybeRefOrGetter
 };

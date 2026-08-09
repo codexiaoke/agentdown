@@ -225,19 +225,40 @@ def _last_user_text(request: AgUiRunAgentInput) -> str:
     return ""
 
 
-def _read_a2ui_client_envelope(request: AgUiRunAgentInput) -> dict[str, Any] | None:
-    """Read the standard A2UI client message and metadata from forwardedProps."""
+def _read_a2ui_client_transport(request: AgUiRunAgentInput) -> dict[str, Any]:
+    """Validate the A2UI capability handshake and optional client message."""
 
     forwarded = request.forwarded_props
     if not isinstance(forwarded, dict):
-        return None
+        raise ValueError("AG-UI+A2UI requests require forwardedProps.a2ui.clientCapabilities.")
     a2ui = forwarded.get("a2ui")
     if not isinstance(a2ui, dict):
-        return None
+        raise ValueError("AG-UI+A2UI requests require forwardedProps.a2ui.clientCapabilities.")
     message = a2ui.get("clientMessage")
     capabilities = a2ui.get("clientCapabilities")
-    if not isinstance(message, dict) or not isinstance(capabilities, dict):
-        return None
+    if not isinstance(capabilities, dict):
+        raise ValueError("A2UI clientCapabilities must be an object.")
+
+    supported_catalog_ids = {
+        catalog_id
+        for version in ("v0.9", "v0.9.1")
+        if isinstance(capabilities.get(version), dict)
+        for catalog_id in capabilities[version].get("supportedCatalogIds", [])
+        if isinstance(catalog_id, str)
+    }
+    if A2UI_BASIC_CATALOG_ID not in supported_catalog_ids:
+        raise ValueError("A2UI client does not advertise the required Basic Catalog.")
+
+    data_model = a2ui.get("clientDataModel")
+    if data_model is not None and not isinstance(data_model, dict):
+        raise ValueError("A2UI clientDataModel must be an object when provided.")
+    if message is None:
+        return {
+            "message": None,
+            "clientDataModel": data_model,
+        }
+    if not isinstance(message, dict):
+        raise ValueError("A2UI clientMessage must be an object when provided.")
     version = message.get("version")
     if version not in {"v0.9", "v0.9.1"} or version not in capabilities:
         raise ValueError("A2UI client message version is not advertised by clientCapabilities.")
@@ -245,9 +266,6 @@ def _read_a2ui_client_envelope(request: AgUiRunAgentInput) -> dict[str, Any] | N
     error = message.get("error")
     if isinstance(action, dict) == isinstance(error, dict):
         raise ValueError("A2UI clientMessage requires exactly one action or error.")
-    data_model = a2ui.get("clientDataModel")
-    if data_model is not None and not isinstance(data_model, dict):
-        raise ValueError("A2UI clientDataModel must be an object when provided.")
     return {
         "message": message,
         "clientDataModel": data_model,
@@ -257,9 +275,9 @@ def _read_a2ui_client_envelope(request: AgUiRunAgentInput) -> dict[str, Any] | N
 def _latest_input(request: AgUiRunAgentInput) -> str:
     """Build the newest model instruction from either text or an A2UI action."""
 
-    envelope = _read_a2ui_client_envelope(request)
-    if envelope is not None:
-        message = envelope["message"]
+    envelope = _read_a2ui_client_transport(request)
+    message = envelope["message"]
+    if message is not None:
         event_type = "action" if "action" in message else "error"
         return (
             f"A2UI 客户端刚刚上报了以下 {event_type}。请结合消息和可选 DataModel 更新界面与答复：\n"

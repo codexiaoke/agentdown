@@ -29,6 +29,18 @@ def _run_input(
     content: str = "生成一个读书计划表单",
     forwarded_props: object | None = None,
 ) -> dict[str, object]:
+    if forwarded_props is None:
+        forwarded_props = {
+            "a2ui": {
+                "clientCapabilities": {
+                    "v0.9.1": {
+                        "supportedCatalogIds": [
+                            "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+                        ]
+                    }
+                }
+            }
+        }
     payload: dict[str, object] = {
         "threadId": "thread:agui:test",
         "runId": run_id,
@@ -43,8 +55,7 @@ def _run_input(
         "context": [],
         "state": {},
     }
-    if forwarded_props is not None:
-        payload["forwardedProps"] = forwarded_props
+    payload["forwardedProps"] = forwarded_props
     return payload
 
 
@@ -179,6 +190,27 @@ class AgUiProviderTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("createSurface", a2ui_values[0])
         self.assertIn("updateComponents", a2ui_values[1])
         self.assertEqual("阅读计划", a2ui_values[2]["updateDataModel"]["value"]["title"])
+
+    async def test_requires_the_basic_catalog_in_the_initial_capability_handshake(self) -> None:
+        request = AgUiRunAgentInput.model_validate(
+            _run_input(
+                forwarded_props={
+                    "a2ui": {
+                        "clientCapabilities": {
+                            "v0.9.1": {
+                                "supportedCatalogIds": ["https://example.com/custom/catalog.json"]
+                            }
+                        }
+                    }
+                }
+            )
+        )
+
+        with self.assertRaisesRegex(ValueError, "required Basic Catalog"):
+            _ = [
+                event
+                async for event in stream_agui_events(request, load_settings(), _fake_generator)
+            ]
 
     async def test_a2ui_action_is_sent_to_model_with_prior_session_context(self) -> None:
         first_request = AgUiRunAgentInput.model_validate(_run_input())

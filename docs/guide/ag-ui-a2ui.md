@@ -181,7 +181,23 @@ useAgUiA2UiChatSession({
 
 ## 客户端消息契约
 
-Action 和 Error 都使用官方 A2UI client message。组合 helper 默认放入以下 AG-UI `forwardedProps`：
+组合 helper 会在首次普通文本请求中先发送能力握手：
+
+```json
+{
+  "a2ui": {
+    "clientCapabilities": {
+      "v0.9.1": {
+        "supportedCatalogIds": [
+          "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+        ]
+      }
+    }
+  }
+}
+```
+
+这样服务端可以在生成第一个 Surface 前选择客户端真实支持的 Catalog。Action 和 Error 才会额外携带官方 A2UI client message：
 
 ```json
 {
@@ -220,10 +236,10 @@ Action 和 Error 都使用官方 A2UI client message。组合 helper 默认放�
 ```ts
 useAgUiA2UiChatSession({
   // ...
-  serializeA2UiClient({ envelope, forwardedProps }) {
+  serializeA2UiClient({ client, forwardedProps }) {
     return {
       forwardedProps,
-      uiProtocol: envelope
+      uiProtocol: client
     };
   }
 });

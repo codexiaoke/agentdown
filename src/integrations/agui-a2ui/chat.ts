@@ -2,8 +2,10 @@ import { getCurrentScope, onScopeDispose, shallowRef } from 'vue';
 import {
   A2UI_SURFACE_RENDERER,
   A2UiSurface,
+  createA2UiClientCapabilities,
   defaultA2UiBasicCatalog,
-  type A2UiClientEnvelope
+  type A2UiClientEnvelope,
+  type A2UiClientTransportEnvelope
 } from '../../a2ui';
 import { createAgUiSseTransport, type AgUiEvent, type AgUiProtocolOptions, type AgUiSseTransportOptions } from '../../adapters/agui';
 import type { FrameworkChatTransportContext } from '../../adapters/shared/chatFactory';
@@ -39,10 +41,10 @@ export function serializeAgUiA2UiForwardedProps<TSource>(
   context: AgUiA2UiSerializeContext<TSource>
 ): unknown {
   const a2ui = {
-    clientMessage: context.envelope.message,
-    clientCapabilities: context.envelope.capabilities,
-    ...(context.envelope.dataModel
-      ? { clientDataModel: context.envelope.dataModel }
+    ...(context.client.message ? { clientMessage: context.client.message } : {}),
+    clientCapabilities: context.client.capabilities,
+    ...(context.client.dataModel
+      ? { clientDataModel: context.client.dataModel }
       : {})
   };
   const base = context.forwardedProps;
@@ -62,6 +64,15 @@ export function useAgUiA2UiChatSession<TSource = RequestInfo | URL>(
   const serializeClient = options.serializeA2UiClient ?? serializeAgUiA2UiForwardedProps;
   const rendererOptions = options.a2uiRenderer;
   const catalogs = rendererOptions?.catalogs ?? [defaultA2UiBasicCatalog];
+  const initialClient: A2UiClientTransportEnvelope = {
+    capabilities: createA2UiClientCapabilities({
+      catalogs,
+      ...(rendererOptions?.version ? { version: rendererOptions.version } : {}),
+      ...(rendererOptions?.includeInlineCatalogs !== undefined
+        ? { includeInlineCatalogs: rendererOptions.includeInlineCatalogs }
+        : {})
+    })
+  };
   let sendQueue: Promise<void> = Promise.resolve();
 
   const transportOptions: Omit<
@@ -78,9 +89,8 @@ export function useAgUiA2UiChatSession<TSource = RequestInfo | URL>(
         configuredForwardedProps,
         context
       );
-      if (!pendingEnvelope.value) return forwardedProps;
       return await serializeClient({
-        envelope: pendingEnvelope.value,
+        client: pendingEnvelope.value ?? initialClient,
         forwardedProps,
         source,
         transportContext: context

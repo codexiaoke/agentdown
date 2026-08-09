@@ -27,6 +27,13 @@ export interface CreateA2UiProcessorOptions<T extends ComponentApi = ComponentAp
   onError?: (error: A2uiClientError) => void | Promise<void>;
 }
 
+export interface CreateA2UiClientCapabilitiesOptions<T extends ComponentApi = ComponentApi> {
+  catalogs: ReadonlyArray<A2UiVueCatalog<T>>;
+  version?: A2UiVersion;
+  /** 为自定义 Catalog 同时发送内联 schema；默认只发送 Catalog ID。 */
+  includeInlineCatalogs?: boolean;
+}
+
 export interface A2UiProcessor<T extends ComponentApi = ComponentApi> {
   readonly processor: MessageProcessor<T>;
   readonly policy: A2UiSecurityPolicy;
@@ -204,4 +211,28 @@ export function createA2UiProcessor<T extends ComponentApi = ComponentApi>(
       processor.model.dispose();
     }
   };
+}
+
+/**
+ * 在 Surface 尚未创建时生成 A2UI capability handshake。
+ *
+ * 这让 transport 可以在首次请求中声明 Catalog 能力，而不必等待首个界面动作。
+ */
+export function createA2UiClientCapabilities<T extends ComponentApi = ComponentApi>(
+  options: CreateA2UiClientCapabilitiesOptions<T>
+): A2uiClientCapabilities {
+  const processor = createA2UiProcessor({
+    catalogs: options.catalogs,
+    ...(options.version ? { version: options.version } : {})
+  });
+
+  try {
+    return processor.getClientCapabilities(
+      options.includeInlineCatalogs === undefined
+        ? undefined
+        : { includeInlineCatalogs: options.includeInlineCatalogs }
+    );
+  } finally {
+    processor.dispose();
+  }
 }
