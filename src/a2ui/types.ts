@@ -81,10 +81,23 @@ export type A2UiAction = A2uiClientAction;
  *
  * Agentdown 不规定它最终位于 HTTP body、header 还是其他协议字段中。
  */
-export interface A2UiClientEnvelope {
-  message: A2uiClientMessage;
+export interface A2UiClientMetadata {
   capabilities: A2uiClientCapabilities;
   dataModel?: A2uiClientDataModel;
+}
+
+/** Surface 产生 action 或 error 时交给宿主的完整客户端消息。 */
+export interface A2UiClientEnvelope extends A2UiClientMetadata {
+  message: A2uiClientMessage;
+}
+
+/**
+ * 一次 transport 请求携带的 A2UI 客户端上下文。
+ *
+ * 首次普通请求只有能力声明；Surface 产生 action 或 error 后才会包含 message。
+ */
+export interface A2UiClientTransportEnvelope extends A2UiClientMetadata {
+  message?: A2uiClientMessage;
 }
 
 /** A2UI Surface 处理错误的统一上下文。 */

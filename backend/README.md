@@ -134,11 +134,22 @@ curl -N \
     ],
     "tools": [],
     "context": [],
-    "state": {}
+    "state": {},
+    "forwardedProps": {
+      "a2ui": {
+        "clientCapabilities": {
+          "v0.9.1": {
+            "supportedCatalogIds": [
+              "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+            ]
+          }
+        }
+      }
+    }
   }'
 ```
 
-这个 endpoint 会调用配置的 DeepSeek Chat Completion JSON mode，校验模型生成的组件树、DataModel、绑定路径、action 和资源上限，再返回标准 AG-UI lifecycle/text/tool/state events，以及三条装在 `CUSTOM name=a2ui` 中的 A2UI v0.9.1 Surface 消息。客户端回传采用 `forwardedProps.a2ui.clientMessage/clientCapabilities/clientDataModel`。完成事件的 `result.model` 和 `result.usage` 来自真实模型响应。
+这个 endpoint 会先校验首次请求中的 A2UI Basic Catalog 能力握手，再调用配置的 DeepSeek Chat Completion JSON mode。它会校验模型生成的组件树、DataModel、绑定路径、action 和资源上限，并返回标准 AG-UI lifecycle/text/tool/state events，以及三条装在 `CUSTOM name=a2ui` 中的 A2UI v0.9.1 Surface 消息。后续 action/error 回传继续采用 `forwardedProps.a2ui.clientMessage/clientCapabilities/clientDataModel`。完成事件的 `result.model` 和 `result.usage` 来自真实模型响应。
 
 常规测试会替换付费模型边界，只验证协议转换、安全校验、action 上下文和恢复。要显式执行一次在线生成测试：
 

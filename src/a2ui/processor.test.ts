@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createA2UiBasicCatalog } from './catalog';
-import { createA2UiProcessor } from './processor';
+import { createA2UiClientCapabilities, createA2UiProcessor } from './processor';
 import { createA2UiSurfaceController } from './surfaceController';
 import { A2UI_BASIC_COMPONENT_NAMES } from './catalog';
 import { A2UI_BASIC_CATALOG_ID } from './types';
@@ -68,6 +68,14 @@ function createMessages() {
 }
 
 describe('createA2UiProcessor', () => {
+  it('creates capabilities before a surface exists', () => {
+    expect(createA2UiClientCapabilities({
+      catalogs: [createA2UiBasicCatalog()]
+    })).toEqual({
+      'v0.9.1': { supportedCatalogIds: [A2UI_BASIC_CATALOG_ID] }
+    });
+  });
+
   it('processes official v0.9 surface, components and data model messages', () => {
     const controller = createA2UiProcessor({ catalogs: [createA2UiBasicCatalog()] });
     const messages = createMessages();

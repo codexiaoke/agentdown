@@ -6,7 +6,7 @@ export {
   defaultA2UiBasicCatalog,
   defineA2UiCatalog
 } from './catalog';
-export { createA2UiProcessor } from './processor';
+export { createA2UiClientCapabilities, createA2UiProcessor } from './processor';
 export { createA2UiSurfaceController } from './surfaceController';
 export { a2uiRunSurfaceRenderer, a2uiRunSurfaceRenderers } from './renderer';
 export {
@@ -17,6 +17,8 @@ export {
 export type {
   A2UiAction,
   A2UiClientEnvelope,
+  A2UiClientMetadata,
+  A2UiClientTransportEnvelope,
   A2UiChildReference,
   A2UiElementProps,
   A2UiErrorContext,
@@ -33,6 +35,7 @@ export type {
 } from './types';
 export type {
   A2UiProcessor,
+  CreateA2UiClientCapabilitiesOptions,
   CreateA2UiProcessorOptions
 } from './processor';
 export type {
