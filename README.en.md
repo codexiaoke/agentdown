@@ -21,8 +21,8 @@ In plain terms:
 
 It is much closer to a rendering/runtime layer for agent products than to a model SDK or backend orchestration framework.
 
-- Input: Agno, LangChain, AutoGen, CrewAI, or your own SSE / JSON event stream
-- Output: chat messages, tool call cards, approval blocks, handoff blocks, artifacts, long-form Markdown, and registered Vue components
+- Input: AG-UI, Agno, LangChain, AutoGen, CrewAI, or your own SSE / JSON event stream
+- Output: chat messages, tool call cards, approval blocks, handoff blocks, artifacts, long-form Markdown, A2UI surfaces, and registered Vue components
 - Layer: agent product frontend
 
 It does not try to be:
@@ -37,6 +37,24 @@ It is mainly responsible for:
 - turning tool calls and Human-In-The-Loop events into real UI
 - keeping long text and heavy blocks performant in the browser
 - letting official framework events plug into the frontend directly
+
+## AG-UI + A2UI Generative UI
+
+Use `useAgUiChatSession()` when your backend speaks the open AG-UI protocol. It maps standard run/message/tool/state/activity events and renders A2UI v0.9 custom events through a frontend-owned Vue catalog.
+
+```ts
+const session = useAgUiChatSession({
+  source: '/api/stream/agui',
+  conversationId: 'session:trip-planner',
+  recovery: {}
+});
+
+await session.send('Build an interactive weekend trip planner');
+```
+
+The agent sends declarative components and data only. Vue implementations, URL policy, and resource limits remain frontend-owned. Component actions are returned as standard A2UI client actions in the next AG-UI `RunAgentInput.forwardedProps`.
+
+See [AG-UI and A2UI](https://codexiaoke.github.io/agentdown/guide/ag-ui-a2ui) for the full contract and the API-key-free browser example.
 
 ## Fastest Way To Integrate Official Frameworks
 
@@ -116,7 +134,8 @@ Agentdown is built for:
 | --- | --- |
 | Narrative layer | `MarkdownRenderer`, `parseMarkdown()`, `markdown-it`, and `@chenglou/pretext` |
 | Runtime chain | `Protocol + Bridge + Assembler + Runtime + RunSurface` |
-| Official adapters | Agno, LangChain, AutoGen, CrewAI |
+| Official adapters | AG-UI, Agno, LangChain, AutoGen, CrewAI |
+| Generative UI | A2UI v0.9 surfaces, data model updates, actions, and a safe Vue catalog |
 | Custom protocol | `defineProtocol()`, `defineEventProtocol()`, `defineHelperProtocol()` |
 | Custom UI | `builtinComponents`, `renderers`, `messageShells`, `:::vue-component` |
 | Performance | text slabization, viewport virtualization, group windowing, lazy mount |
@@ -133,6 +152,7 @@ Agentdown is built for:
 | `math` | KaTeX math blocks |
 | `thought` | collapsible thought blocks |
 | `component` | Vue components injected from a controlled registry with `:::vue-component` |
+| `a2ui` | A declarative A2UI v0.9 surface rendered by a frontend-owned catalog |
 | `artifact` | agent outputs |
 | `approval` | approval blocks |
 | `timeline` | timeline blocks |
@@ -143,6 +163,7 @@ If you want to connect a real chat page quickly, this is the first section to lo
 
 | Framework | Entry points | Streaming text | Tool cards | Built-in operation approval | Notes |
 | --- | --- | --- | --- | --- | --- |
+| AG-UI | `useAgUiChatSession()` / `createAgUiAdapter()` | Yes | Yes | A2UI actions / custom approval | Standard `RunAgentInput`, events, shared state, and generative UI |
 | Agno | `useAgnoChatSession()` / `createAgnoAdapter()` | Yes | Yes | Yes | chat pages should start with `useAgnoChatSession()` |
 | LangChain | `useLangChainChatSession()` / `createLangChainAdapter()` | Yes | Yes | Yes | consumes `astream_events()`-style packets directly |
 | AutoGen | `useAutoGenChatSession()` / `createAutoGenAdapter()` | Yes | Yes | Yes | consumes official `run_stream()` packets directly |
@@ -630,6 +651,7 @@ See [backend/README.md](./backend/README.md) for details.
 - [Getting Started](https://codexiaoke.github.io/agentdown/guide/getting-started)
 - [Core Concepts](https://codexiaoke.github.io/agentdown/guide/core-concepts)
 - [Framework Adapters](https://codexiaoke.github.io/agentdown/guide/framework-adapters)
+- [AG-UI and A2UI](https://codexiaoke.github.io/agentdown/guide/ag-ui-a2ui)
 - [Backend Conversation Recovery](https://codexiaoke.github.io/agentdown/guide/backend-conversation-recovery)
 - [Custom Framework Mapping](https://codexiaoke.github.io/agentdown/guide/custom-framework)
 - [RunSurface](https://codexiaoke.github.io/agentdown/guide/run-surface)

@@ -1,6 +1,6 @@
 ---
 title: 官方框架适配
-description: 用内置适配层直接接 Agno、LangChain、AutoGen、CrewAI 的官方事件。
+description: 用内置适配层直接接 AG-UI、Agno、LangChain、AutoGen、CrewAI 的官方事件。
 ---
 
 # 官方框架适配
@@ -20,6 +20,7 @@ description: 用内置适配层直接接 Agno、LangChain、AutoGen、CrewAI 的
 
 | 框架 | 流式文本 | 工具卡片 | 内置操作审批 | 典型场景 |
 | --- | --- | --- | --- | --- |
+| AG-UI | 支持 | 支持 | 通过 A2UI action / 自定义业务审批 | 标准 Agent 事件、shared state、A2UI 生成式界面 |
 | Agno | 支持 | 支持 | 支持 | requirement、approval、工具确认 |
 | LangChain | 支持 | 支持 | 支持 | LangGraph interrupt、人工审阅、参数修改 |
 | AutoGen | 支持 | 支持 | 支持 | handoff、人机接力、继续对话 |
@@ -141,6 +142,12 @@ const preset = defineAgnoPreset({
 ```
 
 ## 各框架的使用建议
+
+### AG-UI
+
+- 适合后端已经采用开放 AG-UI 协议，或希望前后端不绑定某个 Agent 框架的场景
+- `useAgUiChatSession()` 会接入标准 `RunAgentInput`、AG-UI events、shared state 和 A2UI action
+- 生成式界面完整说明见 [AG-UI 与 A2UI](/guide/ag-ui-a2ui)
 
 ### Agno
 

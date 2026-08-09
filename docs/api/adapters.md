@@ -1,11 +1,11 @@
 ---
 title: 官方适配器 API
-description: Agno、LangChain、AutoGen、CrewAI、Spring AI 适配层的共同模式和主要导出。
+description: AG-UI、Agno、LangChain、AutoGen、CrewAI、Spring AI 适配层的共同模式和主要导出。
 ---
 
 # 官方适配器 API
 
-五套内置适配器遵循同一套公共入口模式，同时保留各自的原生事件语义。
+六套内置适配器遵循同一套公共入口模式，同时保留各自的原生事件语义。
 
 ## 共同层次
 
@@ -19,7 +19,18 @@ description: Agno、LangChain、AutoGen、CrewAI、Spring AI 适配层的共同�
 | `define*EventComponents()` | 事件名 -> 组件 |
 | `define*EventActions()` | 事件名 -> side effect |
 
-## 当前五套适配器
+## 当前六套适配器
+
+### AG-UI
+
+- `useAgUiChatSession()`
+- `createAgUiAdapter()`
+- `createAgUiProtocol()`
+- `createAgUiSseTransport()`
+- `createAgUiStateStore()`
+- `applyAgUiJsonPatch()`
+
+AG-UI 适配器还会自动识别 A2UI custom/raw event，并给 `RunSurface` 注册 `A2UiSurface`。完整用法见 [AG-UI 与 A2UI](/guide/ag-ui-a2ui)。
 
 ### Agno
 
