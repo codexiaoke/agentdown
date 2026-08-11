@@ -21,11 +21,13 @@ import {
   shouldRetainMarkdownWindowRange
 } from './markdownWindowing';
 import { parseMarkdown } from '../core/parseMarkdown';
+import { sanitizeAgentdownHtml } from '../security/sanitizeHtml';
 import { splitMarkdownBlocksForRender } from '../surface/renderUtils';
 import type {
   AgentComponentRegistry,
   MarkdownBuiltinComponentOverrides,
   MarkdownEnginePlugin,
+  MarkdownHtmlSanitizer,
   MarkdownRendererPerformanceOptions,
   MarkdownRendererTelemetry
 } from '../core/types';
@@ -39,8 +41,10 @@ interface Props {
   font?: string;
   /** thought 容器默认标题。 */
   thoughtTitle?: string;
-  /** 是否允许直接渲染不安全 HTML。 */
+  /** 是否允许解析原始 HTML；允许后仍会经过 htmlSanitizer。 */
   allowUnsafeHtml?: boolean;
+  /** 原始 HTML 的宿主可替换净化函数。 */
+  htmlSanitizer?: MarkdownHtmlSanitizer;
   /** markdown 内嵌受控 Vue 组件注册表。 */
   componentRegistry?: AgentComponentRegistry;
   /** markdown 内置 block 组件覆写。 */
@@ -58,6 +62,7 @@ const props = withDefaults(defineProps<Props>(), {
   font: AGENTDOWN_DEFAULT_TEXT_FONT,
   thoughtTitle: '思考过程',
   allowUnsafeHtml: false,
+  htmlSanitizer: sanitizeAgentdownHtml,
   componentRegistry: () => ({}),
   builtinComponents: () => ({}),
   plugins: () => [],
@@ -453,6 +458,7 @@ onBeforeUnmount(() => {
       :font="font"
       :component-registry="componentRegistry"
       :builtin-components="resolvedBuiltinComponents"
+      :html-sanitizer="htmlSanitizer"
     />
 
     <div
@@ -478,6 +484,7 @@ onBeforeUnmount(() => {
           :font="font"
           :component-registry="componentRegistry"
           :builtin-components="resolvedBuiltinComponents"
+          :html-sanitizer="htmlSanitizer"
           @measured="updateMeasuredHeight(entry.block.id, $event)"
         />
 
@@ -493,6 +500,7 @@ onBeforeUnmount(() => {
             :font="font"
             :component-registry="componentRegistry"
             :builtin-components="resolvedBuiltinComponents"
+            :html-sanitizer="htmlSanitizer"
           />
         </div>
       </template>

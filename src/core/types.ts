@@ -55,7 +55,24 @@ export interface MarkdownHtmlBlock {
   kind: 'html';
   /** 回退到 HTML 渲染时的字符串结果。 */
   html: string;
+  /**
+   * `generated` 表示由 markdown-it 从已转义 token 生成；
+   * `untrusted` 表示包含原始 HTML 或来自外部 Runtime，渲染前必须净化。
+   */
+  htmlTrust: MarkdownHtmlTrust;
 }
+
+export type MarkdownHtmlTrust = 'generated' | 'untrusted';
+
+export interface MarkdownHtmlSanitizerContext {
+  trust: MarkdownHtmlTrust;
+}
+
+/** 宿主可替换的 HTML 净化边界。 */
+export type MarkdownHtmlSanitizer = (
+  html: string,
+  context: MarkdownHtmlSanitizerContext
+) => string;
 
 export interface MarkdownCodeBlock {
   /** 当前 block 的稳定标识。 */
@@ -428,7 +445,7 @@ export interface ParseMarkdownOptions {
   componentRegistry?: AgentComponentRegistry;
   /**
    * 是否允许原始 HTML 直接进入 markdown 渲染链。
-   * 默认关闭；开启后只应用于可信内容，否则会有注入风险。
+   * 默认关闭；开启后对应 block 会被标为 untrusted 并在渲染前净化。
    */
   allowUnsafeHtml?: boolean;
 }

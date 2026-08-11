@@ -1,7 +1,12 @@
 <script setup lang="ts">
 import MarkdownBlockRenderer from './MarkdownBlockRenderer.vue';
 import { getMarkdownBlockGapAfter } from './markdownBlockSpacing';
-import type { AgentComponentRegistry, MarkdownBlock, MarkdownBuiltinComponents } from '../core/types';
+import type {
+  AgentComponentRegistry,
+  MarkdownBlock,
+  MarkdownBuiltinComponents,
+  MarkdownHtmlSanitizer
+} from '../core/types';
 
 interface Props {
   blocks: MarkdownBlock[];
@@ -10,6 +15,7 @@ interface Props {
   font: string;
   componentRegistry: AgentComponentRegistry;
   builtinComponents: MarkdownBuiltinComponents;
+  htmlSanitizer?: MarkdownHtmlSanitizer | undefined;
 }
 
 defineProps<Props>();
@@ -34,6 +40,7 @@ defineProps<Props>();
           :font="font"
           :component-registry="componentRegistry"
           :builtin-components="builtinComponents"
+          :html-sanitizer="htmlSanitizer"
         />
       </div>
     </template>

@@ -40,6 +40,7 @@ export {
 export { mergeAgentdownConfigs, useAgentdownConfig } from './config/context';
 export { createMarkdownEngine } from './core/createMarkdownEngine';
 export { parseMarkdown } from './core/parseMarkdown';
+export { sanitizeAgentdownHtml } from './security/sanitizeHtml';
 export { defineAgentdownRecordsAdapter } from './persisted/adapter';
 export {
   createDefaultAgentdownRecordsAdapter,
@@ -357,6 +358,9 @@ export type {
   MarkdownHandoffStatus,
   MarkdownHandoffTarget,
   MarkdownHtmlBlock,
+  MarkdownHtmlSanitizer,
+  MarkdownHtmlSanitizerContext,
+  MarkdownHtmlTrust,
   MarkdownMathBlock,
   MarkdownMermaidBlock,
   MarkdownRenderMode,

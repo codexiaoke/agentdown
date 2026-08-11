@@ -115,7 +115,8 @@ const session = useAsyncIterableBridge<Packet>({
 
 ## HTML 安全
 
-`MarkdownRenderer` 默认 `allowUnsafeHtml = false`。
+`MarkdownRenderer` 默认 `allowUnsafeHtml = false`。显式开启后，原始 HTML
+仍会被标记为不可信并经过 DOMPurify；Runtime 数据不能绕过这一规则。
 
 也就是说：
 

@@ -2,11 +2,33 @@ import { describe, expect, it } from 'vitest';
 import type { MarkdownThoughtBlock, MarkdownTextBlock } from '../core/types';
 import {
   hasHeavyMarkdownContent,
+  resolveSurfaceBlockMarkdownBlock,
   splitMarkdownBlocksForRender,
   splitTextBlockIntoSlabs
 } from './renderUtils';
 
 describe('renderUtils', () => {
+  it('never trusts HTML provenance claimed by runtime data', () => {
+    const block = resolveSurfaceBlockMarkdownBlock({
+      id: 'block:html',
+      slot: 'main',
+      type: 'html',
+      renderer: 'html',
+      state: 'stable',
+      data: {
+        id: 'html:1',
+        kind: 'html',
+        html: '<img src=x onerror=alert(1)>',
+        htmlTrust: 'generated'
+      }
+    });
+
+    expect(block).toMatchObject({
+      kind: 'html',
+      htmlTrust: 'untrusted'
+    });
+  });
+
   it('splits long paragraph text into smaller slabs', () => {
     const block: MarkdownTextBlock = {
       id: 'text:1',

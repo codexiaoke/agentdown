@@ -1,13 +1,21 @@
 <script setup lang="ts">
-import { nextTick, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import PreviewLightbox from './PreviewLightbox.vue';
+import { resolveAgentdownHtml, sanitizeAgentdownHtml } from '../security/sanitizeHtml';
+import type { MarkdownHtmlSanitizer, MarkdownHtmlTrust } from '../core/types';
 
 interface Props {
   html: string;
+  htmlTrust?: MarkdownHtmlTrust;
+  sanitizer?: MarkdownHtmlSanitizer | undefined;
 }
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+  htmlTrust: 'untrusted',
+  sanitizer: sanitizeAgentdownHtml
+});
 const containerRef = ref<HTMLDivElement | null>(null);
+const mounted = ref(false);
 const previewImageSrc = ref('');
 const previewImageAlt = ref('');
 const previewImageTitle = ref('');
@@ -17,6 +25,12 @@ const imagePreviewZoom = ref(1);
 const IMAGE_ZOOM_MIN = 0.75;
 const IMAGE_ZOOM_MAX = 3;
 const IMAGE_ZOOM_STEP = 0.2;
+const safeHtml = computed(() => resolveAgentdownHtml(
+  props.html,
+  props.htmlTrust,
+  props.sanitizer,
+  mounted.value
+));
 
 /** 为图片补齐懒加载属性，并把单图段落提升成 figure。 */
 function enhanceImages(container: HTMLDivElement): void {
@@ -150,12 +164,14 @@ function enhanceHtmlBlock(): void {
   enhanceLinks(container);
 }
 
-onMounted(() => {
+onMounted(async () => {
+  mounted.value = true;
+  await nextTick();
   enhanceHtmlBlock();
 });
 
 watch(
-  () => props.html,
+  safeHtml,
   async () => {
     await nextTick();
     enhanceHtmlBlock();
@@ -170,7 +186,7 @@ watch(
   <div
     ref="containerRef"
     class="agentdown-html-block"
-    v-html="html"
+    v-html="safeHtml"
     @click="handleHtmlClick"
   />
 

@@ -3,7 +3,8 @@ import MarkdownBlockList from './MarkdownBlockList.vue';
 import type {
   AgentComponentRegistry,
   MarkdownBlock,
-  MarkdownBuiltinComponents
+  MarkdownBuiltinComponents,
+  MarkdownHtmlSanitizer
 } from '../core/types';
 
 /**
@@ -16,6 +17,7 @@ interface Props {
   font: string;
   componentRegistry: AgentComponentRegistry;
   builtinComponents: MarkdownBuiltinComponents;
+  htmlSanitizer?: MarkdownHtmlSanitizer | undefined;
 }
 
 defineProps<Props>();
@@ -68,6 +70,7 @@ defineProps<Props>();
       :font="font"
       :component-registry="componentRegistry"
       :builtin-components="builtinComponents"
+      :html-sanitizer="htmlSanitizer"
     />
   </component>
 
@@ -165,5 +168,7 @@ defineProps<Props>();
     :is="builtinComponents.html"
     v-else
     :html="block.html"
+    :html-trust="block.htmlTrust"
+    :sanitizer="htmlSanitizer"
   />
 </template>

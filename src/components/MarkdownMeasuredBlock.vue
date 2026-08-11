@@ -4,7 +4,8 @@ import MarkdownBlockRenderer from './MarkdownBlockRenderer.vue';
 import type {
   AgentComponentRegistry,
   MarkdownBlock,
-  MarkdownBuiltinComponents
+  MarkdownBuiltinComponents,
+  MarkdownHtmlSanitizer
 } from '../core/types';
 
 /**
@@ -18,6 +19,7 @@ interface Props {
   gapAfter?: number;
   componentRegistry: AgentComponentRegistry;
   builtinComponents: MarkdownBuiltinComponents;
+  htmlSanitizer?: MarkdownHtmlSanitizer | undefined;
 }
 
 const props = defineProps<Props>();
@@ -116,6 +118,7 @@ onBeforeUnmount(() => {
         :font="font"
         :component-registry="componentRegistry"
         :builtin-components="builtinComponents"
+        :html-sanitizer="htmlSanitizer"
       />
     </div>
   </div>
