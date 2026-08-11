@@ -69,6 +69,8 @@ function shouldCopyExample(source, exampleRoot) {
 
 async function assertPackagedFiles(packageRoot) {
   const expectedFiles = [
+    'CHANGELOG.md',
+    'SECURITY.md',
     'dist/index.js',
     'dist/index.d.ts',
     'dist/ag-ui.js',

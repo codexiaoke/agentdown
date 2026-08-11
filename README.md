@@ -766,6 +766,7 @@ python3 backend/run.py
 - [RunSurface](https://codexiaoke.github.io/agentdown/guide/run-surface)
 - [流式 Markdown](https://codexiaoke.github.io/agentdown/guide/streaming-markdown)
 - [性能优化](https://codexiaoke.github.io/agentdown/guide/performance)
+- [发布流程](https://codexiaoke.github.io/agentdown/guide/releasing)
 - [FastAPI 后端接入](https://codexiaoke.github.io/agentdown/guide/backend-fastapi)
 - [Runtime API](https://codexiaoke.github.io/agentdown/api/runtime)
 - [RunSurface API](https://codexiaoke.github.io/agentdown/api/run-surface)
