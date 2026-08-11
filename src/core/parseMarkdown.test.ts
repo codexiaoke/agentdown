@@ -22,6 +22,20 @@ describe('parseMarkdown', () => {
     const [block] = parseMarkdown('这一段里有图片 ![alt](https://example.com/demo.png)');
 
     expect(block?.kind).toBe('html');
+    expect(block).toMatchObject({
+      htmlTrust: 'generated'
+    });
+  });
+
+  it('marks explicitly enabled raw html as untrusted', () => {
+    const [block] = parseMarkdown('<img src="x" onerror="alert(1)">', {
+      allowUnsafeHtml: true
+    });
+
+    expect(block).toMatchObject({
+      kind: 'html',
+      htmlTrust: 'untrusted'
+    });
   });
 
   it('parses attachment, branch and handoff directives into structured blocks', () => {
@@ -74,5 +88,4 @@ describe('parseMarkdown', () => {
       minHeight: 180
     });
   });
-
 });

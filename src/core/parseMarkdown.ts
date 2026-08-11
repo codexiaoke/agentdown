@@ -151,7 +151,8 @@ function renderHtmlBlock(
   return {
     id,
     kind: 'html',
-    html: md.renderer.render(tokens.slice(startIndex, endIndex + 1), md.options, {})
+    html: md.renderer.render(tokens.slice(startIndex, endIndex + 1), md.options, {}),
+    htmlTrust: allowUnsafeHtml ? 'untrusted' : 'generated'
   };
 }
 
@@ -464,7 +465,8 @@ function parseTokens(
       blocks.push({
         id: createBlockId('html', index),
         kind: 'html',
-        html: token.content
+        html: token.content,
+        htmlTrust: 'untrusted'
       });
     }
   }

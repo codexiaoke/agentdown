@@ -41,7 +41,8 @@ describe('markdownBlockPerformance', () => {
       shouldMeasureMarkdownBlockHeight({
         id: 'html:1',
         kind: 'html',
-        html: '<table><tr><td>hello</td></tr></table>'
+        html: '<table><tr><td>hello</td></tr></table>',
+        htmlTrust: 'generated'
       })
     ).toBe(true);
     expect(

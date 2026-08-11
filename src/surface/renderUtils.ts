@@ -66,6 +66,13 @@ export function resolveSurfaceBlockMarkdownBlock(block: SurfaceBlock): MarkdownB
   const data = block.data as Partial<MarkdownBlock> & { kind?: unknown };
 
   if (typeof data.kind === 'string' && SURFACE_MARKDOWN_KINDS.has(data.kind as MarkdownBlock['kind'])) {
+    if (data.kind === 'html') {
+      return {
+        ...data,
+        htmlTrust: 'untrusted'
+      } as MarkdownBlock;
+    }
+
     return data as MarkdownBlock;
   }
 

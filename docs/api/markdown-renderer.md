@@ -28,7 +28,8 @@ description: MarkdownRenderer 的主要 props、性能选项和安全策略。
 | `lineHeight` | `number` | `26` | 文本行高 |
 | `font` | `string` | 内置默认字体 | pretext 文本布局用的字体描述 |
 | `thoughtTitle` | `string` | `'Thought Process'` | `:::thought` 默认标题 |
-| `allowUnsafeHtml` | `boolean` | `false` | 是否允许不安全 HTML |
+| `allowUnsafeHtml` | `boolean` | `false` | 是否允许解析原始 HTML；允许后仍会净化 |
+| `htmlSanitizer` | `MarkdownHtmlSanitizer` | DOMPurify | 替换原始 HTML 的净化策略 |
 | `componentRegistry` | `AgentComponentRegistry` | `{}` | `:::vue-component` 可用的受控组件注册表 |
 | `builtinComponents` | `MarkdownBuiltinComponentOverrides` | `{}` | 覆写内置 markdown block 组件 |
 | `plugins` | `MarkdownEnginePlugin[]` | `[]` | 额外 markdown-it 插件 |
@@ -79,3 +80,27 @@ description: MarkdownRenderer 的主要 props、性能选项和安全策略。
 - `handoff`
 
 如果要换外观，优先改 `builtinComponents`。
+
+## HTML 安全边界
+
+默认不解析原始 HTML。即使显式开启 `allowUnsafeHtml`，Agentdown 也不会
+把这部分内容直接交给 `v-html`，而是先经过 DOMPurify：
+
+- 移除 script、事件属性和危险 URL
+- 禁止 style、iframe、object、embed、form 和 `srcdoc`
+- 浏览器不支持 sanitizer 或 SSR 阶段时 fail closed
+- Runtime 传入的 HTML 永远按不可信内容处理，不能自行声明为可信
+
+如果宿主已有统一安全策略，可以注入自己的 sanitizer：
+
+```vue
+<MarkdownRenderer
+  :source="agentOutput"
+  allow-unsafe-html
+  :html-sanitizer="(html, context) => companySanitizer(html, context)"
+/>
+```
+
+自定义 sanitizer 是安全边界的一部分，应返回已经净化的 HTML。不要用
+`html => html` 绕过这一层。内容安全策略（CSP）仍应保持严格，不能把
+sanitizer 当作允许 `unsafe-eval` 或任意脚本来源的理由。

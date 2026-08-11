@@ -12,7 +12,7 @@ import type { MarkdownEnginePlugin } from './types';
 export interface MarkdownEngineOptions {
   /**
    * 是否允许原始 HTML 直接被 markdown-it 当作 HTML 解析。
-   * 默认关闭；开启后仅适用于可信内容。
+   * 默认关闭；开启后渲染层仍会把对应 block 交给 sanitizer。
    */
   allowUnsafeHtml?: boolean;
 }
