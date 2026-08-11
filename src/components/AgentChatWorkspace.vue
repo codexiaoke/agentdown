@@ -185,7 +185,7 @@ const rawFilePreviewPaneWidth = computed(() => {
 const hasConversation = computed(() => {
   runtimeVersion.value;
 
-  return props.runtime.snapshot().blocks.some((block) => block.slot === slotName.value);
+  return props.runtime.blocks().some((block) => block.slot === slotName.value);
 });
 
 const reservedPanelWidth = computed(() => {
@@ -233,11 +233,11 @@ function syncDefaultConversationTail() {
   }
 
   if (conversationTailBaselineBlockIds.value.length === 0) {
-    conversationTailBaselineBlockIds.value = props.runtime.snapshot().blocks.map((block) => block.id);
+    conversationTailBaselineBlockIds.value = props.runtime.blocks().map((block) => block.id);
     defaultConversationTailVisible.value = true;
   }
 
-  const blocks = props.runtime.snapshot().blocks;
+  const blocks = props.runtime.blocks();
   const hasNewConversationContent = hasAgentChatAppendedConversationContent(
     blocks,
     conversationTailBaselineBlockIds.value,
@@ -537,7 +537,7 @@ watch(
     }
 
     if (!previousValue) {
-      conversationTailBaselineBlockIds.value = props.runtime.snapshot().blocks.map((block) => block.id);
+      conversationTailBaselineBlockIds.value = props.runtime.blocks().map((block) => block.id);
       defaultConversationTailVisible.value = true;
     }
 

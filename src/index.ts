@@ -249,7 +249,11 @@ export {
   defineProtocol,
   when
 } from './runtime/defineProtocol';
-export { createAgentRuntime } from './runtime/createAgentRuntime';
+export {
+  AgentRuntimeLimitError,
+  DEFAULT_AGENT_RUNTIME_LIMITS,
+  createAgentRuntime
+} from './runtime/createAgentRuntime';
 export {
   AgentdownBackendRecoveryTracker,
   attachAgentdownRecoveryMetadata,
@@ -723,6 +727,10 @@ export type {
 } from './runtime/defineAdapter';
 export type {
   AgentRuntime,
+  AgentRuntimeLimits,
+  AgentRuntimeListenerErrorContext,
+  AgentRuntimeOptions,
+  AgentRuntimeStats,
   AssemblerContext,
   BlockInsertCommand,
   BlockPatchCommand,
@@ -753,6 +761,7 @@ export type {
   RuntimeNode,
   RuntimeProtocol,
   RuntimeSnapshot,
+  RuntimeSnapshotOptions,
   SurfaceBlockState,
   SurfaceBlockStreamingDraftData,
   StreamAbortCommand,

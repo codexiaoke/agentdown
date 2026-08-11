@@ -114,7 +114,10 @@ const props = withDefaults(defineProps<Props>(), {
 const containerRef = ref<HTMLElement | null>(null);
 const loadMoreRef = ref<HTMLElement | null>(null);
 const width = ref(0);
-const snapshot = shallowRef<RuntimeSnapshot>(props.runtime.snapshot());
+const snapshot = shallowRef<RuntimeSnapshot>(props.runtime.snapshot({
+  includeHistory: false,
+  includeIntents: false
+}));
 const visibleGroupCount = ref(0);
 
 const resolvedBuiltinComponents = computed(() => ({
@@ -232,9 +235,15 @@ function updateWidth() {
  */
 function bindRuntime(runtime: AgentRuntime) {
   unsubscribe?.();
-  snapshot.value = runtime.snapshot();
+  snapshot.value = runtime.snapshot({
+    includeHistory: false,
+    includeIntents: false
+  });
   unsubscribe = runtime.subscribe(() => {
-    snapshot.value = runtime.snapshot();
+    snapshot.value = runtime.snapshot({
+      includeHistory: false,
+      includeIntents: false
+    });
   });
 }
 
