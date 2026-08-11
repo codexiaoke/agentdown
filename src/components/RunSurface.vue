@@ -100,15 +100,7 @@ const props = withDefaults(defineProps<Props>(), {
   componentRegistry: () => ({}),
   builtinComponents: () => ({}),
   renderers: () => ({}),
-  draftPlaceholder: false,
-  messageShells: () => ({
-    user: RunSurfaceUserBubble
-  }),
-  messageActions: () => ({}),
-  approvalActions: () => ({
-    enabled: true
-  }),
-  handoffActions: false
+  messageActions: () => ({})
 });
 
 const containerRef = ref<HTMLElement | null>(null);
@@ -119,34 +111,47 @@ const snapshot = shallowRef<RuntimeSnapshot>(props.runtime.snapshot({
   includeIntents: false
 }));
 const visibleGroupCount = ref(0);
+const resolvedAgentdownConfig = useAgentdownConfig(computed(() => {
+  return props.theme ? { theme: props.theme } : undefined;
+}));
+const resolvedComponentRegistry = computed(() => ({
+  ...(resolvedAgentdownConfig.value.surface?.componentRegistry ?? {}),
+  ...props.componentRegistry
+}));
 
 const resolvedBuiltinComponents = computed(() => ({
   ...defaultMarkdownBuiltinComponents,
+  ...(resolvedAgentdownConfig.value.surface?.builtinComponents ?? {}),
   ...props.builtinComponents
-}));
-const resolvedAgentdownConfig = useAgentdownConfig(computed(() => {
-  return props.theme ? { theme: props.theme } : undefined;
 }));
 const resolvedThemeStyle = computed(() => {
   return resolveAgentdownThemeCssVars(resolvedAgentdownConfig.value.theme);
 });
 
 const resolvedPerformance = computed<ResolvedRunSurfacePerformance>(() => {
-  const configuredGroupWindow = props.performance?.groupWindow;
+  const performance = {
+    ...(resolvedAgentdownConfig.value.surface?.performance ?? {}),
+    ...(props.performance ?? {})
+  };
+  const configuredGroupWindow = performance.groupWindow;
 
   return {
     groupWindow: configuredGroupWindow === false ? false : Math.max(24, configuredGroupWindow ?? 80),
-    groupWindowStep: Math.max(12, props.performance?.groupWindowStep ?? 40),
-    lazyMount: props.performance?.lazyMount ?? true,
-    lazyMountMargin: props.performance?.lazyMountMargin ?? '720px 0px',
-    textSlabChars: Math.max(640, props.performance?.textSlabChars ?? 1600),
-    blockVirtualize: props.performance?.blockVirtualize ?? true,
-    blockVirtualizeMargin: props.performance?.blockVirtualizeMargin ?? '1400px 0px',
-    blockVirtualizeThreshold: Math.max(12, props.performance?.blockVirtualizeThreshold ?? 24)
+    groupWindowStep: Math.max(12, performance.groupWindowStep ?? 40),
+    lazyMount: performance.lazyMount ?? true,
+    lazyMountMargin: performance.lazyMountMargin ?? '720px 0px',
+    textSlabChars: Math.max(640, performance.textSlabChars ?? 1600),
+    blockVirtualize: performance.blockVirtualize ?? true,
+    blockVirtualizeMargin: performance.blockVirtualizeMargin ?? '1400px 0px',
+    blockVirtualizeThreshold: Math.max(12, performance.blockVirtualizeThreshold ?? 24)
   };
 });
 
-const resolvedDraftPlaceholder = computed<RunSurfaceDraftPlaceholder>(() => props.draftPlaceholder ?? false);
+const resolvedDraftPlaceholder = computed<RunSurfaceDraftPlaceholder>(() => (
+  props.draftPlaceholder
+  ?? resolvedAgentdownConfig.value.surface?.draftPlaceholder
+  ?? false
+));
 
 /**
  * 合并 surface 默认 renderer 与外部覆写。
@@ -154,6 +159,7 @@ const resolvedDraftPlaceholder = computed<RunSurfaceDraftPlaceholder>(() => prop
  */
 const resolvedRenderers = computed<RunSurfaceRendererMap>(() => ({
   tool: RunSurfaceToolRenderer,
+  ...(resolvedAgentdownConfig.value.surface?.renderers ?? {}),
   ...(props.renderers ?? {})
 }));
 
@@ -176,6 +182,7 @@ const resolvedMessageShells = computed<RunSurfaceMessageShellMap>(() => ({
     component: RunSurfaceUserBubble,
     props: createDefaultShellProps
   },
+  ...(resolvedAgentdownConfig.value.surface?.messageShells ?? {}),
   ...(props.messageShells ?? {})
 }));
 
@@ -185,6 +192,7 @@ const resolvedMessageActions = computed<RunSurfaceMessageActionsMap>(() => ({
     showOnDraft: false,
     showWhileRunning: false
   },
+  ...(resolvedAgentdownConfig.value.surface?.messageActions ?? {}),
   ...(props.messageActions ?? {})
 }));
 
@@ -195,13 +203,16 @@ const resolvedMessageActions = computed<RunSurfaceMessageActionsMap>(() => ({
  * 但真正显示哪些按钮仍由 approval block 状态和动作配置决定。
  */
 const resolvedApprovalActions = computed<RunSurfaceApprovalActionsOptions | false>(() => {
-  if (props.approvalActions === false) {
+  const configured = props.approvalActions
+    ?? resolvedAgentdownConfig.value.surface?.approvalActions;
+
+  if (configured === false) {
     return false;
   }
 
   return {
     enabled: true,
-    ...(props.approvalActions ?? {})
+    ...(configured ?? {})
   };
 });
 
@@ -209,13 +220,17 @@ const resolvedApprovalActions = computed<RunSurfaceApprovalActionsOptions | fals
  * 统一收敛 handoff 动作区域配置。
  */
 const resolvedHandoffActions = computed<RunSurfaceHandoffActionsOptions | false>(() => {
-  if (props.handoffActions === false) {
+  const configured = props.handoffActions
+    ?? resolvedAgentdownConfig.value.surface?.handoffActions
+    ?? false;
+
+  if (configured === false) {
     return false;
   }
 
   return {
     enabled: true,
-    ...(props.handoffActions ?? {})
+    ...configured
   };
 });
 
@@ -480,6 +495,8 @@ onBeforeUnmount(() => {
     ref="containerRef"
     class="agentdown-root agentdown-run-surface"
     :style="resolvedThemeStyle"
+    :data-agentdown-group-window="String(resolvedPerformance.groupWindow)"
+    :data-agentdown-lazy-mount="String(resolvedPerformance.lazyMount)"
   >
     <p
       v-if="groups.length === 0"
@@ -521,7 +538,7 @@ onBeforeUnmount(() => {
             :width="width"
             :line-height="lineHeight"
             :font="font"
-            :component-registry="componentRegistry"
+            :component-registry="resolvedComponentRegistry"
             :builtin-components="resolvedBuiltinComponents"
             :renderers="resolvedRenderers"
             :draft-placeholder="resolvedDraftPlaceholder"

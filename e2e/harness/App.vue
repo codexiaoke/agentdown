@@ -9,9 +9,9 @@ import {
   type A2UiClientEnvelope
 } from '../../src/a2ui/types';
 import { createMarkdownAssembler } from '../../src/runtime/assemblers';
-import { createAgentRuntime } from '../../src/runtime/createAgentRuntime';
 import { createBridge } from '../../src/runtime/createBridge';
 import type { RuntimeCommand } from '../../src/runtime/types';
+import { browserAgentdown } from './agentdown';
 
 type StreamPacket = {
   type: 'open' | 'delta' | 'close';
@@ -27,7 +27,7 @@ const maliciousMarkdown = [
   '<' + 'script>window.__agentdownXss = true<' + '/script>'
 ].join('\n');
 
-const runtime = createAgentRuntime();
+const runtime = browserAgentdown.createRuntime();
 const bridge = createBridge<StreamPacket>({
   runtime,
   scheduler: 'sync',

@@ -6,6 +6,7 @@ test.beforeEach(async ({ page }) => {
 
 test('sanitizes raw HTML in a real browser', async ({ page }) => {
   const security = page.getByTestId('html-security');
+  await expect(security.locator('.agentdown-root')).toHaveAttribute('data-agentdown-render-mode', 'window');
   await expect(security.getByText('原始 HTML 安全内容')).toBeVisible();
   await expect(security.locator('#raw-safe')).not.toHaveAttribute('onclick');
   await expect(security.locator('#raw-safe')).not.toHaveAttribute('style');
@@ -19,6 +20,10 @@ test('streams runtime commands without navigation or browser errors', async ({ p
   const pageErrors: string[] = [];
   page.on('pageerror', (error) => pageErrors.push(error.message));
   const originalUrl = page.url();
+  await expect(page.getByTestId('runtime-stream').locator('.agentdown-run-surface'))
+    .toHaveAttribute('data-agentdown-group-window', 'false');
+  await expect(page.getByTestId('runtime-stream').locator('.agentdown-run-surface'))
+    .toHaveAttribute('data-agentdown-lazy-mount', 'false');
 
   await page.getByRole('button', { name: '开始流式输出' }).click();
 

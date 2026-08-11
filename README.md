@@ -758,6 +758,7 @@ python3 backend/run.py
 
 - [快速开始](https://codexiaoke.github.io/agentdown/guide/getting-started)
 - [核心概念](https://codexiaoke.github.io/agentdown/guide/core-concepts)
+- [配置与扩展](https://codexiaoke.github.io/agentdown/guide/configuration)
 - [官方框架适配](https://codexiaoke.github.io/agentdown/guide/framework-adapters)
 - [AG-UI 与 A2UI](https://codexiaoke.github.io/agentdown/guide/ag-ui-a2ui)
 - [后端会话恢复与断线续传](https://codexiaoke.github.io/agentdown/guide/backend-conversation-recovery)
