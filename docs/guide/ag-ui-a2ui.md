@@ -335,6 +335,30 @@ const productCatalog = defineA2UiCatalog({
 - 拒绝原型污染键、组件循环和过深嵌套
 - Agent 只能发送声明式数据，不能发送 Vue、JavaScript 或任意 HTML 实现
 
+## 浏览器交互基线
+
+Basic Catalog 的交互不是只验证“能渲染”。当前基线同时覆盖：
+
+- Text 的加粗、强调、行内代码和删除线；链接、图片与 HTML 保持为普通文本
+- TextField 校验错误与输入框的可访问性关联
+- ChoicePicker 的多选、chips 样式和前端筛选
+- Tabs 的方向键、Home、End 和 roving tabindex
+- Modal 的初始焦点、Tab 焦点约束、Escape 关闭和触发按钮焦点恢复
+- Action 发送中的 `disabled`、`aria-busy`、重复提交抑制和完整 DataModel context
+
+仓库使用 Playwright 对同一套真实 Runtime、Markdown Renderer 和 A2UI Surface 跑浏览器测试：
+
+```bash
+# 使用当前电脑安装的 Google Chrome
+npm run test:e2e:chrome
+
+# Google Chrome、Firefox、WebKit 三引擎
+npm run test:e2e
+```
+
+这些测试通过浏览器内的轻量 transport fixture 验证前端库行为，不把仓库 FastAPI
+示例后端算作组件能力或生产依赖。
+
 ## 仓库内真实示例
 
 仓库提供三个独立 Vue 消费者，分别验证公开 npm 入口：

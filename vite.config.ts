@@ -1,9 +1,13 @@
 import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
 import { resolve } from 'node:path';
+import { configDefaults } from 'vitest/config';
 
 export default defineConfig({
   plugins: [vue()],
+  test: {
+    exclude: [...configDefaults.exclude, 'e2e/**']
+  },
   build: {
     assetsInlineLimit: 0,
     lib: {
