@@ -1,6 +1,6 @@
 {
   "name": "agentdown",
-  "version": "0.0.5",
+  "version": "0.1.0-rc.1",
   "description": "Reactive agent-native markdown UI runtime for Vue, powered by markdown-it and @chenglou/pretext.",
   "type": "module",
   "license": "MIT",
@@ -28,6 +28,8 @@
     "dist",
     "README.md",
     "README.en.md",
+    "CHANGELOG.md",
+    "SECURITY.md",
     "LICENSE"
   ],
   "main": "./dist/index.cjs",
@@ -35,6 +37,9 @@
   "types": "./dist/index.d.ts",
   "publishConfig": {
     "access": "public"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
   },
   "exports": {
     ".": {
@@ -66,7 +71,7 @@
     "dev": "vite",
     "build": "npm run typecheck && vite build && npm run build:types",
     "build:types": "vue-tsc --declaration --emitDeclarationOnly -p tsconfig.types.json",
-    "docs:dev": "vitepress dev docs --host 0.0.0.0",
+    "docs:dev": "vitepress dev docs --host 127.0.0.1",
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs",
     "backend:dev": "uv run --project backend uvicorn app.main:app --app-dir backend --reload --port 8000",
@@ -75,7 +80,10 @@
     "backend:smoke:langchain": "uv run --project backend python backend/scripts/smoke_langchain.py",
     "backend:smoke:crewai": "uv run --project backend python backend/scripts/smoke_crewai.py",
     "benchmark:streaming-markdown": "node scripts/benchmark-streaming-markdown.mjs",
+    "audit:production": "npm audit --omit=dev",
     "pack:check": "npm pack --dry-run",
+    "release:check": "npm test && npm run typecheck && npm run test:e2e && npm run docs:build && npm run test:package-consumer && npm run audit:production && npm run pack:check",
+    "release:verify": "node scripts/verify-release.mjs",
     "test:package-consumer": "npm run build && node scripts/test-package-consumer.mjs",
     "prepublishOnly": "npm run build",
     "test": "vitest run",
@@ -101,7 +109,7 @@
   "dependencies": {
     "@chenglou/pretext": "^0.0.8",
     "dompurify": "^3.4.13",
-    "highlight.js": "^11.11.1",
+    "highlight.js": "^11.11.2",
     "katex": "^0.16.44",
     "markdown-it": "^14.3.0",
     "markdown-it-container": "^4.0.0",
@@ -111,7 +119,7 @@
   "devDependencies": {
     "@a2ui/web_core": "^0.10.6",
     "@ag-ui/core": "^0.0.57",
-    "@playwright/test": "^1.55.1",
+    "@playwright/test": "^1.62.1",
     "@types/markdown-it": "^14.1.2",
     "@types/markdown-it-container": "^4.0.0",
     "@types/node": "^25.5.0",

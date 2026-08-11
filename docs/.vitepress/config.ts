@@ -50,6 +50,7 @@ export default defineConfig({
             { text: 'RunSurface 定制', link: '/guide/run-surface' },
             { text: '流式 Markdown', link: '/guide/streaming-markdown' },
             { text: '性能优化', link: '/guide/performance' },
+            { text: '发布流程', link: '/guide/releasing' },
             { text: 'FastAPI Backend', link: '/guide/backend-fastapi' }
           ]
         }

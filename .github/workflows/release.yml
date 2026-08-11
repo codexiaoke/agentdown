@@ -1,0 +1,38 @@
+name: release
+
+on:
+  push:
+    tags:
+      - v*
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+concurrency:
+  group: npm-release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - run: npm ci
+      - name: Verify tag and unpublished version
+        id: release
+        run: npm run release:verify -- "${GITHUB_REF_NAME}"
+      - name: Install browser engines
+        run: npx playwright install --with-deps chrome firefox webkit
+      - run: npm run release:check
+      - name: Publish with npm trusted publishing
+        run: npm publish --access public --tag "${{ steps.release.outputs.dist-tag }}"
