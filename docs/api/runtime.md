@@ -53,10 +53,18 @@ const protocol = defineEventProtocol<Packet>({
 
 ```ts
 const bridge = createBridge({
-  runtime,
   protocol,
   assemblers: {
     markdown: createMarkdownAssembler()
+  },
+  runtimeOptions: {
+    limits: {
+      maxBlocks: 10_000,
+      maxHistoryEntries: 2_000
+    },
+    onListenerError(error, context) {
+      reportFrontendError(error, context);
+    }
   }
 });
 ```
@@ -67,6 +75,56 @@ Bridge 负责：
 - 调用 protocol
 - 把流式命令交给 assembler
 - 再提交到 runtime
+
+如果已经由宿主创建了 `runtime`，可以直接传入它；`runtime` 和
+`runtimeOptions` 不能同时出现，避免配置看似生效、实际被忽略。
+
+## `createAgentRuntime()` 的生产保护
+
+Runtime 默认有明确容量边界：
+
+| 集合 | 默认上限 | 达到上限后的行为 |
+| --- | ---: | --- |
+| nodes | 10,000 | 在写入前拒绝整批命令 |
+| blocks | 20,000 | 在写入前拒绝整批命令 |
+| intents | 2,000 | 只保留最近记录 |
+| history | 5,000 | 只保留最近记录 |
+
+节点和 block 不会被静默清理。宿主应在切换会话或归档完成后调用
+`runtime.reset()`，或者根据业务规模显式调整 `limits`。传入 `false`
+可以关闭某一个上限，但不建议对外部、不可信的数据流这样做。
+
+```ts
+const runtime = createAgentRuntime({
+  limits: {
+    maxNodes: 5_000,
+    maxBlocks: 12_000,
+    maxIntents: 1_000,
+    maxHistoryEntries: 3_000
+  },
+  onListenerError(error, { revision }) {
+    telemetry.capture(error, { revision });
+  }
+});
+
+console.log(runtime.stats());
+```
+
+`apply([...commands])` 会先校验整批命令和执行后的容量，再修改状态。
+自定义协议即使绕过 TypeScript 传入畸形命令，也不会留下执行一半的
+runtime 状态。
+
+只负责渲染时，可以排除调试数据，避免每次更新都克隆 history：
+
+```ts
+runtime.snapshot({
+  includeIntents: false,
+  includeHistory: false
+});
+```
+
+`RunSurface` 和按 block/message 查询的 composable 已默认使用这种轻量
+快照；回放、导出和 Devtools 仍然使用完整快照。
 
 ## `useSseBridge()`
 

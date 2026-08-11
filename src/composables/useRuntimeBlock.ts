@@ -73,7 +73,7 @@ function isAgentRuntime(value: RuntimeBlockComposableSource): value is AgentRunt
  */
 function resolveRuntimeSnapshot(source: RuntimeBlockComposableSource): RuntimeSnapshot {
   return isAgentRuntime(source)
-    ? source.snapshot()
+    ? source.snapshot({ includeHistory: false, includeIntents: false })
     : source;
 }
 
@@ -90,7 +90,7 @@ function useRuntimeSnapshotRef(
     (nextSource, _, onCleanup) => {
       if (isAgentRuntime(nextSource)) {
         const sync = () => {
-          snapshot.value = nextSource.snapshot();
+          snapshot.value = nextSource.snapshot({ includeHistory: false, includeIntents: false });
         };
 
         sync();

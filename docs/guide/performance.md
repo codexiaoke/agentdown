@@ -70,6 +70,19 @@ Agentdown 从一开始就把性能当成主链能力，而不是事后补丁。
 
 ## RunSurface 性能主链
 
+### 0. Runtime 状态有界化
+
+DOM windowing 只能减少挂载数量，不能阻止 JavaScript 状态持续增长。
+Agentdown 的 runtime 因此还会：
+
+- 限制 nodes、blocks、intents 和 history 的默认容量
+- 在整批命令执行前检查 nodes / blocks 上限
+- 让渲染链使用不含 intents / history 的轻量快照
+- 通过 `runtime.stats()` 暴露当前容量和丢弃记录数量
+
+实际的历史归档和会话持久化仍由宿主后端负责，前端 runtime 不会把
+浏览器内存当成会话真相源。
+
 ### 1. group windowing
 
 聊天界面不会一次把所有 group 都挂出来。

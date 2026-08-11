@@ -72,6 +72,15 @@ function createBridgeError<TRawPacket>(
 }
 
 /**
+ * 判断未知异常是否已经是带阶段信息的 bridge 错误。
+ */
+function isBridgeError<TRawPacket>(value: unknown): value is BridgeError<TRawPacket> {
+  return value instanceof Error
+    && value.name === 'AgentdownBridgeError'
+    && typeof (value as Partial<BridgeError<TRawPacket>>).stage === 'string';
+}
+
+/**
  * 把 scheduler 配置统一转换成可执行调度器。
  */
 function createSchedulerRunner(scheduler: BridgeOptions['scheduler']) {
@@ -85,8 +94,15 @@ function createSchedulerRunner(scheduler: BridgeOptions['scheduler']) {
     }
 
     if (scheduler === 'microtask' || scheduler === undefined) {
-      queueMicrotask(flush);
-      return undefined;
+      let cancelled = false;
+      queueMicrotask(() => {
+        if (!cancelled) {
+          flush();
+        }
+      });
+      return () => {
+        cancelled = true;
+      };
     }
 
     if (scheduler === 'animation-frame') {
@@ -153,7 +169,11 @@ function createConsumeYieldRunner(scheduler: ConsumeYieldScheduler | undefined) 
 export function createBridge<TRawPacket = unknown, TSource = AsyncIterable<TRawPacket> | Iterable<TRawPacket>>(
   options: BridgeOptions<TRawPacket, TSource>
 ): Bridge<TRawPacket, TSource> {
-  const runtime = options.runtime ?? createAgentRuntime();
+  if (options.runtime && options.runtimeOptions) {
+    throw new TypeError('Bridge options cannot provide both "runtime" and "runtimeOptions".');
+  }
+
+  const runtime = options.runtime ?? createAgentRuntime(options.runtimeOptions);
   const protocol = options.protocol;
   const transport = options.transport;
   const assemblers = options.assemblers ?? {};
@@ -217,7 +237,13 @@ export function createBridge<TRawPacket = unknown, TSource = AsyncIterable<TRawP
   function handleError(error: BridgeError<TRawPacket>): never {
     lastError = error;
     phase = 'errored';
-    options.hooks?.onError?.(error);
+
+    try {
+      options.hooks?.onError?.(error);
+    } catch (hookError) {
+      globalThis.console?.error?.('[Agentdown] bridge onError hook failed.', hookError);
+    }
+
     throw error;
   }
 
@@ -269,21 +295,17 @@ export function createBridge<TRawPacket = unknown, TSource = AsyncIterable<TRawP
     const assemblerName = streamAssemblerById.get(command.streamId);
 
     if (!assemblerName) {
-      handleError(
-        createBridgeError('stream', `No active stream session for "${command.streamId}".`, {
-          command
-        })
-      );
+      throw createBridgeError('stream', `No active stream session for "${command.streamId}".`, {
+        command
+      });
     }
 
     const assembler = assemblers[assemblerName];
 
     if (!assembler) {
-      handleError(
-        createBridgeError('stream', `Assembler "${assemblerName}" is not registered.`, {
-          command
-        })
-      );
+      throw createBridgeError('stream', `Assembler "${assemblerName}" is not registered.`, {
+        command
+      });
     }
 
     return assembler;
@@ -296,21 +318,17 @@ export function createBridge<TRawPacket = unknown, TSource = AsyncIterable<TRawP
     switch (command.type) {
       case 'stream.open': {
         if (streamAssemblerById.has(command.streamId)) {
-          handleError(
-            createBridgeError('stream', `Stream "${command.streamId}" is already open.`, {
-              command
-            })
-          );
+          throw createBridgeError('stream', `Stream "${command.streamId}" is already open.`, {
+            command
+          });
         }
 
         const assembler = assemblers[command.assembler];
 
         if (!assembler) {
-          handleError(
-            createBridgeError('stream', `Assembler "${command.assembler}" is not registered.`, {
-              command
-            })
-          );
+          throw createBridgeError('stream', `Assembler "${command.assembler}" is not registered.`, {
+            command
+          });
         }
 
         streamAssemblerById.set(command.streamId, command.assembler);
@@ -335,14 +353,66 @@ export function createBridge<TRawPacket = unknown, TSource = AsyncIterable<TRawP
   }
 
   /**
+   * 在调用有状态 assembler 前验证整批 stream 生命周期。
+   * 这样批次尾部的无效命令不会让前面的 open/delta 提前改变 assembler。
+   */
+  function validateStreamSequence(commands: RuntimeCommand[]) {
+    const projectedStreams = new Map(streamAssemblerById);
+
+    for (const command of commands) {
+      switch (command.type) {
+        case 'stream.open':
+          if (projectedStreams.has(command.streamId)) {
+            throw createBridgeError('stream', `Stream "${command.streamId}" is already open.`, {
+              command
+            });
+          }
+
+          if (!assemblers[command.assembler]) {
+            throw createBridgeError('stream', `Assembler "${command.assembler}" is not registered.`, {
+              command
+            });
+          }
+
+          projectedStreams.set(command.streamId, command.assembler);
+          break;
+        case 'stream.delta':
+        case 'stream.close':
+        case 'stream.abort': {
+          const assemblerName = projectedStreams.get(command.streamId);
+
+          if (!assemblerName) {
+            throw createBridgeError('stream', `No active stream session for "${command.streamId}".`, {
+              command
+            });
+          }
+
+          if (!assemblers[assemblerName]) {
+            throw createBridgeError('stream', `Assembler "${assemblerName}" is not registered.`, {
+              command
+            });
+          }
+
+          if (command.type !== 'stream.delta') {
+            projectedStreams.delete(command.streamId);
+          }
+          break;
+        }
+        default:
+          break;
+      }
+    }
+  }
+
+  /**
    * 对待执行命令做合并和 stream 展开。
    */
-  function normalizeQueuedCommands() {
+  function normalizeQueuedCommands(queuedCommands: RuntimeCommand[]) {
     const commands = batchOptions.coalesceStreamDeltas
-      ? coalesceStreamDeltas(pendingCommands)
-      : [...pendingCommands];
+      ? coalesceStreamDeltas(queuedCommands)
+      : [...queuedCommands];
 
-    pendingCommands.splice(0, pendingCommands.length);
+    validateStreamSequence(commands);
     const expanded: RuntimeCommand[] = [];
 
     for (const command of commands) {
@@ -411,6 +481,10 @@ export function createBridge<TRawPacket = unknown, TSource = AsyncIterable<TRawP
    * 把当前待处理命令真正应用到 runtime。
    */
   function flush(reason = 'manual') {
+    if (phase === 'errored' && lastError) {
+      throw lastError;
+    }
+
     if (pendingCommands.length === 0) {
       clearScheduling();
       return;
@@ -418,15 +492,21 @@ export function createBridge<TRawPacket = unknown, TSource = AsyncIterable<TRawP
 
     const wasConsuming = phase === 'consuming';
     clearScheduling();
+    const queuedCommands = [...pendingCommands];
 
     let expanded: RuntimeCommand[];
 
     try {
-      expanded = normalizeQueuedCommands();
+      expanded = normalizeQueuedCommands(queuedCommands);
       if (expanded.length > 0) {
         runtime.apply(expanded);
       }
+      pendingCommands.splice(0, queuedCommands.length);
     } catch (cause) {
+      if (isBridgeError<TRawPacket>(cause)) {
+        handleError(cause);
+      }
+
       handleError(
         createBridgeError('flush', `Bridge flush failed (${reason}).`, {
           cause
@@ -503,6 +583,12 @@ export function createBridge<TRawPacket = unknown, TSource = AsyncIterable<TRawP
         return;
       }
 
+      if (isBridgeError<TRawPacket>(cause)) {
+        clearScheduling();
+        throw cause;
+      }
+
+      clearScheduling();
       handleError(
         createBridgeError('consume', 'Bridge consume failed.', {
           cause
@@ -537,9 +623,19 @@ export function createBridge<TRawPacket = unknown, TSource = AsyncIterable<TRawP
    * 关闭当前 bridge，后续不再继续消费。
    */
   function close() {
-    flush('close');
+    if (phase !== 'errored') {
+      flush('close');
+    }
+
     clearScheduling();
+    pendingCommands.splice(0, pendingCommands.length);
+    streamAssemblerById.clear();
     protocol.reset?.();
+
+    for (const assembler of Object.values(assemblers)) {
+      assembler.reset?.();
+    }
+
     phase = 'closed';
   }
 

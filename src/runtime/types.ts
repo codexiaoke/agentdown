@@ -245,6 +245,60 @@ export interface RuntimeIntentHistoryEntry {
 export type RuntimeHistoryEntry = RuntimeCommandHistoryEntry | RuntimeIntentHistoryEntry;
 
 /**
+ * runtime 内部集合的容量限制。
+ *
+ * 节点和 block 达到上限时会拒绝整批命令，避免静默丢失界面内容；
+ * intent 和 history 属于观测记录，会只保留最近的数据。
+ */
+export interface AgentRuntimeLimits {
+  maxNodes: number | false;
+  maxBlocks: number | false;
+  maxIntents: number | false;
+  maxHistoryEntries: number | false;
+}
+
+/**
+ * runtime 订阅者异常的诊断上下文。
+ */
+export interface AgentRuntimeListenerErrorContext {
+  revision: number;
+}
+
+/**
+ * 创建 runtime 时可配置的可靠性选项。
+ */
+export interface AgentRuntimeOptions {
+  limits?: Partial<AgentRuntimeLimits>;
+  onListenerError?: (
+    error: unknown,
+    context: AgentRuntimeListenerErrorContext
+  ) => void;
+}
+
+/**
+ * 创建快照时的投影选项。
+ */
+export interface RuntimeSnapshotOptions {
+  /** 是否包含 intent；只负责渲染的订阅通常不需要。 */
+  includeIntents?: boolean;
+  /** 是否包含完整 history；默认包含，以保持调试和回放语义。 */
+  includeHistory?: boolean;
+}
+
+/**
+ * runtime 当前资源使用统计。
+ */
+export interface AgentRuntimeStats {
+  revision: number;
+  nodeCount: number;
+  blockCount: number;
+  intentCount: number;
+  historyEntryCount: number;
+  droppedIntentCount: number;
+  droppedHistoryEntryCount: number;
+}
+
+/**
  * runtime 当前完整快照。
  */
 export interface RuntimeSnapshot {
@@ -267,7 +321,8 @@ export interface AgentRuntime {
   intents(): RuntimeIntent[];
   history(): RuntimeHistoryEntry[];
   emitIntent(intent: Omit<RuntimeIntent, 'id' | 'at'>): RuntimeIntent;
-  snapshot(): RuntimeSnapshot;
+  snapshot(options?: RuntimeSnapshotOptions): RuntimeSnapshot;
+  stats(): AgentRuntimeStats;
   subscribe(listener: () => void): () => void;
   reset(): void;
 }
@@ -403,6 +458,8 @@ export interface BridgeHooks<TRawPacket = unknown> {
  */
 export interface BridgeOptions<TRawPacket = unknown, TSource = unknown> {
   runtime?: AgentRuntime;
+  /** 未显式提供 runtime 时，用这些选项创建默认 runtime。 */
+  runtimeOptions?: AgentRuntimeOptions;
   protocol: RuntimeProtocol<TRawPacket>;
   transport?: TransportAdapter<TSource, TRawPacket>;
   assemblers?: Record<string, StreamAssembler>;

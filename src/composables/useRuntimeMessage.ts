@@ -65,7 +65,7 @@ function isAgentRuntime(value: RuntimeMessageComposableSource): value is AgentRu
  */
 function resolveRuntimeSnapshot(source: RuntimeMessageComposableSource): RuntimeSnapshot {
   return isAgentRuntime(source)
-    ? source.snapshot()
+    ? source.snapshot({ includeHistory: false, includeIntents: false })
     : source;
 }
 
@@ -82,7 +82,7 @@ function useRuntimeSnapshotRef(
     (nextSource, _, onCleanup) => {
       if (isAgentRuntime(nextSource)) {
         const sync = () => {
-          snapshot.value = nextSource.snapshot();
+          snapshot.value = nextSource.snapshot({ includeHistory: false, includeIntents: false });
         };
 
         sync();
@@ -182,4 +182,3 @@ export function useRuntimeMessagesByConversationId(
     getRuntimeMessagesByConversationId
   );
 }
-

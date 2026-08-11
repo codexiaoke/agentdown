@@ -3,6 +3,108 @@ import { createBridge } from './createBridge';
 import type { BridgeStatus } from './types';
 
 describe('createBridge', () => {
+  it('configures the default runtime without requiring a custom instance', () => {
+    const bridge = createBridge({
+      protocol: {
+        map() {
+          return [];
+        }
+      },
+      runtimeOptions: {
+        limits: {
+          maxBlocks: 0
+        }
+      }
+    });
+
+    expect(() => bridge.runtime.apply({
+      type: 'block.upsert',
+      block: {
+        id: 'block:1',
+        slot: 'main',
+        type: 'text',
+        renderer: 'text',
+        state: 'stable',
+        data: {}
+      }
+    })).toThrow(/blocks limit exceeded/);
+  });
+
+  it('rejects ambiguous runtime configuration', () => {
+    const runtimeBridge = createBridge({
+      protocol: {
+        map() {
+          return [];
+        }
+      }
+    });
+
+    expect(() => createBridge({
+      protocol: runtimeBridge.protocol,
+      runtime: runtimeBridge.runtime,
+      runtimeOptions: {}
+    })).toThrow(/both "runtime" and "runtimeOptions"/);
+  });
+
+  it('validates a stream batch before mutating any assembler session', () => {
+    const open = vi.fn(() => []);
+    const delta = vi.fn(() => []);
+    const onError = vi.fn();
+    const bridge = createBridge<string>({
+      protocol: {
+        map({ packet }) {
+          if (packet === 'open') {
+            return {
+              type: 'stream.open',
+              streamId: 'stream:valid',
+              slot: 'main',
+              assembler: 'text'
+            };
+          }
+
+          return {
+            type: 'stream.delta',
+            streamId: 'stream:missing',
+            text: packet
+          };
+        }
+      },
+      assemblers: {
+        text: {
+          open,
+          delta,
+          close: () => []
+        }
+      },
+      hooks: {
+        onError
+      }
+    });
+
+    bridge.push(['open', 'invalid-delta']);
+
+    expect(() => bridge.flush('test-invalid-batch')).toThrow(/No active stream session/);
+    expect(open).not.toHaveBeenCalled();
+    expect(delta).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(bridge.status()).toMatchObject({
+      phase: 'errored',
+      pendingCommandCount: 2,
+      activeStreamCount: 0
+    });
+
+    expect(() => bridge.flush('must-not-retry')).toThrow(/No active stream session/);
+    expect(open).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledTimes(1);
+
+    bridge.close();
+    expect(bridge.status()).toMatchObject({
+      phase: 'closed',
+      pendingCommandCount: 0,
+      activeStreamCount: 0
+    });
+  });
+
   it('resets protocol state when bridge.reset() is called', () => {
     const reset = vi.fn();
     const bridge = createBridge({
