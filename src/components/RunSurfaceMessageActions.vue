@@ -54,7 +54,7 @@ const props = defineProps<Props>();
 
 const feedbackAction = ref<'like' | 'dislike' | null>(null);
 const transientSuccessAction = ref<string | null>(null);
-let transientSuccessTimer: number | undefined;
+let transientSuccessTimer: ReturnType<typeof globalThis.setTimeout> | undefined;
 const BUILTIN_ACTION_KEYS = new Set<RunSurfaceBuiltinMessageActionKey>([
   'copy',
   'regenerate',

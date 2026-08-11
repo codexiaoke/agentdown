@@ -10,3 +10,5 @@ backend/.venv
 backend/.pytest_cache
 backend/.env
 backend/.idea
+playwright-report
+test-results

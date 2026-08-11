@@ -210,7 +210,7 @@ export function createBridge<TRawPacket = unknown, TSource = AsyncIterable<TRawP
   let phase: BridgeStatus['phase'] = 'idle';
   let scheduled = false;
   let scheduleCleanup: void | (() => void);
-  let latencyTimer: number | undefined;
+  let latencyTimer: ReturnType<typeof globalThis.setTimeout> | undefined;
   let lastFlushAt: number | undefined;
   let lastError: BridgeError<TRawPacket> | undefined;
 

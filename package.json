@@ -79,8 +79,10 @@
     "test:package-consumer": "npm run build && node scripts/test-package-consumer.mjs",
     "prepublishOnly": "npm run build",
     "test": "vitest run",
+    "test:e2e": "playwright test",
+    "test:e2e:chrome": "playwright test --project=chrome",
     "test:watch": "vitest",
-    "typecheck": "vue-tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json",
+    "typecheck": "vue-tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json && vue-tsc --noEmit -p tsconfig.e2e.json",
     "preview": "vite preview"
   },
   "peerDependencies": {
@@ -109,6 +111,7 @@
   "devDependencies": {
     "@a2ui/web_core": "^0.10.6",
     "@ag-ui/core": "^0.0.57",
+    "@playwright/test": "^1.55.1",
     "@types/markdown-it": "^14.1.2",
     "@types/markdown-it-container": "^4.0.0",
     "@types/node": "^25.5.0",

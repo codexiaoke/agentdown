@@ -68,7 +68,7 @@ const actionError = ref('');
 const reasonPromptActionKey = ref<string | null>(null);
 const reasonPromptValue = ref('');
 const reasonPromptError = ref('');
-let successTimer: number | undefined;
+let successTimer: ReturnType<typeof globalThis.setTimeout> | undefined;
 
 /**
  * 读取标题，统一成响应式值。

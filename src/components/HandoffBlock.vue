@@ -59,7 +59,7 @@ const successActionKey = ref<string | null>(null);
 const actionError = ref('');
 const inputValue = ref('');
 const inputError = ref('');
-let successTimer: number | undefined;
+let successTimer: ReturnType<typeof globalThis.setTimeout> | undefined;
 
 /**
  * 读取标题，统一成响应式值。

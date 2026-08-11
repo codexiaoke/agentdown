@@ -1,11 +1,16 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref } from 'vue';
 import type { A2UiElementProps } from '../types';
+import { parseA2UiSimpleMarkdown } from '../simpleMarkdown';
 
 const props = defineProps<A2UiElementProps>();
 
 const modalOpen = ref(false);
 const activeTab = ref(0);
+const choiceFilter = ref('');
+const modalTriggerRef = ref<HTMLDivElement | null>(null);
+const modalDialogRef = ref<HTMLElement | null>(null);
+let modalReturnFocus: HTMLElement | null = null;
 
 const values = computed(() => props.resolvedProps);
 const accessibility = computed<Record<string, unknown>>(() => {
@@ -33,6 +38,7 @@ const actionError = computed(() => props.actionState?.error ?? (
     : '操作失败。'
 ));
 const actionErrorId = computed(() => `${props.componentId}-action-error`);
+const validationErrorId = computed(() => `${props.componentId}-validation-error`);
 const actionDisabled = computed(() => (
   isInvalid.value || actionPending.value || props.interactionDisabled === true
 ));
@@ -48,6 +54,21 @@ const iconSvgPath = computed(() => {
   if (!name || typeof name !== 'object' || Array.isArray(name)) return '';
   const path = (name as Record<string, unknown>).svgPath;
   return typeof path === 'string' ? path.slice(0, props.securityPolicy.maxStringLength) : '';
+});
+const textSegments = computed(() => parseA2UiSimpleMarkdown(String(values.value.text ?? '')));
+const choiceOptions = computed(() => Array.isArray(values.value.options)
+  ? values.value.options as Array<Record<string, unknown>>
+  : []);
+const filteredChoiceOptions = computed(() => {
+  const query = choiceFilter.value.trim().toLocaleLowerCase();
+
+  if (!query) {
+    return choiceOptions.value;
+  }
+
+  return choiceOptions.value.filter((option) => (
+    String(option.label ?? option.value ?? '').toLocaleLowerCase().includes(query)
+  ));
 });
 
 const iconGlyphs: Readonly<Record<string, string>> = {
@@ -150,6 +171,116 @@ function justifyClass(value: unknown): string {
 function alignClass(value: unknown): string {
   return `a2ui-align--${String(value ?? 'stretch')}`;
 }
+
+function activateTab(event: KeyboardEvent, index: number) {
+  const tabs = values.value.tabs as unknown[] | undefined;
+  const lastIndex = Math.max(0, (tabs?.length ?? 1) - 1);
+  let nextIndex: number | null = null;
+
+  if (event.key === 'ArrowRight') nextIndex = index >= lastIndex ? 0 : index + 1;
+  if (event.key === 'ArrowLeft') nextIndex = index <= 0 ? lastIndex : index - 1;
+  if (event.key === 'Home') nextIndex = 0;
+  if (event.key === 'End') nextIndex = lastIndex;
+
+  if (nextIndex === null) {
+    return;
+  }
+
+  event.preventDefault();
+  activeTab.value = nextIndex;
+  const buttons = (event.currentTarget as HTMLElement).parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]');
+  buttons?.[nextIndex]?.focus();
+}
+
+function getModalFocusableElements(): HTMLElement[] {
+  if (!modalDialogRef.value) {
+    return [];
+  }
+
+  return Array.from(modalDialogRef.value.querySelectorAll<HTMLElement>(
+    'button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])'
+  )).filter((element) => !element.hasAttribute('hidden'));
+}
+
+function resolveModalReturnFocus(event?: MouseEvent): HTMLElement | null {
+  const activeElement = document.activeElement;
+  if (
+    activeElement instanceof HTMLElement
+    && activeElement !== document.body
+    && activeElement !== document.documentElement
+  ) {
+    return activeElement;
+  }
+
+  const eventTarget = event?.target;
+  if (eventTarget instanceof Element) {
+    const focusableTarget = eventTarget.closest<HTMLElement>(
+      'button, input, textarea, select, a[href], [tabindex]:not([tabindex="-1"])'
+    );
+    if (focusableTarget) {
+      return focusableTarget;
+    }
+  }
+
+  return modalTriggerRef.value?.querySelector<HTMLElement>(
+    'button, input, textarea, select, a[href], [tabindex]:not([tabindex="-1"])'
+  ) ?? modalTriggerRef.value;
+}
+
+async function openModal(event?: MouseEvent) {
+  if (modalOpen.value) {
+    return;
+  }
+
+  modalReturnFocus = resolveModalReturnFocus(event);
+  modalOpen.value = true;
+  await nextTick();
+  (getModalFocusableElements()[0] ?? modalDialogRef.value)?.focus();
+}
+
+async function closeModal() {
+  if (!modalOpen.value) {
+    return;
+  }
+
+  modalOpen.value = false;
+  await nextTick();
+  modalReturnFocus?.focus();
+  modalReturnFocus = null;
+}
+
+function handleModalKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    void closeModal();
+    return;
+  }
+
+  if (event.key !== 'Tab') {
+    return;
+  }
+
+  const focusable = getModalFocusableElements();
+  if (focusable.length === 0) {
+    event.preventDefault();
+    modalDialogRef.value?.focus();
+    return;
+  }
+
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last?.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first?.focus();
+  }
+}
+
+onBeforeUnmount(() => {
+  modalReturnFocus = null;
+});
 </script>
 
 <template>
@@ -161,7 +292,13 @@ function alignClass(value: unknown): string {
     :style="weightStyle"
     :aria-label="ariaLabel || undefined"
   >
-    {{ String(values.text ?? '') }}
+    <template v-for="(segment, index) in textSegments" :key="index">
+      <code v-if="segment.code">{{ segment.text }}</code>
+      <strong v-else-if="segment.strong">{{ segment.text }}</strong>
+      <em v-else-if="segment.emphasis">{{ segment.text }}</em>
+      <del v-else-if="segment.deleted">{{ segment.text }}</del>
+      <template v-else>{{ segment.text }}</template>
+    </template>
   </component>
 
   <figure v-else-if="componentType === 'Image'" class="agentdown-a2ui-media" :style="weightStyle">
@@ -245,7 +382,9 @@ function alignClass(value: unknown): string {
         role="tab"
         :aria-selected="activeTab === index"
         :aria-controls="`${componentId}-panel-${index}`"
+        :tabindex="activeTab === index ? 0 : -1"
         @click="activeTab = index"
+        @keydown="activateTab($event, index)"
       >
         {{ String(tab.title ?? `Tab ${index + 1}`) }}
       </button>
@@ -255,23 +394,31 @@ function alignClass(value: unknown): string {
       role="tabpanel"
       :aria-labelledby="`${componentId}-tab-${activeTab}`"
       class="agentdown-a2ui-tabs__panel"
+      tabindex="0"
     >
       <slot :name="`tab-${activeTab}`" />
     </div>
   </section>
 
   <div v-else-if="componentType === 'Modal'" class="agentdown-a2ui-modal">
-    <div class="agentdown-a2ui-modal__trigger" @click="modalOpen = true">
+    <div ref="modalTriggerRef" class="agentdown-a2ui-modal__trigger" @click="openModal">
       <slot name="trigger" />
     </div>
-    <div v-if="modalOpen" class="agentdown-a2ui-modal__backdrop" @click.self="modalOpen = false">
+    <div
+      v-if="modalOpen"
+      class="agentdown-a2ui-modal__backdrop"
+      @click.self="closeModal"
+      @keydown="handleModalKeydown"
+    >
       <section
+        ref="modalDialogRef"
         class="agentdown-a2ui-modal__dialog"
         role="dialog"
         aria-modal="true"
         :aria-label="ariaLabel || 'Dialog'"
+        tabindex="-1"
       >
-        <button type="button" class="agentdown-a2ui-modal__close" aria-label="Close" @click="modalOpen = false">×</button>
+        <button type="button" class="agentdown-a2ui-modal__close" aria-label="Close" @click="closeModal">×</button>
         <slot name="content" />
       </section>
     </div>
@@ -319,6 +466,7 @@ function alignClass(value: unknown): string {
       v-if="values.variant === 'longText'"
       :value="String(values.value ?? '')"
       :aria-invalid="isInvalid"
+      :aria-describedby="isInvalid ? validationErrorId : ariaDescription ? `${componentId}-description` : undefined"
       @input="updateTextField"
     />
     <input
@@ -326,9 +474,15 @@ function alignClass(value: unknown): string {
       :type="values.variant === 'obscured' ? 'password' : values.variant === 'number' ? 'number' : 'text'"
       :value="String(values.value ?? '')"
       :aria-invalid="isInvalid"
+      :aria-describedby="isInvalid ? validationErrorId : ariaDescription ? `${componentId}-description` : undefined"
       @input="updateTextField"
     >
-    <small v-for="error in validationErrors" :key="error" class="agentdown-a2ui-field__error">{{ error }}</small>
+    <small
+      v-for="(error, index) in validationErrors"
+      :id="index === 0 ? validationErrorId : undefined"
+      :key="error"
+      class="agentdown-a2ui-field__error"
+    >{{ error }}</small>
   </label>
 
   <label v-else-if="componentType === 'CheckBox'" class="agentdown-a2ui-checkbox">
@@ -336,9 +490,21 @@ function alignClass(value: unknown): string {
     <span>{{ String(values.label ?? '') }}</span>
   </label>
 
-  <fieldset v-else-if="componentType === 'ChoicePicker'" class="agentdown-a2ui-choice">
+  <fieldset
+    v-else-if="componentType === 'ChoicePicker'"
+    class="agentdown-a2ui-choice"
+    :class="`agentdown-a2ui-choice--${String(values.displayStyle ?? 'checkbox')}`"
+  >
     <legend v-if="values.label">{{ String(values.label) }}</legend>
-    <label v-for="option in (values.options as any[] ?? [])" :key="String(option.value)">
+    <input
+      v-if="values.filterable"
+      v-model="choiceFilter"
+      type="search"
+      class="agentdown-a2ui-choice__filter"
+      :aria-label="`${String(values.label ?? '选项')}筛选`"
+    >
+    <div class="agentdown-a2ui-choice__options">
+    <label v-for="option in filteredChoiceOptions" :key="String(option.value)">
       <input
         :type="values.variant === 'mutuallyExclusive' ? 'radio' : 'checkbox'"
         :name="values.variant === 'mutuallyExclusive' ? componentId : undefined"
@@ -347,6 +513,7 @@ function alignClass(value: unknown): string {
       >
       <span>{{ String(option.label ?? option.value) }}</span>
     </label>
+    </div>
   </fieldset>
 
   <label v-else-if="componentType === 'Slider'" class="agentdown-a2ui-field">
@@ -356,6 +523,7 @@ function alignClass(value: unknown): string {
       :min="Number(values.min ?? 0)"
       :max="Number(values.max ?? 100)"
       :value="Number(values.value ?? 0)"
+      :aria-label="String(values.label ?? 'Slider')"
       :aria-invalid="isInvalid"
       @input="updateSlider"
     >
@@ -453,5 +621,11 @@ function alignClass(value: unknown): string {
 .agentdown-a2ui-field__error { color: #b42318; }
 .agentdown-a2ui-checkbox, .agentdown-a2ui-choice label { display: flex; align-items: center; gap: 0.5rem; }
 .agentdown-a2ui-choice { display: grid; gap: 0.45rem; margin: 0; padding: 0; border: 0; }
+.agentdown-a2ui-choice__filter { width: 100%; box-sizing: border-box; padding: 0.5rem 0.65rem; border: 1px solid var(--agentdown-border, #cbd5e1); border-radius: 0.6rem; font: inherit; }
+.agentdown-a2ui-choice__options { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.agentdown-a2ui-choice--checkbox .agentdown-a2ui-choice__options { flex-direction: column; align-items: flex-start; }
+.agentdown-a2ui-choice--chips label { position: relative; padding: 0.42rem 0.68rem; border: 1px solid var(--agentdown-border, #cbd5e1); border-radius: 999px; cursor: pointer; }
+.agentdown-a2ui-choice--chips label:has(input:checked) { border-color: var(--agentdown-accent, #4f46e5); background: color-mix(in srgb, var(--agentdown-accent, #4f46e5) 12%, transparent); color: var(--agentdown-accent, #4f46e5); }
+.agentdown-a2ui-choice--chips label input { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .agentdown-a2ui-unsupported { padding: 0.75rem; border: 1px solid #fda29b; border-radius: 0.6rem; color: #b42318; background: #fff1f0; }
 </style>
