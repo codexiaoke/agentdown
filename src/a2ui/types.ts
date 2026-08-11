@@ -64,9 +64,9 @@ export interface A2UiElementProps {
   resolvedProps: Record<string, unknown>;
   surface: SurfaceModel<ComponentApi>;
   securityPolicy: A2UiSecurityPolicy;
-  /** 当前组件最近一次服务端 action 的生命周期状态。 */
+  /** 当前组件的 transport delivery 或宿主 execution 状态。 */
   actionState?: A2UiActionState;
-  /** 使用原请求 id 和原始数据重试最近一次失败的 action。 */
+  /** 重试 delivery 失败，或委托宿主重试明确允许重试的 execution 失败。 */
   retryAction?: () => Promise<boolean>;
   /** 宿主正在恢复或执行其他互斥操作时统一禁止交互。 */
   interactionDisabled?: boolean;
@@ -109,27 +109,81 @@ export interface A2UiClientTransportEnvelope extends A2UiClientMetadata {
   message?: A2uiClientMessage;
 }
 
-/** A2UI 服务端 action 的客户端生命周期。 */
-export type A2UiActionStatus = 'pending' | 'succeeded' | 'failed';
+/** 客户端把 action envelope 交给宿主 transport 的状态。 */
+export type A2UiActionDeliveryStatus = 'sending' | 'delivered' | 'failed';
 
-/**
- * 一个组件最近一次 action 的状态。
- *
- * `requestId` 在失败重试时保持不变，后端可直接把它用作幂等键。
- */
-export interface A2UiActionState {
+/** 宿主执行 action 的业务状态；Agentdown 不自行推断这些状态。 */
+export type A2UiActionExecutionStatus = 'pending' | 'succeeded' | 'failed' | 'cancelled';
+
+interface A2UiActionStateBase {
   key: string;
   requestId: string;
-  action: A2uiClientAction;
-  status: A2UiActionStatus;
+  surfaceId: string;
+  sourceComponentId: string;
   attempt: number;
   startedAt: number;
   settledAt?: number;
   error?: string;
+  retryable?: boolean;
 }
 
-/** 按 `surfaceId + sourceComponentId` 索引的 action 状态快照。 */
+/**
+ * Agentdown 自己拥有的 transport delivery 状态。
+ *
+ * `delivered` 只表示宿主 callback 已正常返回，不代表业务 action 成功。
+ */
+export interface A2UiActionDeliveryState extends A2UiActionStateBase {
+  phase: 'delivery';
+  action: A2uiClientAction;
+  status: A2UiActionDeliveryStatus;
+}
+
+/** 宿主提供的业务 action 状态。 */
+export interface A2UiActionExecutionState extends A2UiActionStateBase {
+  phase: 'execution';
+  action?: A2uiClientAction;
+  status: A2UiActionExecutionStatus;
+}
+
+/** Renderer 当前展示的状态：宿主 execution 状态优先于本地 delivery 状态。 */
+export type A2UiActionState = A2UiActionDeliveryState | A2UiActionExecutionState;
+
+/** 按 `surfaceId + sourceComponentId` 索引的 Renderer action 状态。 */
 export type A2UiActionStateMap = Readonly<Record<string, A2UiActionState>>;
+
+/** 宿主状态源提供的业务 action 状态表。 */
+export type A2UiActionExecutionStateMap = Readonly<Record<string, A2UiActionExecutionState>>;
+
+/** 宿主向 Agentdown 投影的只读 action execution 快照。 */
+export interface A2UiActionExecutionSnapshot {
+  surfaceId: string;
+  interactionDisabled?: boolean;
+  states: A2UiActionExecutionStateMap;
+}
+
+export type A2UiActionExecutionStateListener = (
+  snapshot: A2UiActionExecutionSnapshot
+) => void;
+
+/**
+ * 由应用宿主实现的只读 action 状态源。
+ *
+ * 它可以来自后端订阅、AG-UI runtime 或纯本地 executor；Agentdown 不规定存储和传输方式。
+ */
+export interface A2UiActionStateSource {
+  getSnapshot: (surfaceId: string) => A2UiActionExecutionSnapshot;
+  subscribe: (
+    surfaceId: string,
+    listener: A2UiActionExecutionStateListener
+  ) => () => void;
+}
+
+/** Agentdown 合并宿主 execution 状态和本地 delivery 状态后的只读快照。 */
+export interface A2UiActionStateSnapshot {
+  surfaceId: string;
+  interactionDisabled: boolean;
+  states: A2UiActionStateMap;
+}
 
 /** 生成 action 状态表使用的稳定组件 key。 */
 export function createA2UiActionStateKey(

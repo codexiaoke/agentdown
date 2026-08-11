@@ -98,9 +98,10 @@ async function sendToBackend(envelope: A2UiClientEnvelope) {
 </template>
 ```
 
-`sendClientMessage` 是可等待的 transport callback。它返回的 Promise 会驱动按钮的
-`pending / succeeded / failed` 状态；`@client-message` 仍可用于埋点观察，但不会被 Vue
-等待，因此不能代替 transport callback。
+`sendClientMessage` 是可等待的 transport callback。它返回的 Promise 只驱动
+`sending / delivered / failed` delivery 状态：`delivered` 表示 envelope 已交给宿主，
+不表示业务 action 已成功。`@client-message` 仍可用于埋点观察，但不会被 Vue 等待，
+因此不能代替 transport callback。
 
 `A2UiSurface` 内部持有长生命周期 `MessageProcessor`。当服务端消息历史只是追加时，它只处理新增消息，不重放旧历史，因此用户在 TextField、ChoicePicker 等组件中的本地输入不会被下一条服务端消息覆盖。只有历史发生替换或回退时才重建 Surface。
 
@@ -259,19 +260,52 @@ useAgUiA2UiChatSession({
 
 也可以直接调用 `session.sendA2UiClient(envelope)`。
 
-## Action 生命周期
+## Action 状态边界
 
-Basic Catalog 的 Button 默认具备完整的服务端 action 状态：
+Agentdown 是前端库，因此把 transport delivery 与业务 execution 明确分开：
 
-- 请求中显示“处理中…”并禁用，阻止双击重复提交
-- 成功后恢复可交互状态
-- 失败时保留 Surface 和表单数据，在原按钮下显示错误与“重试”
-- 重试复用原始 action、data model 和 `requestId`
-- AG-UI 断线重连期间统一禁止 Surface action，避免恢复中的重复业务操作
+- Agentdown 自己管理 `sending / delivered / failed`，用于阻止双击和重试发送失败；
+- 宿主通过可选 `A2UiActionStateSource` 投影 `pending / succeeded / failed / cancelled`；
+- `sendClientMessage` 正常返回绝不会被解释为业务 `succeeded`；
+- 宿主 execution 状态优先于同一组件的本地 delivery 状态；
+- `interactionDisabled` 可以来自组件 props，也可以来自宿主状态源；
+- 业务失败只有声明 `retryable: true` 且配置 `retryExecution` 时才显示重试入口。
 
-自定义 Catalog renderer 会收到同样的 `actionState`、`retryAction` 和
-`interactionDisabled` props，因此无需重新实现 transport 状态机。组合 helper 还通过
-`session.a2uiActionStates` 暴露会话级只读状态，方便宿主做埋点或全局提示。
+```ts
+import type {
+  A2UiActionExecutionSnapshot,
+  A2UiActionStateSource
+} from 'agentdown/a2ui';
+
+let snapshot: A2UiActionExecutionSnapshot = {
+  surfaceId: 'planner',
+  interactionDisabled: false,
+  states: {}
+};
+const listeners = new Set<(value: A2UiActionExecutionSnapshot) => void>();
+
+const actionStateSource: A2UiActionStateSource = {
+  getSnapshot: () => snapshot,
+  subscribe(_surfaceId, listener) {
+    listeners.add(listener);
+    return () => listeners.delete(listener);
+  }
+};
+
+// WebSocket、SSE、AG-UI runtime 或纯本地 executor 都可以更新同一个状态源。
+function updateActionState(next: A2UiActionExecutionSnapshot) {
+  snapshot = next;
+  listeners.forEach((listener) => listener(snapshot));
+}
+```
+
+将 `actionStateSource` 传给 `A2UiSurface`，或放入组合 helper 的
+`a2uiRenderer.actionStateSource`。Agentdown 不规定状态来自后端还是本地 executor，仓库内
+FastAPI 仅用于示例和端到端测试。
+
+自定义 Catalog renderer 会收到合并后的 `actionState`、`retryAction` 和
+`interactionDisabled` props。组合 helper 还通过 `session.a2uiActionStates` 暴露会话级
+只读快照，方便宿主做埋点或全局提示。
 
 ## Catalog 与安全边界
 

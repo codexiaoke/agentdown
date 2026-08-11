@@ -9,8 +9,13 @@ import type {
 } from '@a2ui/web_core/v0_9';
 import { createA2UiProcessor, type A2UiProcessor } from './processor';
 import type {
+  A2UiActionDeliveryState,
+  A2UiActionExecutionSnapshot,
+  A2UiActionExecutionState,
   A2UiActionState,
   A2UiActionStateMap,
+  A2UiActionStateSnapshot,
+  A2UiActionStateSource,
   A2UiClientEnvelope,
   A2UiSecurityPolicy,
   A2UiVersion,
@@ -27,10 +32,11 @@ export interface CreateA2UiSurfaceControllerOptions<T extends ComponentApi = Com
   includeInlineCatalogs?: boolean;
   onChange?: (surface: SurfaceModel<T> | undefined) => void;
   onClientMessage?: (envelope: A2UiClientEnvelope) => void | Promise<void>;
-  onActionStateChange?: (
-    state: A2UiActionState,
-    states: A2UiActionStateMap
-  ) => void;
+  /** 宿主拥有的业务 action 状态源；未提供时只展示 transport delivery 状态。 */
+  actionStateSource?: A2UiActionStateSource;
+  /** 宿主允许业务失败重试时负责重新执行；Agentdown 不推断执行策略。 */
+  retryExecution?: (state: A2UiActionExecutionState) => void | Promise<void>;
+  onActionStateChange?: (snapshot: A2UiActionStateSnapshot) => void;
   /** 测试或宿主需要接管 id 规则时使用；默认生成随机稳定 id。 */
   createClientRequestId?: () => string;
 }
@@ -55,12 +61,13 @@ export interface A2UiSurfaceController<T extends ComponentApi = ComponentApi> {
   ) => A2UiClientEnvelope;
   getActionState: (sourceComponentId: string) => A2UiActionState | undefined;
   getActionStates: () => A2UiActionStateMap;
+  getActionStateSnapshot: () => A2UiActionStateSnapshot;
   retryAction: (sourceComponentId: string) => Promise<boolean>;
   dispose: () => void;
 }
 
 interface A2UiActionRecord {
-  state: A2UiActionState;
+  state: A2UiActionDeliveryState;
   envelope: A2UiClientEnvelope;
 }
 
@@ -90,6 +97,25 @@ function isPrefix(previous: readonly string[], next: readonly string[]): boolean
     && previous.every((entry, index) => entry === next[index]);
 }
 
+function copyExecutionSnapshot(
+  snapshot: A2UiActionExecutionSnapshot,
+  surfaceId: string
+): A2UiActionExecutionSnapshot {
+  if (snapshot.surfaceId !== surfaceId) {
+    throw new Error(
+      `A2UI action state source returned surface "${snapshot.surfaceId}" for "${surfaceId}".`
+    );
+  }
+
+  return {
+    surfaceId,
+    interactionDisabled: snapshot.interactionDisabled === true,
+    states: Object.freeze(Object.fromEntries(
+      Object.entries(snapshot.states).map(([key, state]) => [key, { ...state }])
+    ))
+  };
+}
+
 /**
  * 持有一个长生命周期 A2UI Surface。
  *
@@ -105,6 +131,12 @@ export function createA2UiSurfaceController<T extends ComponentApi = ComponentAp
   let surfaceSubscriptions: Subscription[] = [];
   let disposed = false;
   const actionRecords = new Map<string, A2UiActionRecord>();
+  let executionSnapshot: A2UiActionExecutionSnapshot = {
+    surfaceId: options.surfaceId,
+    interactionDisabled: false,
+    states: {}
+  };
+  let unsubscribeActionStateSource: (() => void) | undefined;
 
   function clearSubscriptions(subscriptions: Subscription[]) {
     subscriptions.forEach((subscription) => subscription.unsubscribe());
@@ -156,13 +188,30 @@ export function createA2UiSurfaceController<T extends ComponentApi = ComponentAp
   }
 
   function getActionStates(): A2UiActionStateMap {
-    return Object.freeze(Object.fromEntries(
+    const deliveryStates = Object.fromEntries(
       Array.from(actionRecords, ([key, record]) => [key, { ...record.state }])
-    ));
+    );
+    return Object.freeze({
+      ...deliveryStates,
+      ...Object.fromEntries(
+        Object.entries(executionSnapshot.states).map(([key, state]) => [key, {
+          ...state,
+          retryable: state.retryable === true && options.retryExecution !== undefined
+        }])
+      )
+    });
   }
 
-  function notifyActionState(record: A2UiActionRecord) {
-    options.onActionStateChange?.({ ...record.state }, getActionStates());
+  function getActionStateSnapshot(): A2UiActionStateSnapshot {
+    return Object.freeze({
+      surfaceId: options.surfaceId,
+      interactionDisabled: executionSnapshot.interactionDisabled === true,
+      states: getActionStates()
+    });
+  }
+
+  function notifyActionState() {
+    options.onActionStateChange?.(getActionStateSnapshot());
   }
 
   async function deliverAction(record: A2UiActionRecord): Promise<void> {
@@ -170,7 +219,7 @@ export function createA2UiSurfaceController<T extends ComponentApi = ComponentAp
       await options.onClientMessage?.(record.envelope);
       record.state = {
         ...record.state,
-        status: 'succeeded',
+        status: 'delivered',
         settledAt: Date.now()
       };
     } catch (error) {
@@ -178,16 +227,20 @@ export function createA2UiSurfaceController<T extends ComponentApi = ComponentAp
         ...record.state,
         status: 'failed',
         settledAt: Date.now(),
-        error: resolveActionError(error)
+        error: resolveActionError(error),
+        retryable: true
       };
     }
-    notifyActionState(record);
+    notifyActionState();
   }
 
   async function emitAction(action: A2uiClientAction): Promise<void> {
     const key = createA2UiActionStateKey(action.surfaceId, action.sourceComponentId);
-    const active = actionRecords.get(key);
-    if (active?.state.status === 'pending') {
+    const active = getActionStates()[key];
+    if (
+      (active?.phase === 'delivery' && active.status === 'sending')
+      || (active?.phase === 'execution' && active.status === 'pending')
+    ) {
       return;
     }
 
@@ -195,16 +248,19 @@ export function createA2UiSurfaceController<T extends ComponentApi = ComponentAp
     const record: A2UiActionRecord = {
       envelope,
       state: {
+        phase: 'delivery',
         key,
         requestId: envelope.requestId,
+        surfaceId: action.surfaceId,
+        sourceComponentId: action.sourceComponentId,
         action,
-        status: 'pending',
+        status: 'sending',
         attempt: 1,
         startedAt: Date.now()
       }
     };
     actionRecords.set(key, record);
-    notifyActionState(record);
+    notifyActionState();
     await deliverAction(record);
   }
 
@@ -214,6 +270,17 @@ export function createA2UiSurfaceController<T extends ComponentApi = ComponentAp
 
   async function retryAction(sourceComponentId: string): Promise<boolean> {
     const key = createA2UiActionStateKey(options.surfaceId, sourceComponentId);
+    const activeState = getActionStates()[key];
+    if (
+      activeState?.phase === 'execution'
+      && activeState.status === 'failed'
+      && activeState.retryable === true
+      && options.retryExecution
+    ) {
+      await options.retryExecution({ ...activeState });
+      return true;
+    }
+
     const record = actionRecords.get(key);
     if (!record || record.state.status !== 'failed') {
       return false;
@@ -222,17 +289,18 @@ export function createA2UiSurfaceController<T extends ComponentApi = ComponentAp
     const {
       settledAt: _settledAt,
       error: _error,
-      ...activeState
+      retryable: _retryable,
+      ...deliveryState
     } = record.state;
     record.state = {
-      ...activeState,
-      status: 'pending',
+      ...deliveryState,
+      status: 'sending',
       attempt: record.state.attempt + 1,
       startedAt: Date.now()
     };
-    notifyActionState(record);
+    notifyActionState();
     await deliverAction(record);
-    return record.state.status === 'succeeded';
+    return record.state.status === 'delivered';
   }
 
   function createProcessor(): A2UiProcessor<T> {
@@ -263,6 +331,22 @@ export function createA2UiSurfaceController<T extends ComponentApi = ComponentAp
   }
 
   processor = createProcessor();
+
+  if (options.actionStateSource) {
+    executionSnapshot = copyExecutionSnapshot(
+      options.actionStateSource.getSnapshot(options.surfaceId),
+      options.surfaceId
+    );
+    unsubscribeActionStateSource = options.actionStateSource.subscribe(
+      options.surfaceId,
+      (snapshot) => {
+        if (disposed) return;
+        executionSnapshot = copyExecutionSnapshot(snapshot, options.surfaceId);
+        notifyActionState();
+      }
+    );
+  }
+  notifyActionState();
 
   function rebuild(messages: ReadonlyArray<unknown>): A2UiSurfaceSyncResult {
     clearSubscriptions(surfaceSubscriptions);
@@ -311,6 +395,7 @@ export function createA2UiSurfaceController<T extends ComponentApi = ComponentAp
     },
     reset() {
       actionRecords.clear();
+      notifyActionState();
       rebuild([]);
     },
     getSurface() {
@@ -318,14 +403,19 @@ export function createA2UiSurfaceController<T extends ComponentApi = ComponentAp
     },
     createClientEnvelope,
     getActionState(sourceComponentId) {
-      const record = actionRecords.get(createA2UiActionStateKey(options.surfaceId, sourceComponentId));
-      return record ? { ...record.state } : undefined;
+      const state = getActionStates()[
+        createA2UiActionStateKey(options.surfaceId, sourceComponentId)
+      ];
+      return state ? { ...state } : undefined;
     },
     getActionStates,
+    getActionStateSnapshot,
     retryAction,
     dispose() {
       if (disposed) return;
       disposed = true;
+      unsubscribeActionStateSource?.();
+      unsubscribeActionStateSource = undefined;
       clearSubscriptions(surfaceSubscriptions);
       clearSubscriptions(processorSubscriptions);
       processor.dispose();

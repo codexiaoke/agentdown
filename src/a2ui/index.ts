@@ -17,9 +17,17 @@ export {
 } from './types';
 export type {
   A2UiAction,
+  A2UiActionDeliveryState,
+  A2UiActionDeliveryStatus,
+  A2UiActionExecutionSnapshot,
+  A2UiActionExecutionState,
+  A2UiActionExecutionStateListener,
+  A2UiActionExecutionStateMap,
+  A2UiActionExecutionStatus,
   A2UiActionState,
   A2UiActionStateMap,
-  A2UiActionStatus,
+  A2UiActionStateSnapshot,
+  A2UiActionStateSource,
   A2UiClientEnvelope,
   A2UiClientMetadata,
   A2UiClientTransportEnvelope,

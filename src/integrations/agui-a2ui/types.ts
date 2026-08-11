@@ -1,7 +1,9 @@
 import type { MaybeRefOrGetter, ShallowRef } from 'vue';
 import type {
-  A2UiActionState,
+  A2UiActionExecutionState,
   A2UiActionStateMap,
+  A2UiActionStateSnapshot,
+  A2UiActionStateSource,
   A2UiClientEnvelope,
   A2UiClientTransportEnvelope,
   A2UiSecurityPolicy,
@@ -19,10 +21,9 @@ export interface AgUiA2UiRendererOptions {
   version?: A2UiVersion;
   includeInlineCatalogs?: boolean;
   securityPolicy?: Partial<A2UiSecurityPolicy>;
-  onActionStateChange?: (
-    state: A2UiActionState,
-    states: A2UiActionStateMap
-  ) => void;
+  actionStateSource?: A2UiActionStateSource;
+  retryExecution?: (state: A2UiActionExecutionState) => void | Promise<void>;
+  onActionStateChange?: (snapshot: A2UiActionStateSnapshot) => void;
 }
 
 export interface AgUiA2UiAdapterOptions<
