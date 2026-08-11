@@ -8,9 +8,19 @@ import { serializeAgUiA2UiForwardedProps, useAgUiA2UiChatSession } from './chat'
 describe('useAgUiA2UiChatSession', () => {
   it('installs the opt-in interactive A2UI renderer', () => {
     const scope = effectScope();
+    const actionStateSource = {
+      getSnapshot: (surfaceId: string) => ({
+        surfaceId,
+        interactionDisabled: false,
+        states: {}
+      }),
+      subscribe: () => () => undefined
+    };
+    const retryExecution = vi.fn();
     const session = scope.run(() => useAgUiA2UiChatSession<string>({
       source: '/api/stream/agui',
-      conversationId: 'thread:test'
+      conversationId: 'thread:test',
+      a2uiRenderer: { actionStateSource, retryExecution }
     }));
     expect(session).toBeDefined();
 
@@ -31,6 +41,8 @@ describe('useAgUiA2UiChatSession', () => {
     });
     expect(rendererProps?.sendClientMessage).toEqual(expect.any(Function));
     expect(rendererProps?.onActionStateChange).toEqual(expect.any(Function));
+    expect(rendererProps?.actionStateSource).toBe(actionStateSource);
+    expect(rendererProps?.retryExecution).toBe(retryExecution);
     expect(rendererProps?.interactionDisabled).toBe(false);
     expect(session!.a2uiClientError.value).toBeNull();
     expect(session!.a2uiActionStates.value).toEqual({});

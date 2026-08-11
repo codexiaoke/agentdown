@@ -4,8 +4,8 @@ import {
   A2UiSurface,
   createA2UiClientCapabilities,
   defaultA2UiBasicCatalog,
-  type A2UiActionState,
   type A2UiActionStateMap,
+  type A2UiActionStateSnapshot,
   type A2UiClientEnvelope,
   type A2UiClientTransportEnvelope
 } from '../../a2ui';
@@ -83,6 +83,17 @@ export function useAgUiA2UiChatSession<TSource = RequestInfo | URL>(
   };
   let sendQueue: Promise<void> = Promise.resolve();
   const inFlightRequests = new Map<string, Promise<void>>();
+  const surfaceActionStateKeys = new Map<string, Set<string>>();
+
+  function mergeActionStateSnapshot(snapshot: A2UiActionStateSnapshot) {
+    const next = { ...a2uiActionStates.value };
+    for (const key of surfaceActionStateKeys.get(snapshot.surfaceId) ?? []) {
+      delete next[key];
+    }
+    Object.assign(next, snapshot.states);
+    surfaceActionStateKeys.set(snapshot.surfaceId, new Set(Object.keys(snapshot.states)));
+    a2uiActionStates.value = next;
+  }
 
   const transportOptions: Omit<
     AgUiSseTransportOptions<TSource, FrameworkChatTransportContext>,
@@ -124,16 +135,19 @@ export function useAgUiA2UiChatSession<TSource = RequestInfo | URL>(
           ...(rendererOptions?.securityPolicy
             ? { securityPolicy: rendererOptions.securityPolicy }
             : {}),
+          ...(rendererOptions?.actionStateSource
+            ? { actionStateSource: rendererOptions.actionStateSource }
+            : {}),
+          ...(rendererOptions?.retryExecution
+            ? { retryExecution: rendererOptions.retryExecution }
+            : {}),
           interactionDisabled: a2uiTransportBusy.value,
           sendClientMessage(envelope: A2UiClientEnvelope) {
             return sendA2UiClient(envelope);
           },
-          onActionStateChange(state: A2UiActionState, states: A2UiActionStateMap) {
-            a2uiActionStates.value = {
-              ...a2uiActionStates.value,
-              [state.key]: state
-            };
-            rendererOptions?.onActionStateChange?.(state, states);
+          onActionStateChange(snapshot: A2UiActionStateSnapshot) {
+            mergeActionStateSnapshot(snapshot);
+            rendererOptions?.onActionStateChange?.(snapshot);
           }
         })
       }

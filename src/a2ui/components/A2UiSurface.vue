@@ -11,8 +11,9 @@ import {
   type A2UiSurfaceController
 } from '../surfaceController';
 import type {
-  A2UiActionState,
-  A2UiActionStateMap,
+  A2UiActionExecutionState,
+  A2UiActionStateSnapshot,
+  A2UiActionStateSource,
   A2UiClientEnvelope,
   A2UiErrorContext,
   A2UiSecurityPolicy,
@@ -34,10 +35,14 @@ interface Props {
   block?: SurfaceBlock<A2UiSurfaceBlockData>;
   emitIntent?: (intent: Omit<RuntimeIntent, 'id' | 'at'>) => RuntimeIntent;
   /**
-   * 可等待的 transport 回调。与 `@client-message` 不同，它的 Promise 会直接驱动
-   * action pending / success / error 生命周期。
+   * 可等待的 transport 回调。Promise 只表示 envelope 是否成功交给宿主，
+   * 不代表业务 action 已执行成功。
    */
   sendClientMessage?: (envelope: A2UiClientEnvelope) => void | Promise<void>;
+  /** 宿主拥有的只读业务 action 状态源。 */
+  actionStateSource?: A2UiActionStateSource;
+  /** 宿主允许业务失败重试时负责重新执行。 */
+  retryExecution?: (state: A2UiActionExecutionState) => void | Promise<void>;
   /** 恢复连接或宿主执行互斥操作时统一禁止 Surface action。 */
   interactionDisabled?: boolean;
 }
@@ -49,7 +54,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{
   clientMessage: [envelope: A2UiClientEnvelope];
-  actionStateChange: [state: A2UiActionState, states: A2UiActionStateMap];
+  actionStateChange: [snapshot: A2UiActionStateSnapshot];
   error: [context: A2UiErrorContext];
 }>();
 
@@ -57,7 +62,11 @@ const controller = shallowRef<A2UiSurfaceController<ComponentApi> | null>(null);
 const surface = shallowRef<SurfaceModel<ComponentApi> | null>(null);
 const revision = ref(0);
 const errorMessage = ref<string | null>(null);
-const actionStates = shallowRef<A2UiActionStateMap>({});
+const actionStateSnapshot = shallowRef<A2UiActionStateSnapshot>({
+  surfaceId: '',
+  interactionDisabled: false,
+  states: {}
+});
 
 const blockData = computed<A2UiSurfaceBlockData | null>(() => {
   const data = props.block?.data;
@@ -66,6 +75,9 @@ const blockData = computed<A2UiSurfaceBlockData | null>(() => {
 const resolvedMessages = computed<ReadonlyArray<unknown>>(() => props.messages ?? blockData.value?.messages ?? []);
 const resolvedSurfaceId = computed(() => props.surfaceId ?? blockData.value?.surfaceId ?? 'root');
 const resolvedRootId = computed(() => props.rootId ?? blockData.value?.rootId ?? 'root');
+const resolvedInteractionDisabled = computed(() => (
+  props.interactionDisabled === true || actionStateSnapshot.value.interactionDisabled
+));
 const resolvedCatalog = computed(() => props.catalogs.find(
   (catalog) => catalog.id === surface.value?.catalog.id
 ));
@@ -74,7 +86,11 @@ function disposeController() {
   controller.value?.dispose();
   controller.value = null;
   surface.value = null;
-  actionStates.value = {};
+  actionStateSnapshot.value = {
+    surfaceId: resolvedSurfaceId.value,
+    interactionDisabled: false,
+    states: {}
+  };
 }
 
 function reportError(context: A2UiErrorContext) {
@@ -117,14 +133,16 @@ function rebuildController() {
       version: props.version,
       includeInlineCatalogs: props.includeInlineCatalogs,
       ...(props.securityPolicy ? { policy: props.securityPolicy } : {}),
+      ...(props.actionStateSource ? { actionStateSource: props.actionStateSource } : {}),
+      ...(props.retryExecution ? { retryExecution: props.retryExecution } : {}),
       onChange(nextSurface) {
         surface.value = nextSurface ?? null;
         revision.value += 1;
       },
       onClientMessage: handleClientMessage,
-      onActionStateChange(state, states) {
-        actionStates.value = states;
-        emit('actionStateChange', state, states);
+      onActionStateChange(snapshot) {
+        actionStateSnapshot.value = snapshot;
+        emit('actionStateChange', snapshot);
       }
     });
     controller.value = nextController;
@@ -144,7 +162,9 @@ watch(
     props.catalogs,
     props.version,
     props.includeInlineCatalogs,
-    props.securityPolicy
+    props.securityPolicy,
+    props.actionStateSource,
+    props.retryExecution
   ] as const,
   rebuildController,
   { immediate: true }
@@ -188,9 +208,9 @@ onBeforeUnmount(disposeController);
       base-path="/"
       :revision="revision"
       :security-policy="controller!.policy"
-      :action-states="actionStates"
+      :action-states="actionStateSnapshot.states"
       :retry-action="controller!.retryAction"
-      :interaction-disabled="interactionDisabled"
+      :interaction-disabled="resolvedInteractionDisabled"
     />
   </section>
 </template>

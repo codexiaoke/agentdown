@@ -3,7 +3,36 @@ import { createA2UiBasicCatalog } from './catalog';
 import { createA2UiClientCapabilities, createA2UiProcessor } from './processor';
 import { createA2UiSurfaceController } from './surfaceController';
 import { A2UI_BASIC_COMPONENT_NAMES } from './catalog';
-import { A2UI_BASIC_CATALOG_ID } from './types';
+import {
+  A2UI_BASIC_CATALOG_ID,
+  createA2UiActionStateKey,
+  type A2UiActionExecutionSnapshot,
+  type A2UiActionExecutionStateListener,
+  type A2UiActionStateSource
+} from './types';
+
+class MutableActionStateSource implements A2UiActionStateSource {
+  snapshot: A2UiActionExecutionSnapshot;
+  readonly listeners = new Set<A2UiActionExecutionStateListener>();
+
+  constructor(surfaceId: string) {
+    this.snapshot = { surfaceId, interactionDisabled: false, states: {} };
+  }
+
+  getSnapshot(): A2UiActionExecutionSnapshot {
+    return this.snapshot;
+  }
+
+  subscribe(_surfaceId: string, listener: A2UiActionExecutionStateListener): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  update(snapshot: A2UiActionExecutionSnapshot) {
+    this.snapshot = snapshot;
+    this.listeners.forEach((listener) => listener(snapshot));
+  }
+}
 
 function createMessages() {
   return [
@@ -271,7 +300,7 @@ describe('createA2UiProcessor', () => {
     controller.dispose();
   });
 
-  it('keeps one action pending and suppresses rapid duplicate dispatches', async () => {
+  it('keeps one action sending and suppresses rapid duplicate dispatches', async () => {
     let release: (() => void) | undefined;
     const pending = new Promise<void>((resolve) => {
       release = resolve;
@@ -283,8 +312,9 @@ describe('createA2UiProcessor', () => {
       catalogs: [createA2UiBasicCatalog()],
       onClientMessage,
       createClientRequestId: () => 'a2ui:request:deduplicated',
-      onActionStateChange(state) {
-        states.push(state.status);
+      onActionStateChange(snapshot) {
+        const state = Object.values(snapshot.states)[0];
+        if (state) states.push(state.status);
       }
     });
     controller.sync(createMessages());
@@ -300,14 +330,18 @@ describe('createA2UiProcessor', () => {
     expect(onClientMessage).toHaveBeenCalledTimes(1);
     expect(controller.getActionState('submit')).toMatchObject({
       requestId: 'a2ui:request:deduplicated',
-      status: 'pending',
+      phase: 'delivery',
+      status: 'sending',
       attempt: 1
     });
 
     release?.();
     await first;
-    expect(controller.getActionState('submit')?.status).toBe('succeeded');
-    expect(states).toEqual(['pending', 'succeeded']);
+    expect(controller.getActionState('submit')).toMatchObject({
+      phase: 'delivery',
+      status: 'delivered'
+    });
+    expect(states).toEqual(['sending', 'delivered']);
 
     controller.dispose();
   });
@@ -335,6 +369,7 @@ describe('createA2UiProcessor', () => {
 
     expect(controller.getActionState('submit')).toMatchObject({
       requestId: 'a2ui:request:retry',
+      phase: 'delivery',
       status: 'failed',
       attempt: 1,
       error: '网络暂时不可用'
@@ -342,13 +377,91 @@ describe('createA2UiProcessor', () => {
     expect(await controller.retryAction('submit')).toBe(true);
     expect(controller.getActionState('submit')).toMatchObject({
       requestId: 'a2ui:request:retry',
-      status: 'succeeded',
+      phase: 'delivery',
+      status: 'delivered',
       attempt: 2
     });
     expect(envelopes).toHaveLength(2);
     expect(envelopes[1]).toEqual(envelopes[0]);
 
     controller.dispose();
+  });
+
+  it('projects host execution state without treating delivery as business success', async () => {
+    const stateSource = new MutableActionStateSource('planner');
+    const retryExecution = vi.fn();
+    const controller = createA2UiSurfaceController({
+      surfaceId: 'planner',
+      catalogs: [createA2UiBasicCatalog()],
+      actionStateSource: stateSource,
+      retryExecution,
+      createClientRequestId: () => 'a2ui:request:host-state',
+      onClientMessage: vi.fn()
+    });
+    controller.sync(createMessages());
+
+    await controller.getSurface()!.dispatchAction({
+      event: { name: 'trip_submitted', context: { city: '杭州' } }
+    }, 'submit');
+
+    expect(controller.getActionState('submit')).toMatchObject({
+      phase: 'delivery',
+      status: 'delivered'
+    });
+
+    const key = createA2UiActionStateKey('planner', 'submit');
+    stateSource.update({
+      surfaceId: 'planner',
+      interactionDisabled: true,
+      states: {
+        [key]: {
+          phase: 'execution',
+          key,
+          requestId: 'a2ui:request:host-state',
+          surfaceId: 'planner',
+          sourceComponentId: 'submit',
+          status: 'pending',
+          attempt: 1,
+          startedAt: 100
+        }
+      }
+    });
+
+    expect(controller.getActionState('submit')).toMatchObject({
+      phase: 'execution',
+      status: 'pending'
+    });
+    expect(controller.getActionStateSnapshot().interactionDisabled).toBe(true);
+
+    stateSource.update({
+      surfaceId: 'planner',
+      interactionDisabled: false,
+      states: {
+        [key]: {
+          phase: 'execution',
+          key,
+          requestId: 'a2ui:request:host-state',
+          surfaceId: 'planner',
+          sourceComponentId: 'submit',
+          status: 'failed',
+          attempt: 1,
+          startedAt: 100,
+          settledAt: 200,
+          error: '库存不足',
+          retryable: true
+        }
+      }
+    });
+
+    expect(await controller.retryAction('submit')).toBe(true);
+    expect(retryExecution).toHaveBeenCalledWith(expect.objectContaining({
+      phase: 'execution',
+      status: 'failed',
+      requestId: 'a2ui:request:host-state'
+    }));
+
+    controller.dispose();
+    expect(stateSource.listeners).toHaveLength(0);
   });
 
   it('emits standard client error messages from the surface', async () => {

@@ -20,9 +20,18 @@ const validationErrors = computed(() => Array.isArray(values.value.validationErr
   ? values.value.validationErrors.map(String)
   : []);
 const isInvalid = computed(() => values.value.isValid === false || validationErrors.value.length > 0);
-const actionPending = computed(() => props.actionState?.status === 'pending');
+const actionPending = computed(() => (
+  props.actionState?.phase === 'delivery'
+    ? props.actionState.status === 'sending'
+    : props.actionState?.status === 'pending'
+));
 const actionFailed = computed(() => props.actionState?.status === 'failed');
-const actionError = computed(() => props.actionState?.error ?? '操作失败，请重试。');
+const actionRetryable = computed(() => props.actionState?.retryable === true);
+const actionError = computed(() => props.actionState?.error ?? (
+  props.actionState?.phase === 'delivery'
+    ? '消息发送失败。'
+    : '操作失败。'
+));
 const actionErrorId = computed(() => `${props.componentId}-action-error`);
 const actionDisabled = computed(() => (
   isInvalid.value || actionPending.value || props.interactionDisabled === true
@@ -295,7 +304,12 @@ function alignClass(value: unknown): string {
       role="alert"
     >
       <span>{{ actionError }}</span>
-      <button type="button" :disabled="interactionDisabled" @click="retryFailedAction">重试</button>
+      <button
+        v-if="actionRetryable"
+        type="button"
+        :disabled="interactionDisabled"
+        @click="retryFailedAction"
+      >重试</button>
     </div>
   </template>
 
