@@ -31,6 +31,9 @@ export { default as DefaultMarkdownThoughtBlock } from './components/ThoughtBloc
 export { default as DefaultMarkdownTimelineBlock } from './components/TimelineBlock.vue';
 export { defaultMarkdownBuiltinComponents } from './components/defaultMarkdownComponents';
 export { createAgentdownPlugin } from './config/plugin';
+export { createAgentdown, inspectAgentdownConfig } from './config/createAgentdown';
+export { describeAgentdownError, reportAgentdownDiagnostic } from './config/diagnostics';
+export { validateAgentdownConfig } from './config/validate';
 export {
   defineAgentdownConfig,
   defineAgentdownTheme,
@@ -857,6 +860,13 @@ export type {
 } from './runtime/defineProtocol';
 export type {
   AgentdownConfig,
+  AgentdownDiagnostic,
+  AgentdownDiagnosticHandler,
+  AgentdownDiagnosticLevel,
+  AgentdownDiagnosticScope,
+  AgentdownDiagnosticsConfig,
+  AgentdownMarkdownConfig,
+  AgentdownSurfaceConfig,
   AgentdownTheme,
   AgentdownThemeColorTokens,
   AgentdownThemeLayoutTokens,
@@ -865,6 +875,11 @@ export type {
   AgentdownThemeTokens,
   AgentdownThemeComponentTokens,
 } from './config/types';
+export type {
+  AgentdownConfigInspection,
+  AgentdownInstance
+} from './config/createAgentdown';
+export type { AgentdownDiagnosticInput } from './config/diagnostics';
 export type {
   FetchTransportSource,
   JsonRequestOptions,

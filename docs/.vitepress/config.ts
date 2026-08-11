@@ -41,6 +41,7 @@ export default defineConfig({
           items: [
             { text: '快速开始', link: '/guide/getting-started' },
             { text: '核心概念', link: '/guide/core-concepts' },
+            { text: '配置与扩展', link: '/guide/configuration' },
             { text: '内部架构边界', link: '/guide/architecture' },
             { text: '后端会话恢复', link: '/guide/backend-conversation-recovery' },
             { text: 'AG-UI 与 A2UI', link: '/guide/ag-ui-a2ui' },

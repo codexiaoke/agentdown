@@ -62,11 +62,8 @@ const props = withDefaults(defineProps<Props>(), {
   font: AGENTDOWN_DEFAULT_TEXT_FONT,
   thoughtTitle: '思考过程',
   allowUnsafeHtml: false,
-  htmlSanitizer: sanitizeAgentdownHtml,
   componentRegistry: () => ({}),
-  builtinComponents: () => ({}),
-  plugins: () => [],
-  performance: () => ({})
+  builtinComponents: () => ({})
 });
 const emit = defineEmits<{
   telemetry: [snapshot: MarkdownRendererTelemetry];
@@ -79,18 +76,36 @@ const mountedEndIndex = ref(0);
 const measuredHeights = shallowRef<Record<string, number>>({});
 const viewportSyncPasses = ref(0);
 const windowRangeChangeCount = ref(0);
+const resolvedAgentdownConfig = useAgentdownConfig(computed(() => {
+  return props.theme ? { theme: props.theme } : undefined;
+}));
+const resolvedPlugins = computed(() => (
+  props.plugins ?? resolvedAgentdownConfig.value.markdown?.plugins ?? []
+));
+const resolvedComponentRegistry = computed(() => ({
+  ...(resolvedAgentdownConfig.value.markdown?.componentRegistry ?? {}),
+  ...props.componentRegistry
+}));
+const resolvedHtmlSanitizer = computed(() => (
+  props.htmlSanitizer
+  ?? resolvedAgentdownConfig.value.markdown?.htmlSanitizer
+  ?? sanitizeAgentdownHtml
+));
 
 // source 变化时重新解析 block，但布局仍然依赖容器宽度单独计算。
 const blocks = computed(() =>
   parseMarkdown(props.source, {
-    plugins: props.plugins,
+    plugins: resolvedPlugins.value,
     thoughtTitle: props.thoughtTitle,
-    componentRegistry: props.componentRegistry,
+    componentRegistry: resolvedComponentRegistry.value,
     allowUnsafeHtml: props.allowUnsafeHtml
   })
 );
 const resolvedPerformance = computed<ResolvedMarkdownRendererPerformance>(() => {
-  return resolveMarkdownRendererPerformance(props.performance);
+  return resolveMarkdownRendererPerformance({
+    ...(resolvedAgentdownConfig.value.markdown?.performance ?? {}),
+    ...(props.performance ?? {})
+  });
 });
 const virtualOverscan = computed(() => parseMarkdownVirtualOverscan(resolvedPerformance.value.virtualizeMargin));
 const retainedOverscan = computed(() => ({
@@ -106,10 +121,8 @@ const renderableBlocks = computed(() => {
 });
 const resolvedBuiltinComponents = computed(() => ({
   ...defaultMarkdownBuiltinComponents,
+  ...(resolvedAgentdownConfig.value.markdown?.builtinComponents ?? {}),
   ...props.builtinComponents
-}));
-const resolvedAgentdownConfig = useAgentdownConfig(computed(() => {
-  return props.theme ? { theme: props.theme } : undefined;
 }));
 const resolvedThemeStyle = computed(() => {
   return resolveAgentdownThemeCssVars(resolvedAgentdownConfig.value.theme);
@@ -456,9 +469,9 @@ onBeforeUnmount(() => {
       :width="width"
       :line-height="lineHeight"
       :font="font"
-      :component-registry="componentRegistry"
+      :component-registry="resolvedComponentRegistry"
       :builtin-components="resolvedBuiltinComponents"
-      :html-sanitizer="htmlSanitizer"
+      :html-sanitizer="resolvedHtmlSanitizer"
     />
 
     <div
@@ -482,9 +495,9 @@ onBeforeUnmount(() => {
           :width="width"
           :line-height="lineHeight"
           :font="font"
-          :component-registry="componentRegistry"
+          :component-registry="resolvedComponentRegistry"
           :builtin-components="resolvedBuiltinComponents"
-          :html-sanitizer="htmlSanitizer"
+          :html-sanitizer="resolvedHtmlSanitizer"
           @measured="updateMeasuredHeight(entry.block.id, $event)"
         />
 
@@ -498,9 +511,9 @@ onBeforeUnmount(() => {
             :width="width"
             :line-height="lineHeight"
             :font="font"
-            :component-registry="componentRegistry"
+            :component-registry="resolvedComponentRegistry"
             :builtin-components="resolvedBuiltinComponents"
-            :html-sanitizer="htmlSanitizer"
+            :html-sanitizer="resolvedHtmlSanitizer"
           />
         </div>
       </template>

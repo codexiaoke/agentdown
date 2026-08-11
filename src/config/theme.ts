@@ -5,6 +5,7 @@ import type {
   AgentdownThemeComponentTokens,
   AgentdownThemeTokens
 } from './types';
+import { validateAgentdownConfig } from './validate';
 
 /**
  * 判断当前值是否是一个包含自有键的普通对象。
@@ -118,7 +119,7 @@ export function mergeAgentdownThemes(base?: AgentdownTheme, override?: Agentdown
  * 定义一份带完整类型提示的 Agentdown config。
  */
 export function defineAgentdownConfig(config: AgentdownConfig): AgentdownConfig {
-  return config;
+  return validateAgentdownConfig(config);
 }
 
 /**

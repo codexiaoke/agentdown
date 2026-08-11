@@ -97,6 +97,7 @@ const combined = await import('agentdown/ag-ui-a2ui');
 
 const checks = [
   ['agentdown.RunSurface', core.RunSurface],
+  ['agentdown.createAgentdown', core.createAgentdown],
   ['agentdown/ag-ui.useAgUiChatSession', agui.useAgUiChatSession],
   ['agentdown/a2ui.A2UiSurface', a2ui.A2UiSurface],
   ['agentdown/a2ui.createA2UiClientCapabilities', a2ui.createA2UiClientCapabilities],
@@ -107,6 +108,13 @@ for (const [name, value] of checks) {
   if (typeof value !== 'function' && typeof value !== 'object') {
     throw new Error(\`Missing packaged export: \${name}\`);
   }
+}
+
+const configured = core.createAgentdown({
+  runtime: { limits: { maxNodes: 25 } }
+});
+if (configured.inspectConfig().runtimeLimits.maxNodes !== 25) {
+  throw new Error('Packaged createAgentdown config did not reach the runtime factory.');
 }
 `, 'utf8');
   await run(process.execPath, [smokePath], tempRoot);

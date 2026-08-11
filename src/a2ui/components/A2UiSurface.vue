@@ -4,6 +4,8 @@ import type {
   SurfaceModel
 } from '@a2ui/web_core/v0_9';
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
+import { useAgentdownConfig } from '../../config/context';
+import { describeAgentdownError, reportAgentdownDiagnostic } from '../../config/diagnostics';
 import type { RuntimeData, RuntimeIntent, SurfaceBlock } from '../../runtime/types';
 import { defaultA2UiBasicCatalog } from '../catalog';
 import {
@@ -67,6 +69,7 @@ const actionStateSnapshot = shallowRef<A2UiActionStateSnapshot>({
   interactionDisabled: false,
   states: {}
 });
+const resolvedAgentdownConfig = useAgentdownConfig();
 
 const blockData = computed<A2UiSurfaceBlockData | null>(() => {
   const data = props.block?.data;
@@ -96,6 +99,17 @@ function disposeController() {
 function reportError(context: A2UiErrorContext) {
   errorMessage.value = context.error instanceof Error ? context.error.message : String(context.error);
   emit('error', context);
+  reportAgentdownDiagnostic(resolvedAgentdownConfig.value, {
+    scope: 'a2ui',
+    level: 'error',
+    code: `a2ui.${context.phase}-error`,
+    message: errorMessage.value,
+    details: {
+      ...(context.surfaceId ? { surfaceId: context.surfaceId } : {}),
+      ...(context.componentId ? { componentId: context.componentId } : {}),
+      error: describeAgentdownError(context.error)
+    }
+  });
   if (context.phase === 'validation' || context.phase === 'processing') {
     const activeController = controller.value;
     if (activeController) {

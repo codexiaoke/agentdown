@@ -132,10 +132,79 @@ export interface AgentdownTheme {
   cssVars?: Record<`--agentdown-${string}`, string>;
 }
 
+/** MarkdownRenderer 在一个应用作用域内共享的默认值。 */
+export interface AgentdownMarkdownConfig {
+  performance?: MarkdownRendererPerformanceOptions;
+  htmlSanitizer?: MarkdownHtmlSanitizer;
+  componentRegistry?: AgentComponentRegistry;
+  builtinComponents?: MarkdownBuiltinComponentOverrides;
+  /** 局部 Renderer 传入 plugins 时会完整替换这里的默认列表。 */
+  plugins?: MarkdownEnginePlugin[];
+}
+
+/** RunSurface 在一个应用作用域内共享的默认值。 */
+export interface AgentdownSurfaceConfig {
+  performance?: RunSurfacePerformanceOptions;
+  componentRegistry?: AgentComponentRegistry;
+  builtinComponents?: MarkdownBuiltinComponentOverrides;
+  renderers?: RunSurfaceRendererMap;
+  draftPlaceholder?: RunSurfaceDraftPlaceholder;
+  messageShells?: RunSurfaceMessageShellMap;
+  messageActions?: RunSurfaceMessageActionsMap;
+  approvalActions?: RunSurfaceApprovalActionsOptions | false;
+  handoffActions?: RunSurfaceHandoffActionsOptions | false;
+}
+
+export type AgentdownDiagnosticScope = 'config' | 'runtime' | 'markdown' | 'surface' | 'a2ui';
+export type AgentdownDiagnosticLevel = 'info' | 'warning' | 'error';
+
+/** 可交给 Sentry、OpenTelemetry 或宿主日志系统的稳定诊断事件。 */
+export interface AgentdownDiagnostic {
+  scope: AgentdownDiagnosticScope;
+  level: AgentdownDiagnosticLevel;
+  code: string;
+  message: string;
+  timestamp: number;
+  details?: Record<string, unknown>;
+}
+
+export type AgentdownDiagnosticHandler = (diagnostic: AgentdownDiagnostic) => void;
+
+/** 诊断处理器按配置层级追加，单个处理器抛错不会中断运行时。 */
+export interface AgentdownDiagnosticsConfig {
+  enabled?: boolean;
+  handlers?: AgentdownDiagnosticHandler[];
+}
+
 /**
  * Agentdown 子树级 / 全局级配置对象。
  */
 export interface AgentdownConfig {
   /** 当前作用域下启用的主题。 */
   theme?: AgentdownTheme;
+  /** 通过 createAgentdown().createRuntime() 创建 runtime 时使用的可靠性默认值。 */
+  runtime?: AgentRuntimeOptions;
+  /** MarkdownRenderer 默认值；组件 props 具有更高优先级。 */
+  markdown?: AgentdownMarkdownConfig;
+  /** RunSurface 默认值；组件 props 具有更高优先级。 */
+  surface?: AgentdownSurfaceConfig;
+  /** 结构化诊断出口。 */
+  diagnostics?: AgentdownDiagnosticsConfig;
 }
+import type {
+  AgentComponentRegistry,
+  MarkdownBuiltinComponentOverrides,
+  MarkdownEnginePlugin,
+  MarkdownHtmlSanitizer,
+  MarkdownRendererPerformanceOptions
+} from '../core/types';
+import type { AgentRuntimeOptions } from '../runtime/types';
+import type {
+  RunSurfaceApprovalActionsOptions,
+  RunSurfaceDraftPlaceholder,
+  RunSurfaceHandoffActionsOptions,
+  RunSurfaceMessageActionsMap,
+  RunSurfaceMessageShellMap,
+  RunSurfacePerformanceOptions,
+  RunSurfaceRendererMap
+} from '../surface/types';
