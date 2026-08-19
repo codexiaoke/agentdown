@@ -1,11 +1,22 @@
 ---
-title: AG-UI 与 A2UI
-description: 分别使用纯 AG-UI、独立 A2UI Runtime，或显式组合两者。
+title: 统一 Chat、AG-UI 与 A2UI
+description: 用一个聊天入口承载文字、前端组件与动态 A2UI，并了解各低层协议入口。
 ---
 
-# AG-UI 与 A2UI
+# 统一 Chat、AG-UI 与 A2UI
 
-Agentdown 把两套协议做成三个独立入口：
+产品层推荐只有一个入口：
+
+```text
+useAgentChat() -> POST /api/stream/chat
+                         ├─ TEXT_MESSAGE_*   普通文字
+                         ├─ TOOL_CALL_*      前端注册组件
+                         └─ CUSTOM name=a2ui 动态 A2UI
+```
+
+AG-UI 是聊天事件协议，不是页面上供用户选择的 Provider；A2UI 是一种回答表现，也不需要独立聊天接口。固定、高频业务卡片优先由前端注册，Agent 只选择组件并提供 props。只有现有组件无法表达动态布局或交互时才使用 A2UI。
+
+底层仍保留三个可独立使用的入口：
 
 | 入口 | 负责什么 | 不负责什么 |
 | --- | --- | --- |
@@ -13,7 +24,7 @@ Agentdown 把两套协议做成三个独立入口：
 | `agentdown/a2ui` | A2UI v0.9/v0.9.1 状态、Catalog、Vue Renderer 与客户端消息 | 不规定后端或传输协议 |
 | `agentdown/ag-ui-a2ui` | 用明确的 AG-UI 扩展事件承载 A2UI，并接好双向消息 | 不要求业务采用固定的服务端实现 |
 
-这种分层意味着 A2UI 可以放在 AG-UI、WebSocket 或业务自定义 transport 上；只用 AG-UI 的项目也不会被生成式 UI 逻辑影响。
+这种分层意味着 A2UI 也可以放在 WebSocket 或业务自定义 transport 上；低层入口不会限制产品必须采用统一 Chat helper。
 
 ## 安装
 
@@ -28,7 +39,7 @@ npm install @ag-ui/core
 # 独立 A2UI
 npm install @a2ui/web_core
 
-# AG-UI + A2UI
+# 统一 Chat（推荐）
 npm install @ag-ui/core @a2ui/web_core
 ```
 
@@ -38,7 +49,37 @@ npm install @ag-ui/core @a2ui/web_core
 import 'agentdown/style.css';
 ```
 
-## 只接 AG-UI
+## 推荐：统一 Chat
+
+```ts
+import { useAgentChat } from 'agentdown';
+import WeatherCard from './WeatherCard.vue';
+
+const session = useAgentChat({
+  source: '/api/stream/chat',
+  conversationId: 'session:assistant',
+  components: {
+    weather_card: {
+      component: WeatherCard,
+      description: '展示已有可信数据的天气结果',
+      propsSchema: {
+        type: 'object',
+        properties: {
+          city: { type: 'string' },
+          temperature: { type: 'number' },
+          condition: { type: 'string' }
+        },
+        required: ['city', 'temperature', 'condition'],
+        additionalProperties: false
+      }
+    }
+  }
+});
+```
+
+前端组件表会同时生成标准 AG-UI tools 和本地白名单 renderer。传给 Agent 的只有名称、description 与 JSON Schema；Vue 组件不会离开浏览器。
+
+## 低层：只接 AG-UI
 
 `useAgUiChatSession()` 只处理标准 AG-UI 语义。`CUSTOM` 和 `RAW` 保持应用自定义事件，不会被猜测成 A2UI。
 
@@ -46,7 +87,7 @@ import 'agentdown/style.css';
 import { useAgUiChatSession } from 'agentdown/ag-ui';
 
 const session = useAgUiChatSession({
-  source: '/api/stream/agui',
+  source: '/api/examples/agui',
   conversationId: 'session:assistant',
   recovery: {}
 });
@@ -124,7 +165,7 @@ const controller = createA2UiSurfaceController({
 controller.sync(serverMessages);
 ```
 
-## 显式组合 AG-UI + A2UI
+## 低层：显式组合 AG-UI + A2UI
 
 组合入口会注册 A2UI Renderer，并将客户端消息放进下一次标准 AG-UI `RunAgentInput.forwardedProps`：
 
@@ -136,7 +177,7 @@ import { useAgUiA2UiChatSession } from 'agentdown/ag-ui-a2ui';
 
 const prompt = ref('生成一个读书计划表单。');
 const session = useAgUiA2UiChatSession({
-  source: 'http://127.0.0.1:8000/api/stream/agui',
+  source: 'http://127.0.0.1:8000/api/stream/chat',
   input: prompt,
   conversationId: 'session:reading-planner',
   recovery: {}
@@ -396,7 +437,8 @@ npm run test:e2e
 
 - `examples/vue-ag-ui` → `agentdown/ag-ui` → `/api/examples/agui`
 - `examples/vue-a2ui` → `agentdown/a2ui` → `/api/examples/a2ui`
-- `examples/vue-ag-ui-a2ui` → `agentdown/ag-ui-a2ui` → `/api/stream/agui`
+- 主 Demo → `useAgentChat()` → `/api/stream/chat`
+- `examples/vue-ag-ui-a2ui` → 低层 `agentdown/ag-ui-a2ui` → `/api/stream/chat`
 
 三条后端都真实调用 DeepSeek。纯 AG-UI 端点只发送标准 lifecycle/text events；独立 A2UI 端点使用普通 JSON transport；组合端点才通过 AG-UI `CUSTOM` 承载 A2UI。它们都是参考示例，不是库要求的固定后端：
 

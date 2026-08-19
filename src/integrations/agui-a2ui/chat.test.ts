@@ -19,7 +19,7 @@ describe('useAgUiA2UiChatSession', () => {
     const retryExecution = vi.fn();
     const actionHandlers = { toggle_unit: vi.fn() };
     const session = scope.run(() => useAgUiA2UiChatSession<string>({
-      source: '/api/stream/agui',
+      source: '/api/stream/chat',
       conversationId: 'thread:test',
       a2uiRenderer: { actionHandlers, actionStateSource, retryExecution }
     }));
@@ -75,7 +75,7 @@ describe('useAgUiA2UiChatSession', () => {
         }
       },
       forwardedProps: { tenantId: 'tenant-1' },
-      source: '/api/stream/agui',
+      source: '/api/stream/chat',
       transportContext: undefined
     });
 
@@ -102,7 +102,7 @@ describe('useAgUiA2UiChatSession', () => {
     });
     const scope = effectScope();
     const session = scope.run(() => useAgUiA2UiChatSession<string>({
-      source: '/api/stream/agui',
+      source: '/api/stream/chat',
       conversationId: 'thread:recovering',
       recovery: {
         async loadArchive() {
@@ -140,7 +140,7 @@ describe('useAgUiA2UiChatSession', () => {
         }
       },
       forwardedProps: undefined,
-      source: '/api/stream/agui',
+      source: '/api/stream/chat',
       transportContext: undefined
     })).toEqual({
       a2ui: {
@@ -171,7 +171,7 @@ describe('useAgUiA2UiChatSession', () => {
     });
     const scope = effectScope();
     const session = scope.run(() => useAgUiA2UiChatSession<string>({
-      source: '/api/stream/agui',
+      source: '/api/stream/chat',
       conversationId: 'thread:test',
       transport: {
         fetch: fetchMock as typeof fetch,
@@ -302,7 +302,7 @@ describe('useAgUiA2UiChatSession', () => {
     });
     const scope = effectScope();
     const session = scope.run(() => useAgUiA2UiChatSession<string>({
-      source: '/api/stream/agui',
+      source: '/api/stream/chat',
       conversationId: 'thread:dedupe',
       transport: { fetch: fetchMock as typeof fetch }
     }))!;
@@ -388,7 +388,7 @@ describe('useAgUiA2UiChatSession', () => {
     });
     const scope = effectScope();
     const session = scope.run(() => useAgUiA2UiChatSession<string>({
-      source: '/api/stream/agui',
+      source: '/api/stream/chat',
       conversationId: 'thread:reset',
       transport: { fetch: fetchMock as typeof fetch }
     }))!;

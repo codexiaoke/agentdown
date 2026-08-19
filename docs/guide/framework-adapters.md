@@ -146,8 +146,9 @@ const preset = defineAgnoPreset({
 ### AG-UI
 
 - 适合后端已经采用开放 AG-UI 协议，或希望前后端不绑定某个 Agent 框架的场景
+- 产品聊天页优先使用 `useAgentChat()`，在一个 `/stream/chat` 中承载文字、前端组件和 A2UI
 - `agentdown/ag-ui` 的 `useAgUiChatSession()` 只接入标准 `RunAgentInput`、AG-UI events 和 shared state
-- 需要生成式界面时使用 `agentdown/ag-ui-a2ui` 的 `useAgUiA2UiChatSession()`
+- `agentdown/ag-ui-a2ui` 的 `useAgUiA2UiChatSession()` 是需要自行组合协议时的低层入口
 - 生成式界面完整说明见 [AG-UI 与 A2UI](/guide/ag-ui-a2ui)
 
 ### Agno

@@ -38,25 +38,41 @@ raw packet / SSE -> protocol -> bridge -> assembler -> runtime -> Agent UI
 - 把长文本和大组件控制在浏览器可承受的性能范围内
 - 让官方框架事件可以直接接到前端页面
 
-## AG-UI + A2UI 生成式界面
+## 一个聊天入口，多种回答形式
 
-AG-UI 与 A2UI 是可独立采用的两层。纯 AG-UI 从 `agentdown/ag-ui` 导入；只有需要生成式界面时，才显式使用 `agentdown/ag-ui-a2ui`。
+产品代码推荐只使用 `useAgentChat()` 和一个 `/api/stream/chat`。AG-UI 负责聊天事件流；Agent 可以直接回答文字、选择前端注册的固定组件，或在固定组件无法表达时返回动态 A2UI。
 
 ```ts
-import { useAgUiA2UiChatSession } from 'agentdown/ag-ui-a2ui';
+import { useAgentChat } from 'agentdown';
+import WeatherCard from './WeatherCard.vue';
 
-const session = useAgUiA2UiChatSession({
-  source: '/api/stream/agui',
-  conversationId: 'session:reading-planner',
-  recovery: {}
+const session = useAgentChat({
+  source: '/api/stream/chat',
+  conversationId: 'session:assistant',
+  components: {
+    weather_card: {
+      component: WeatherCard,
+      description: '展示已有可信数据的天气结果',
+      propsSchema: {
+        type: 'object',
+        properties: {
+          city: { type: 'string' },
+          temperature: { type: 'number' },
+          condition: { type: 'string' }
+        },
+        required: ['city', 'temperature', 'condition'],
+        additionalProperties: false
+      }
+    }
+  }
 });
 
-await session.send('生成一个读书计划表单，包含书名、每日分钟数和提交按钮');
+await session.send('使用这些数据回答天气：深圳，26°C，多云');
 ```
 
-Agent 只发送声明式组件和 DataModel；Catalog、Vue 实现、URL 策略和资源上限都由前端控制。Action/Error 会带上客户端能力以及启用 `sendDataModel` 的数据模型。独立 A2UI Runtime 也可从 `agentdown/a2ui` 使用，不依赖 AG-UI。
+Agent 只能看到组件名称、描述与 props schema，看不到 Vue 实现，也不能返回可执行的 HTML/JavaScript。动态 A2UI 同样受前端 Catalog、URL 策略和资源上限约束。`agentdown/ag-ui`、`agentdown/a2ui` 与 `agentdown/ag-ui-a2ui` 继续作为高级低层入口。
 
-仓库在 `examples/` 中提供纯 AG-UI、独立 A2UI、AG-UI+A2UI 三个独立 Vue 消费者。三条示例后端都真实调用 DeepSeek，进程内存只保存会话和事件，不提供硬编码业务结果。完整说明和浏览器验证步骤见 [AG-UI 与 A2UI](https://codexiaoke.github.io/agentdown/guide/ag-ui-a2ui)。
+仓库 Demo 使用真实 DeepSeek 让同一个会话分别展示普通文本、前端 `WeatherCard` 与交互式读书计划 A2UI。FastAPI 只用于库的联调测试，进程内存保存会话与事件。完整说明见 [AG-UI 与 A2UI](https://codexiaoke.github.io/agentdown/guide/ag-ui-a2ui)。
 
 ## 最快接入官方框架
 

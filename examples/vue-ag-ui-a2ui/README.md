@@ -1,6 +1,6 @@
-# AG-UI + A2UI Vue 消费者
+# 统一 Chat Vue 消费者
 
-这个应用显式使用 `agentdown/ag-ui-a2ui`。首次请求会发送 A2UI capabilities，后端真实调用 DeepSeek，并通过 AG-UI `CUSTOM name=a2ui` 返回经过校验的 Surface；action/error 继续走标准 RunAgentInput。
+这个应用使用主入口 `useAgentChat()` 连接 `/api/stream/chat`。首次请求会发送 A2UI capabilities，后端真实调用 DeepSeek，并在同一个标准 AG-UI 流中选择普通文字、前端组件或经过校验的 A2UI Surface；action/error 继续走标准 RunAgentInput。
 
 ```bash
 npm run backend:dev

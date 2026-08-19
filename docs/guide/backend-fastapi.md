@@ -1,11 +1,11 @@
 ---
 title: FastAPI Backend
-description: 使用仓库内置 backend 联调真实 AG-UI+A2UI 示例和主流 Agent 框架。
+description: 使用仓库内置测试 backend 联调统一 Chat 与各协议适配层。
 ---
 
 # FastAPI Backend
 
-仓库里的 `backend/` 不是 mock。
+仓库里的 `backend/` 是前端库的测试与参考后端，不是 Agentdown 的生产服务端要求。它会真实调用模型与框架，而不是返回硬编码页面数据。
 
 它的定位是：
 
@@ -18,7 +18,7 @@ description: 使用仓库内置 backend 联调真实 AG-UI+A2UI 示例和主流 
 
 | 路径 | 框架 | 默认定位 |
 | --- | --- | --- |
-| `/api/stream/agui` | AG-UI + A2UI | 位于 `app/examples/` 的真实 DeepSeek 参考实现 |
+| `/api/stream/chat` | Agentdown Chat | 一个 AG-UI 流按语义返回文字、前端组件或 A2UI |
 | `/api/stream/agno` | Agno | 聊天 + requirement / approval |
 | `/api/stream/langchain` | LangChain | interrupt / review |
 | `/api/stream/autogen` | AutoGen | handoff / 人机接力 |
