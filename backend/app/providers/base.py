@@ -25,10 +25,10 @@ def create_provider_descriptors() -> list[ProviderDescriptor]:
 
     return [
         ProviderDescriptor(
-            id="agui",
-            path="/api/stream/agui",
-            label="AG-UI + A2UI",
-            note="参考示例：基于 DeepSeek 的真实生成式 UI Agent，输出标准 AG-UI events 和经后端校验的 A2UI v0.9.1 Surface。",
+            id="chat",
+            path="/api/stream/chat",
+            label="Agentdown Chat",
+            note="统一聊天入口：通过 AG-UI 流返回文本、前端注册回答组件或经后端校验的 A2UI Surface。",
         ),
         ProviderDescriptor(
             id="agno",

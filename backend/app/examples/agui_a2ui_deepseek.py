@@ -122,10 +122,65 @@ class AgUiModelGeneration:
     response_id: str | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class AgUiAnswerComponentGeneration:
+    """One frontend-owned answer component selected by the model."""
+
+    name: str
+    props: dict[str, Any]
+    assistant_text: str
+    model: str
+    usage: dict[str, Any]
+    response_id: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class AgUiTextGeneration:
+    """A normal text answer that does not need a structured UI."""
+
+    assistant_text: str
+    model: str
+    usage: dict[str, Any]
+    response_id: str | None = None
+
+
+AgUiChatGeneration = AgUiModelGeneration | AgUiAnswerComponentGeneration | AgUiTextGeneration
+
+
 AgUiSurfaceGenerator = Callable[
     [BackendSettings, list[dict[str, str]], str],
-    Awaitable[AgUiModelGeneration],
+    Awaitable[AgUiChatGeneration],
 ]
+
+_CHAT_SYSTEM_PROMPT = """你是一个通过 AG-UI 流回答用户的 Agent。前端会把可用的回答组件作为工具提供给你。
+
+选择回答形式时遵守：
+1. 普通解释直接返回简洁文本，不调用工具。
+2. 如果某个前端回答组件与结果明确匹配，调用该工具一次，并严格按 parameters 填写 props；不要在文本中伪造组件。
+3. 固定、高频的展示卡片优先使用前端回答组件，例如天气卡、订单卡、商品卡。
+4. 只有结构无法由现有组件表达、且确实需要动态布局或交互时，才调用 render_a2ui_surface。
+5. 不要编造实时数据。只有用户已经提供数据，或上下文中有可信结果时，才能填写结果组件。
+6. 不要生成 HTML、Vue、JavaScript、URL 跳转或任意客户端函数。
+7. 最多调用一个回答工具。
+"""
+
+_A2UI_RENDER_TOOL: dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "render_a2ui_surface",
+        "description": "当现有前端回答组件不足以表达结果时，生成一个受限 A2UI Basic Catalog 动态界面。",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "assistantText": {"type": "string"},
+                "components": {"type": "array", "items": {"type": "object"}},
+                "dataModel": {"type": "object"},
+            },
+            "required": ["assistantText", "components", "dataModel"],
+            "additionalProperties": False,
+        },
+    },
+}
 
 
 class AgUiAgentSessionStore:
@@ -921,6 +976,158 @@ def _create_deepseek_http_client() -> httpx.AsyncClient:
     return httpx.AsyncClient(trust_env=False, timeout=60.0)
 
 
+def _frontend_answer_tools(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Accept only explicitly marked frontend presentation tools."""
+
+    resolved: list[dict[str, Any]] = []
+    names: set[str] = set()
+    for tool in tools[:32]:
+        metadata = tool.get("metadata")
+        if not isinstance(metadata, dict) or metadata.get("kind") != "frontend-answer-component":
+            continue
+        name = tool.get("name")
+        description = tool.get("description")
+        parameters = tool.get("parameters")
+        if not isinstance(name, str) or not _ACTION_NAME_PATTERN.fullmatch(name):
+            raise ValueError("Frontend answer component has an invalid name.")
+        if name == "render_a2ui_surface" or name in names:
+            raise ValueError(f"Frontend answer component name is reserved or duplicated: {name}.")
+        if not isinstance(description, str) or not description.strip():
+            raise ValueError(f"Frontend answer component {name} requires a description.")
+        if not isinstance(parameters, dict) or parameters.get("type") != "object":
+            raise ValueError(f"Frontend answer component {name} requires an object parameters schema.")
+        _validate_json_value(parameters)
+        names.add(name)
+        resolved.append({
+            "type": "function",
+            "function": {
+                "name": name,
+                "description": description[:1_000],
+                "parameters": parameters,
+            },
+        })
+    return resolved
+
+
+def _parse_answer_component_props(name: str, arguments: str) -> dict[str, Any]:
+    """Validate one model-selected frontend component payload."""
+
+    if len(arguments.encode("utf-8")) > MAX_PLAN_BYTES:
+        raise ValueError(f"Frontend answer component {name} props are too large.")
+    try:
+        props = json.loads(arguments)
+    except json.JSONDecodeError as error:
+        raise ValueError(f"Frontend answer component {name} returned invalid JSON.") from error
+    if not isinstance(props, dict):
+        raise ValueError(f"Frontend answer component {name} props must be an object.")
+    _validate_json_value(props)
+    return props
+
+
+async def generate_deepseek_chat_response(
+    settings: BackendSettings,
+    history: list[dict[str, str]],
+    latest_input: str,
+    tools: list[dict[str, Any]],
+) -> AgUiChatGeneration:
+    """Let the model choose text, a registered frontend component, or A2UI."""
+
+    if not settings.deepseek_api_key:
+        raise ValueError("DEEPSEEK_API_KEY is required for the real unified chat agent.")
+
+    frontend_tools = _frontend_answer_tools(tools)
+    allowed_component_names = {
+        tool["function"]["name"]
+        for tool in frontend_tools
+    }
+    model_tools = [*frontend_tools, _A2UI_RENDER_TOOL]
+    messages: list[dict[str, str]] = [
+        {
+            "role": "system",
+            "content": (
+                _CHAT_SYSTEM_PROMPT
+                + "\n调用 render_a2ui_surface 时，只能使用 Text、Row、Column、List、Card、Tabs、Divider、"
+                "Button、TextField、CheckBox、ChoicePicker、Slider、DateTimeInput；必须有 id=root，"
+                "所有引用必须指向已声明组件，Button 只能发送 event action。"
+            ),
+        },
+        *_bound_history(history),
+        {"role": "user", "content": latest_input[:8_000]},
+    ]
+    last_error: Exception | None = None
+
+    async with _create_deepseek_http_client() as http_client:
+        client = AsyncOpenAI(
+            api_key=settings.deepseek_api_key,
+            base_url=build_openai_compatible_base_url(settings.deepseek_base_url),
+            max_retries=2,
+            timeout=60.0,
+            http_client=http_client,
+        )
+        for attempt in range(2):
+            response = await client.chat.completions.create(
+                model=settings.deepseek_model,
+                messages=messages,  # type: ignore[arg-type]
+                tools=model_tools,  # type: ignore[arg-type]
+                tool_choice="auto",
+                temperature=0.1,
+                max_tokens=6_000,
+            )
+            output = response.choices[0].message
+            usage = response.usage.model_dump() if response.usage is not None else {}
+            tool_calls = output.tool_calls or []
+            try:
+                if len(tool_calls) > 1:
+                    raise ValueError("Unified chat model may select at most one answer component.")
+                if tool_calls:
+                    function = tool_calls[0].function
+                    if function.name == "render_a2ui_surface":
+                        surface = parse_generated_surface(function.arguments)
+                        return AgUiModelGeneration(
+                            surface=surface,
+                            model=response.model,
+                            usage=usage,
+                            response_id=response.id,
+                        )
+                    if function.name not in allowed_component_names:
+                        raise ValueError(f"Model selected an unregistered answer component: {function.name}.")
+                    props = _parse_answer_component_props(function.name, function.arguments)
+                    return AgUiAnswerComponentGeneration(
+                        name=function.name,
+                        props=props,
+                        assistant_text=(output.content or "").strip(),
+                        model=response.model,
+                        usage=usage,
+                        response_id=response.id,
+                    )
+
+                text = (output.content or "").strip()
+                if not text:
+                    raise ValueError("Unified chat model returned neither text nor an answer component.")
+                return AgUiTextGeneration(
+                    assistant_text=text,
+                    model=response.model,
+                    usage=usage,
+                    response_id=response.id,
+                )
+            except ValueError as error:
+                last_error = error
+                if attempt == 1:
+                    break
+                messages.append({
+                    "role": "user",
+                    "content": f"上一个回答不符合前端能力约束，请重新选择一次。错误：{str(error)[:1_000]}",
+                })
+
+    raise ValueError(f"DeepSeek did not return a valid unified chat answer after repair: {last_error}")
+
+
+def _generation_assistant_text(generation: AgUiChatGeneration) -> str:
+    if isinstance(generation, AgUiModelGeneration):
+        return generation.surface.assistant_text
+    return generation.assistant_text
+
+
 def build_a2ui_surface_messages(surface: AgUiGeneratedSurface) -> list[dict[str, Any]]:
     """Wrap a validated model plan in server-owned A2UI protocol envelopes."""
 
@@ -963,9 +1170,8 @@ async def stream_agui_events(
     settings: BackendSettings,
     generator: AgUiSurfaceGenerator | None = None,
 ) -> AsyncIterator[dict[str, Any]]:
-    """Run the real model agent and stream AG-UI lifecycle plus validated A2UI."""
+    """Stream one chat where text, frontend components, and A2UI are answer forms."""
 
-    generator = generator or generate_deepseek_surface
     client_transport = _read_a2ui_client_transport(request)
     client_message = client_transport["message"]
     known_action_surface = build_known_action_surface(client_message)
@@ -984,7 +1190,7 @@ async def stream_agui_events(
         yield event
     if known_action_surface is None:
         async for event in _yield_event(
-            {"type": "THINKING_START", "title": "DeepSeek 正在设计 A2UI 界面"}
+            {"type": "THINKING_START", "title": "DeepSeek 正在组织回答"}
         ):
             yield event
     async for event in _yield_event(
@@ -1012,11 +1218,20 @@ async def stream_agui_events(
                 stored_history = await agui_agent_session_store.history(request.thread_id)
                 request_history = _request_history(request)
                 history = stored_history or request_history[:-1]
-                generation = await generator(settings, history, latest_input)
+                generation = (
+                    await generator(settings, history, latest_input)
+                    if generator is not None
+                    else await generate_deepseek_chat_response(
+                        settings,
+                        history,
+                        latest_input,
+                        request.tools,
+                    )
+                )
                 await agui_agent_session_store.append_turn(
                     request.thread_id,
                     latest_input,
-                    generation.surface.assistant_text,
+                    _generation_assistant_text(generation),
                 )
     except Exception as error:
         if known_action_surface is None:
@@ -1033,64 +1248,93 @@ async def stream_agui_events(
         return
 
     assistant_message_id = f"message:assistant:{request.run_id}"
-    tool_call_id = f"tool:render-a2ui:{request.run_id}"
+    tool_call_name = (
+        generation.name
+        if isinstance(generation, AgUiAnswerComponentGeneration)
+        else "render_a2ui_surface"
+    )
+    tool_call_id = f"tool:{tool_call_name}:{request.run_id}"
     if known_action_surface is None:
         async for event in _yield_event({"type": "THINKING_END"}):
             yield event
-        for event in (
-            {
-                "type": "TEXT_MESSAGE_START",
-                "messageId": assistant_message_id,
-                "role": "assistant",
-            },
-            {
-                "type": "TEXT_MESSAGE_CONTENT",
-                "messageId": assistant_message_id,
-                "delta": generation.surface.assistant_text,
-            },
-            {"type": "TEXT_MESSAGE_END", "messageId": assistant_message_id},
-            {
-                "type": "TOOL_CALL_START",
-                "toolCallId": tool_call_id,
-                "toolCallName": "render_a2ui_surface",
-                "parentMessageId": assistant_message_id,
-            },
-            {
-                "type": "TOOL_CALL_ARGS",
-                "toolCallId": tool_call_id,
-                "delta": json.dumps(
-                    {
-                        "surfaceId": A2UI_SURFACE_ID,
-                        "components": generation.surface.components,
-                        "dataModel": generation.surface.data_model,
-                    },
-                    ensure_ascii=False,
-                    separators=(",", ":"),
-                ),
-            },
-            {"type": "TOOL_CALL_END", "toolCallId": tool_call_id},
-            {
-                "type": "TOOL_CALL_RESULT",
-                "messageId": f"message:tool:{request.run_id}",
-                "toolCallId": tool_call_id,
-                "content": json.dumps(
-                    {
-                        "ok": True,
-                        "source": "deepseek",
-                        "model": generation.model,
-                        "componentCount": len(generation.surface.components),
-                    },
-                    ensure_ascii=False,
-                    separators=(",", ":"),
-                ),
-            },
-        ):
+        response_events: list[dict[str, Any]] = []
+        assistant_text = _generation_assistant_text(generation)
+        if assistant_text:
+            response_events.extend([
+                {
+                    "type": "TEXT_MESSAGE_START",
+                    "messageId": assistant_message_id,
+                    "role": "assistant",
+                },
+                {
+                    "type": "TEXT_MESSAGE_CONTENT",
+                    "messageId": assistant_message_id,
+                    "delta": assistant_text,
+                },
+                {"type": "TEXT_MESSAGE_END", "messageId": assistant_message_id},
+            ])
+        if isinstance(generation, AgUiModelGeneration):
+            tool_arguments = {
+                "surfaceId": A2UI_SURFACE_ID,
+                "components": generation.surface.components,
+                "dataModel": generation.surface.data_model,
+            }
+            tool_result = {
+                "ok": True,
+                "source": "deepseek",
+                "model": generation.model,
+                "componentCount": len(generation.surface.components),
+            }
+        elif isinstance(generation, AgUiAnswerComponentGeneration):
+            tool_arguments = generation.props
+            tool_result = {
+                "ok": True,
+                "source": "deepseek",
+                "model": generation.model,
+                "renderedBy": "frontend",
+            }
+        else:
+            tool_arguments = None
+            tool_result = None
+
+        if tool_arguments is not None and tool_result is not None:
+            response_events.extend([
+                {
+                    "type": "TOOL_CALL_START",
+                    "toolCallId": tool_call_id,
+                    "toolCallName": tool_call_name,
+                    **({"parentMessageId": assistant_message_id} if assistant_text else {}),
+                },
+                {
+                    "type": "TOOL_CALL_ARGS",
+                    "toolCallId": tool_call_id,
+                    "delta": json.dumps(
+                        tool_arguments,
+                        ensure_ascii=False,
+                        separators=(",", ":"),
+                    ),
+                },
+                {"type": "TOOL_CALL_END", "toolCallId": tool_call_id},
+                {
+                    "type": "TOOL_CALL_RESULT",
+                    "messageId": f"message:tool:{request.run_id}",
+                    "toolCallId": tool_call_id,
+                    "content": json.dumps(
+                        tool_result,
+                        ensure_ascii=False,
+                        separators=(",", ":"),
+                    ),
+                },
+            ])
+
+        for event in response_events:
             async for streamed in _yield_event(event):
                 yield streamed
 
-    for message in build_a2ui_surface_messages(generation.surface):
-        async for event in _yield_event({"type": "CUSTOM", "name": "a2ui", "value": message}):
-            yield event
+    if isinstance(generation, AgUiModelGeneration):
+        for message in build_a2ui_surface_messages(generation.surface):
+            async for event in _yield_event({"type": "CUSTOM", "name": "a2ui", "value": message}):
+                yield event
 
     for event in (
         {

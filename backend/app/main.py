@@ -80,13 +80,13 @@ def parse_event_cursor(value: str | None) -> int | None:
     return cursor
 
 
-@app.post("/api/stream/agui")
-async def stream_agui_provider(
+@app.post("/api/stream/chat")
+async def stream_chat(
     request: AgUiRunAgentInput,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     last_event_id: str | None = Header(default=None, alias="Last-Event-ID"),
 ) -> object:
-    """Run the real DeepSeek AG-UI + A2UI reference example with backend recovery."""
+    """Run one chat stream whose answers may be text, frontend components, or A2UI."""
 
     conversation_id = request.thread_id
     request_id = idempotency_key or request.run_id
