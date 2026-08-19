@@ -159,6 +159,11 @@ curl -N \
 
 这个 endpoint 会先校验首次请求中的 A2UI Basic Catalog 能力握手，再调用配置的 DeepSeek Chat Completion JSON mode。它会校验模型生成的组件树、DataModel、绑定路径、action 和资源上限，并返回标准 AG-UI lifecycle/text/tool/state events，以及三条装在 `CUSTOM name=a2ui` 中的 A2UI v0.9.1 Surface 消息。后续 action/error 回传继续采用 `forwardedProps.a2ui.clientMessage/clientCapabilities/clientDataModel`。完成事件的 `result.model` 和 `result.usage` 来自真实模型响应。
 
+读书计划中的已知业务 action 使用确定性示例 handler：`reading_plan_submitted` 会把原
+Surface 更新成“已提交”只读摘要，`reading_plan_edit_requested` 会带着原值回到编辑态。
+这两个动作不会再次调用模型，也不会追加重复的 assistant/tool 消息；空书名会保留表单并
+显示校验错误。该 handler 只是参考实现，真实业务应替换为自己的持久化和权限检查。
+
 常规测试会替换付费模型边界，只验证协议转换、安全校验、action 上下文和恢复。要显式执行一次在线生成测试：
 
 ```bash
