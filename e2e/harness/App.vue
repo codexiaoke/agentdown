@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { EventType, type AGUIEvent } from '@ag-ui/core';
 import { ref } from 'vue';
 import MarkdownRenderer from '../../src/components/MarkdownRenderer.vue';
 import RunSurface from '../../src/components/RunSurface.vue';
@@ -11,7 +12,9 @@ import {
 import { createMarkdownAssembler } from '../../src/runtime/assemblers';
 import { createBridge } from '../../src/runtime/createBridge';
 import type { RuntimeCommand } from '../../src/runtime/types';
+import { useAgentChat } from '../../src/composables/useAgentChat';
 import { browserAgentdown } from './agentdown';
+import HarnessWeatherCard from './HarnessWeatherCard.vue';
 
 type StreamPacket = {
   type: 'open' | 'delta' | 'close';
@@ -290,6 +293,134 @@ const readonlyWeatherMessages: unknown[] = [
   }
 ];
 
+const unifiedRequestThreadIds = ref<string[]>([]);
+
+function sseResponse(events: AGUIEvent[]): Response {
+  return new Response([
+    ...events.flatMap((event) => [`data: ${JSON.stringify(event)}`, '']),
+    ''
+  ].join('\n'), { headers: { 'Content-Type': 'text/event-stream' } });
+}
+
+const unifiedFetch: typeof fetch = async (_source, init) => {
+  const request = JSON.parse(String(init?.body)) as {
+    threadId: string;
+    runId: string;
+    messages: Array<{ content?: string }>;
+  };
+  const content = request.messages.at(-1)?.content ?? '';
+  unifiedRequestThreadIds.value.push(request.threadId);
+
+  const events: AGUIEvent[] = [
+    { type: EventType.RUN_STARTED, threadId: request.threadId, runId: request.runId }
+  ];
+
+  if (content === 'weather') {
+    events.push(
+      { type: EventType.TEXT_MESSAGE_START, messageId: `${request.runId}:assistant`, role: 'assistant' },
+      { type: EventType.TEXT_MESSAGE_CONTENT, messageId: `${request.runId}:assistant`, delta: '使用前端注册的天气组件展示。' },
+      { type: EventType.TEXT_MESSAGE_END, messageId: `${request.runId}:assistant` },
+      {
+        type: EventType.TOOL_CALL_START,
+        toolCallId: `${request.runId}:weather`,
+        toolCallName: 'weather_card',
+        parentMessageId: `${request.runId}:assistant`
+      },
+      {
+        type: EventType.TOOL_CALL_ARGS,
+        toolCallId: `${request.runId}:weather`,
+        delta: '{"city":"深圳","temperature":26,"condition":"多云","humidity":72,"windSpeed":3.2}'
+      },
+      { type: EventType.TOOL_CALL_END, toolCallId: `${request.runId}:weather` },
+      {
+        type: EventType.TOOL_CALL_RESULT,
+        toolCallId: `${request.runId}:weather`,
+        messageId: `${request.runId}:weather-result`,
+        content: '{"rendered":true}'
+      }
+    );
+  } else if (content === 'a2ui') {
+    events.push(
+      { type: EventType.TEXT_MESSAGE_START, messageId: `${request.runId}:assistant`, role: 'assistant' },
+      { type: EventType.TEXT_MESSAGE_CONTENT, messageId: `${request.runId}:assistant`, delta: '固定组件不足，返回动态计划界面。' },
+      { type: EventType.TEXT_MESSAGE_END, messageId: `${request.runId}:assistant` },
+      {
+        type: EventType.CUSTOM,
+        name: 'a2ui',
+        value: {
+          version: 'v0.9.1',
+          createSurface: {
+            surfaceId: 'unified-planner',
+            catalogId: A2UI_BASIC_CATALOG_ID
+          }
+        }
+      },
+      {
+        type: EventType.CUSTOM,
+        name: 'a2ui',
+        value: {
+          version: 'v0.9.1',
+          updateComponents: {
+            surfaceId: 'unified-planner',
+            components: [
+              { id: 'root', component: 'Card', child: 'content' },
+              { id: 'content', component: 'Column', children: ['title', 'book', 'minutes'] },
+              { id: 'title', component: 'Text', text: '动态读书计划', variant: 'h2' },
+              { id: 'book', component: 'TextField', label: '书名', value: { path: '/book' } },
+              { id: 'minutes', component: 'Slider', label: '每日分钟数', min: 10, max: 90, value: { path: '/minutes' } }
+            ]
+          }
+        }
+      },
+      {
+        type: EventType.CUSTOM,
+        name: 'a2ui',
+        value: {
+          version: 'v0.9.1',
+          updateDataModel: {
+            surfaceId: 'unified-planner',
+            path: '/',
+            value: { book: 'Designing Data-Intensive Applications', minutes: 30 }
+          }
+        }
+      }
+    );
+  } else {
+    events.push(
+      { type: EventType.TEXT_MESSAGE_START, messageId: `${request.runId}:assistant`, role: 'assistant' },
+      { type: EventType.TEXT_MESSAGE_CONTENT, messageId: `${request.runId}:assistant`, delta: '这是不需要任何 UI 组件的普通文本回答。' },
+      { type: EventType.TEXT_MESSAGE_END, messageId: `${request.runId}:assistant` }
+    );
+  }
+
+  events.push({ type: EventType.RUN_FINISHED, threadId: request.threadId, runId: request.runId });
+  return sseResponse(events);
+};
+
+const unifiedSession = useAgentChat({
+  source: '/api/stream/chat',
+  conversationId: 'e2e:unified-chat',
+  components: {
+    weather_card: {
+      component: HarnessWeatherCard,
+      description: '展示天气结果',
+      propsSchema: {
+        type: 'object',
+        properties: {
+          city: { type: 'string' },
+          temperature: { type: 'number' },
+          condition: { type: 'string' },
+          humidity: { type: 'number' },
+          windSpeed: { type: 'number' }
+        },
+        required: ['city', 'temperature', 'condition', 'humidity', 'windSpeed'],
+        additionalProperties: false
+      }
+    }
+  },
+  transport: { fetch: unifiedFetch }
+});
+
 const lastClientEnvelope = ref<A2UiClientEnvelope | null>(null);
 const actionStateHistory = ref<A2UiActionStateSnapshot[]>([]);
 
@@ -358,6 +489,17 @@ async function sendClientMessage(envelope: A2UiClientEnvelope) {
         :messages="readonlyWeatherMessages"
       />
     </section>
+
+    <section data-testid="unified-chat">
+      <h2>Unified Chat</h2>
+      <div class="unified-actions">
+        <button type="button" @click="unifiedSession.send('text')">统一流：文本</button>
+        <button type="button" @click="unifiedSession.send('weather')">统一流：天气组件</button>
+        <button type="button" @click="unifiedSession.send('a2ui')">统一流：动态 A2UI</button>
+      </div>
+      <RunSurface :runtime="unifiedSession.runtime" v-bind="unifiedSession.surface.value" />
+      <output data-testid="unified-thread-ids">{{ unifiedRequestThreadIds.join(',') }}</output>
+    </section>
   </main>
 </template>
 
@@ -366,4 +508,5 @@ async function sendClientMessage(envelope: A2UiClientEnvelope) {
 .harness > section { padding: 1.25rem; border: 1px solid #d8dee9; border-radius: 1rem; background: #fff; }
 button { font: inherit; }
 pre { overflow: auto; white-space: pre-wrap; }
+.unified-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
 </style>
