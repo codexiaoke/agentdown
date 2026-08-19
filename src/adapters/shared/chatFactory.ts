@@ -434,6 +434,8 @@ export interface FrameworkChatSessionResult<
   devtools: UseAgentDevtoolsResult<TRawPacket>;
   /** 当前是否处于“手动中断后等待恢复”的状态。 */
   interrupted: ShallowRef<boolean>;
+  /** 开始一段全新会话，同时清空 runtime、恢复游标和已捕获的后端 sessionId。 */
+  reset: () => void;
   /** 发送当前输入框内容。 */
   send: (input?: FrameworkChatInputValue, source?: TSource) => Promise<void>;
   /**
@@ -1841,6 +1843,33 @@ export function useFrameworkChatSession<
     );
   });
 
+  /**
+   * 开始一段真正独立的新会话。
+   *
+   * adapter reset 只负责清空渲染 runtime；chat helper 还必须清空后端恢复
+   * 游标，否则新会话从 cursor 1 重新计数时会被误判成旧事件的重复回放。
+   */
+  function resetChatSession() {
+    sessionState.disconnect();
+    sessionState.reset();
+    recoveryTracker.reset();
+    requestInput.value = '';
+    lastInput.value = '';
+    lastSubmission.value = null;
+    activeSubmission.value = null;
+    sessionId.value = '';
+    eventCursor.value = 0;
+    clientRequestId.value = '';
+    recoveryError.value = null;
+    restoredFromBackend.value = false;
+    replayOnly.value = false;
+    activeRecoveryRequestId.value = '';
+    interrupted.value = false;
+    pendingHumanResolutionCount.value = 0;
+    activeSource.value = initialSource;
+    chatIds.value = null;
+  }
+
   recoveryReady = initializeAutomaticRecovery();
 
   return {
@@ -1862,6 +1891,7 @@ export function useFrameworkChatSession<
     chatIds,
     devtools,
     interrupted,
+    reset: resetChatSession,
     send,
     continueConversation,
     regenerate,

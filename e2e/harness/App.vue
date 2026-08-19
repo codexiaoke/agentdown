@@ -84,7 +84,7 @@ async function startStreaming() {
   streaming.value = false;
 }
 
-const a2uiMessages: unknown[] = [
+const editableA2uiMessages: unknown[] = [
   {
     version: 'v0.9.1',
     createSurface: {
@@ -165,6 +165,93 @@ const a2uiMessages: unknown[] = [
   }
 ];
 
+interface SubmittedPlan {
+  name: string;
+  reminder: boolean;
+  topics: string[];
+  minutes: number;
+  date: string;
+}
+
+const defaultPlan: SubmittedPlan = {
+  name: '默认计划',
+  reminder: false,
+  topics: ['engineering'],
+  minutes: 30,
+  date: '2026-08-11'
+};
+const a2uiMessages = ref<unknown[]>(editableA2uiMessages);
+let submittedPlan: SubmittedPlan = defaultPlan;
+
+function editableMessages(plan: SubmittedPlan): unknown[] {
+  return [
+    editableA2uiMessages[0],
+    editableA2uiMessages[1],
+    {
+      version: 'v0.9.1',
+      updateDataModel: {
+        surfaceId: 'production-form',
+        path: '/',
+        value: plan
+      }
+    }
+  ];
+}
+
+function submittedMessages(plan: SubmittedPlan): unknown[] {
+  return [
+    editableA2uiMessages[0],
+    {
+      version: 'v0.9.1',
+      updateComponents: {
+        surfaceId: 'production-form',
+        components: [
+          { id: 'root', component: 'Column', children: ['status', 'summary', 'edit'] },
+          { id: 'status', component: 'Text', text: '✓ 已提交', variant: 'h2' },
+          { id: 'summary', component: 'Card', child: 'details' },
+          { id: 'details', component: 'Column', children: ['name-summary', 'minutes-summary', 'topics-summary', 'date-summary'] },
+          { id: 'name-summary', component: 'Text', text: { path: '/nameSummary' } },
+          { id: 'minutes-summary', component: 'Text', text: { path: '/minutesSummary' } },
+          { id: 'topics-summary', component: 'Text', text: { path: '/topicsSummary' } },
+          { id: 'date-summary', component: 'Text', text: { path: '/dateSummary' } },
+          {
+            id: 'edit',
+            component: 'Button',
+            child: 'edit-label',
+            action: {
+              event: {
+                name: 'plan_edit_requested',
+                context: {
+                  name: { path: '/name' },
+                  reminder: { path: '/reminder' },
+                  topics: { path: '/topics' },
+                  minutes: { path: '/minutes' },
+                  date: { path: '/date' }
+                }
+              }
+            }
+          },
+          { id: 'edit-label', component: 'Text', text: '修改计划' }
+        ]
+      }
+    },
+    {
+      version: 'v0.9.1',
+      updateDataModel: {
+        surfaceId: 'production-form',
+        path: '/',
+        value: {
+          ...plan,
+          nameSummary: `计划名称：${plan.name}`,
+          minutesSummary: `每日时长：${plan.minutes} 分钟`,
+          topicsSummary: `阅读主题：${plan.topics.join('、')}`,
+          dateSummary: `开始日期：${plan.date}`
+        }
+      }
+    }
+  ];
+}
+
 const readonlyWeatherMessages: unknown[] = [
   {
     version: 'v0.9.1',
@@ -213,6 +300,27 @@ function recordActionState(snapshot: A2UiActionStateSnapshot) {
 async function sendClientMessage(envelope: A2UiClientEnvelope) {
   await new Promise<void>((resolve) => globalThis.setTimeout(resolve, 600));
   lastClientEnvelope.value = envelope;
+  if (!envelope.message || !('action' in envelope.message)) return;
+
+  const { action } = envelope.message;
+  if (action.name === 'plan_submitted') {
+    const context = action.context ?? {};
+    submittedPlan = {
+      name: typeof context.name === 'string' ? context.name : defaultPlan.name,
+      reminder: typeof context.reminder === 'boolean' ? context.reminder : defaultPlan.reminder,
+      topics: Array.isArray(context.topics)
+        ? context.topics.filter((value): value is string => typeof value === 'string')
+        : defaultPlan.topics,
+      minutes: typeof context.minutes === 'number' ? context.minutes : defaultPlan.minutes,
+      date: typeof context.date === 'string' ? context.date : defaultPlan.date
+    };
+    a2uiMessages.value = submittedMessages(submittedPlan);
+    return;
+  }
+
+  if (action.name === 'plan_edit_requested') {
+    a2uiMessages.value = editableMessages(submittedPlan);
+  }
 }
 </script>
 

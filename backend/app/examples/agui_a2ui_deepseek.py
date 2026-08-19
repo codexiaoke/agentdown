@@ -9,6 +9,7 @@ import json
 import re
 from typing import Any
 
+import httpx
 from openai import AsyncOpenAI
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
@@ -306,9 +307,24 @@ def _reading_plan_values(message: dict[str, Any]) -> tuple[str, int, list[str]]:
     raw_minutes = context.get("minutes", context.get("dailyMinutes", 30))
     minutes = raw_minutes if isinstance(raw_minutes, int) and not isinstance(raw_minutes, bool) else 30
     minutes = max(10, min(120, minutes))
-    raw_pace = context.get("pace", context.get("readingPace", ["稳定"]))
-    pace = [str(value)[:40] for value in raw_pace[:4]] if isinstance(raw_pace, list) else ["稳定"]
-    return book, minutes, pace or ["稳定"]
+    raw_pace = context.get("pace", context.get("readingPace", ["适中"]))
+    pace_value = str(raw_pace[0]).strip().lower() if isinstance(raw_pace, list) and raw_pace else ""
+    pace_aliases = {
+        "轻松": "轻松",
+        "easy": "轻松",
+        "light": "轻松",
+        "relaxed": "轻松",
+        "适中": "适中",
+        "稳定": "适中",
+        "moderate": "适中",
+        "normal": "适中",
+        "steady": "适中",
+        "紧凑": "紧凑",
+        "fast": "紧凑",
+        "intensive": "紧凑",
+        "tight": "紧凑",
+    }
+    return book, minutes, [pace_aliases.get(pace_value, "适中")]
 
 
 def _reading_plan_form_surface(
@@ -846,12 +862,19 @@ async def generate_deepseek_surface(
         {"role": "user", "content": latest_input[:8_000]},
     ]
     last_error: Exception | None = None
-    async with AsyncOpenAI(
-        api_key=settings.deepseek_api_key,
-        base_url=build_openai_compatible_base_url(settings.deepseek_base_url),
-        max_retries=2,
-        timeout=60.0,
-    ) as client:
+    # This reference backend should behave consistently across developer machines.
+    # In particular, an unbracketed IPv6 entry such as ``::1`` in NO_PROXY can
+    # make httpx reject the client before the request starts. External proxy
+    # routing remains an application concern and can be supplied by replacing
+    # this example generator.
+    async with _create_deepseek_http_client() as http_client:
+        client = AsyncOpenAI(
+            api_key=settings.deepseek_api_key,
+            base_url=build_openai_compatible_base_url(settings.deepseek_base_url),
+            max_retries=2,
+            timeout=60.0,
+            http_client=http_client,
+        )
         for attempt in range(2):
             response = await client.chat.completions.create(
                 model=settings.deepseek_model,
@@ -890,6 +913,12 @@ async def generate_deepseek_surface(
             )
 
     raise ValueError(f"DeepSeek did not return a valid A2UI plan after repair: {last_error}")
+
+
+def _create_deepseek_http_client() -> httpx.AsyncClient:
+    """Create the deterministic network client used by the reference model call."""
+
+    return httpx.AsyncClient(trust_env=False, timeout=60.0)
 
 
 def build_a2ui_surface_messages(surface: AgUiGeneratedSurface) -> list[dict[str, Any]]:

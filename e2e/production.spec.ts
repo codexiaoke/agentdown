@@ -81,6 +81,18 @@ test('supports A2UI forms, keyboard tabs, modal focus and client actions', async
   await expect(page.getByTestId('client-envelope')).toContainText('product');
   await expect(page.getByTestId('client-envelope')).toContainText('45');
   await expect(page.getByTestId('client-envelope')).toContainText('2026-09-01');
+
+  await expect(surface.getByRole('heading', { name: '✓ 已提交' })).toBeVisible();
+  await expect(surface).toContainText('计划名称：浏览器验收计划');
+  await expect(surface).toContainText('每日时长：45 分钟');
+  await expect(surface.getByRole('button', { name: '提交计划' })).toHaveCount(0);
+
+  await surface.getByRole('button', { name: '修改计划' }).click();
+  await expect(surface.getByRole('heading', { name: '生产级 A2UI 表单' })).toBeVisible();
+  await expect(surface.getByRole('textbox', { name: '计划名称' })).toHaveValue('浏览器验收计划');
+  await expect(surface.getByRole('checkbox', { name: '启用每日提醒' })).toBeChecked();
+  await expect(surface.getByRole('slider', { name: /每日分钟数/ })).toHaveValue('45');
+  await expect(surface.getByLabel('开始日期')).toHaveValue('2026-09-01');
 });
 
 test('renders a read-only A2UI result without inventing actions', async ({ page }) => {
