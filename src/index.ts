@@ -395,6 +395,7 @@ export type {
   UseAgentChatFrameworkOptions,
   UseAgentChatLangChainOptions,
   UseAgentChatSpringAiOptions,
+  UseAgentChatStreamOptions,
   UseAgentChatOptions,
   UseAgentChatResult
 } from './composables/useAgentChat';

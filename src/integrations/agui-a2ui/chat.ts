@@ -15,6 +15,7 @@ import { useFrameworkChatSession } from '../../adapters/shared/chatFactory';
 import type { FrameworkJsonTransportResolvable } from '../../adapters/shared/jsonSseTransportFactory';
 import type { RunSurfaceRendererContext } from '../../surface/types';
 import { createAgUiA2UiAdapter } from './adapter';
+import { defineAgentAnswerComponents } from './components';
 import type { AgUiA2UiCombinedProtocol } from './protocol';
 import type {
   AgUiA2UiAdapterOptions,
@@ -69,6 +70,9 @@ export function useAgUiA2UiChatSession<TSource = RequestInfo | URL>(
     options.recovery !== undefined && options.recovery !== false
   );
   const configuredForwardedProps = options.transport?.forwardedProps;
+  const configuredTools = options.transport?.tools;
+  const configuredToolRenderer = options.protocolOptions?.toolRenderer;
+  const answerComponents = defineAgentAnswerComponents(options.components ?? {});
   const serializeClient = options.serializeA2UiClient ?? serializeAgUiA2UiForwardedProps;
   const rendererOptions = options.a2uiRenderer;
   const catalogs = rendererOptions?.catalogs ?? [defaultA2UiBasicCatalog];
@@ -100,6 +104,15 @@ export function useAgUiA2UiChatSession<TSource = RequestInfo | URL>(
     'message'
   > = {
     ...(options.transport ?? {}),
+    tools: async (
+      source: TSource,
+      context: FrameworkChatTransportContext | undefined
+    ) => {
+      const configured = await resolveTransportValue(source, configuredTools, context) ?? [];
+      const byName = new Map(configured.map((tool) => [tool.name, tool]));
+      for (const tool of answerComponents.tools) byName.set(tool.name, tool);
+      return [...byName.values()];
+    },
     forwardedProps: async (
       source: TSource,
       context: FrameworkChatTransportContext | undefined
@@ -122,6 +135,7 @@ export function useAgUiA2UiChatSession<TSource = RequestInfo | URL>(
     ...(options.surface ?? {}),
     renderers: {
       ...(options.surface?.renderers ?? {}),
+      ...answerComponents.renderers,
       [A2UI_SURFACE_RENDERER]: {
         component: A2UiSurface,
         mode: 'context' as const,
@@ -168,6 +182,15 @@ export function useAgUiA2UiChatSession<TSource = RequestInfo | URL>(
     frameworkName: 'AG-UI+A2UI',
     options: {
       ...options,
+      protocolOptions: {
+        ...(options.protocolOptions ?? {}),
+        toolRenderer(input) {
+          const answerRenderer = answerComponents.resolveRenderer(input.toolCallName);
+          if (answerRenderer) return answerRenderer;
+          if (typeof configuredToolRenderer === 'function') return configuredToolRenderer(input);
+          return configuredToolRenderer;
+        }
+      },
       surface,
       transport: transportOptions
     },
