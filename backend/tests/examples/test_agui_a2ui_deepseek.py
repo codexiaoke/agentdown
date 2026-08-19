@@ -192,8 +192,7 @@ class AgUiProviderTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("RUN_FINISHED", events[-1]["type"])
         self.assertEqual("deepseek-test-model", events[-1]["result"]["model"])
 
-        tool_result = next(event for event in events if event["type"] == "TOOL_CALL_RESULT")
-        self.assertEqual("deepseek", json.loads(tool_result["content"])["source"])
+        self.assertNotIn("TOOL_CALL_START", {event["type"] for event in events})
         a2ui_values = [
             event["value"]
             for event in events

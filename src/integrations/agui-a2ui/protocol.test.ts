@@ -21,6 +21,9 @@ describe('AG-UI+A2UI protocol extension', () => {
 
     session.push([
       { type: EventType.RUN_STARTED, threadId: 'thread-1', runId: 'run-1' },
+      { type: EventType.TEXT_MESSAGE_START, messageId: 'assistant-1', role: 'assistant' },
+      { type: EventType.TEXT_MESSAGE_CONTENT, messageId: 'assistant-1', delta: '计划如下。' },
+      { type: EventType.TEXT_MESSAGE_END, messageId: 'assistant-1' },
       { type: EventType.CUSTOM, name: 'a2ui', value: createSurface },
       {
         type: EventType.CUSTOM,
@@ -54,10 +57,37 @@ describe('AG-UI+A2UI protocol extension', () => {
       renderer: 'a2ui.surface',
       state: 'stable',
       conversationId: 'thread-1',
-      turnId: 'run-2'
+      turnId: 'run-2',
+      messageId: 'assistant-1'
     });
     expect((block?.data.messages as unknown[])).toHaveLength(3);
     expect(a2uiProtocol.getSurfaceMessages('thread-1', 'planner')).toHaveLength(3);
+
+    session.close();
+  });
+
+  it('uses the main AG-UI message resolver for A2UI blocks', () => {
+    const adapter = createAgUiA2UiAdapter({
+      protocolOptions: {
+        messageId: () => 'message:assistant:semantic'
+      }
+    });
+    const session = adapter.createSession();
+
+    session.push([
+      { type: EventType.RUN_STARTED, threadId: 'thread-semantic', runId: 'run-semantic' },
+      { type: EventType.TEXT_MESSAGE_START, messageId: 'message:assistant:raw', role: 'assistant' },
+      { type: EventType.TEXT_MESSAGE_CONTENT, messageId: 'message:assistant:raw', delta: '计划如下。' },
+      { type: EventType.TEXT_MESSAGE_END, messageId: 'message:assistant:raw' },
+      { type: EventType.CUSTOM, name: 'a2ui', value: createSurface },
+      { type: EventType.RUN_FINISHED, threadId: 'thread-semantic', runId: 'run-semantic' }
+    ] as AGUIEvent[]);
+    session.flush('semantic-message');
+
+    const textBlock = session.runtime.blocks().find((block) => block.type === 'text');
+    expect(textBlock?.messageId).toBe('message:assistant:semantic');
+    expect(session.runtime.block('block:a2ui:thread-semantic:planner')?.messageId)
+      .toBe('message:assistant:semantic');
 
     session.close();
   });

@@ -1272,9 +1272,13 @@ async def stream_agui_events(
     tool_call_name = (
         generation.name
         if isinstance(generation, AgUiAnswerComponentGeneration)
-        else "render_a2ui_surface"
+        else None
     )
-    tool_call_id = f"tool:{tool_call_name}:{request.run_id}"
+    tool_call_id = (
+        f"tool:{tool_call_name}:{request.run_id}"
+        if tool_call_name is not None
+        else None
+    )
     if known_action_surface is None:
         async for event in _yield_event({"type": "THINKING_END"}):
             yield event
@@ -1295,17 +1299,8 @@ async def stream_agui_events(
                 {"type": "TEXT_MESSAGE_END", "messageId": assistant_message_id},
             ])
         if isinstance(generation, AgUiModelGeneration):
-            tool_arguments = {
-                "surfaceId": A2UI_SURFACE_ID,
-                "components": generation.surface.components,
-                "dataModel": generation.surface.data_model,
-            }
-            tool_result = {
-                "ok": True,
-                "source": "deepseek",
-                "model": generation.model,
-                "componentCount": len(generation.surface.components),
-            }
+            tool_arguments = None
+            tool_result = None
         elif isinstance(generation, AgUiAnswerComponentGeneration):
             tool_arguments = generation.props
             tool_result = {
@@ -1318,7 +1313,12 @@ async def stream_agui_events(
             tool_arguments = None
             tool_result = None
 
-        if tool_arguments is not None and tool_result is not None:
+        if (
+            tool_call_name is not None
+            and tool_call_id is not None
+            and tool_arguments is not None
+            and tool_result is not None
+        ):
             response_events.extend([
                 {
                     "type": "TOOL_CALL_START",

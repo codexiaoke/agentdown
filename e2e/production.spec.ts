@@ -122,6 +122,11 @@ test('uses one chat session for text, frontend components, and dynamic A2UI', as
   await expect(unified.getByRole('textbox', { name: '书名' }))
     .toHaveValue('Designing Data-Intensive Applications');
   await expect(unified.getByRole('slider', { name: /每日分钟数/ })).toHaveValue('30');
+  const assistantMessage = unified.locator(
+    '.agentdown-run-surface-group[data-role="assistant"]'
+  );
+  await expect(assistantMessage).toHaveCount(1);
+  await expect(assistantMessage.locator('.agentdown-run-surface-message-actions')).toHaveCount(1);
   await expect(unified.getByTestId('unified-thread-ids'))
     .toHaveText('e2e:unified-chat,e2e:unified-chat,e2e:unified-chat');
 });
