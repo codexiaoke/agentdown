@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { EventType, type AGUIEvent } from '@ag-ui/core';
 import { ref } from 'vue';
+import AgentChatWorkspace from '../../src/components/AgentChatWorkspace.vue';
 import MarkdownRenderer from '../../src/components/MarkdownRenderer.vue';
 import RunSurface from '../../src/components/RunSurface.vue';
 import A2UiSurface from '../../src/a2ui/components/A2UiSurface.vue';
@@ -295,11 +296,26 @@ const readonlyWeatherMessages: unknown[] = [
 
 const unifiedRequestThreadIds = ref<string[]>([]);
 
-function sseResponse(events: AGUIEvent[]): Response {
-  return new Response([
-    ...events.flatMap((event) => [`data: ${JSON.stringify(event)}`, '']),
-    ''
-  ].join('\n'), { headers: { 'Content-Type': 'text/event-stream' } });
+function sseResponse(events: AGUIEvent[], delayMs = 0): Response {
+  if (delayMs === 0) {
+    return new Response([
+      ...events.flatMap((event) => [`data: ${JSON.stringify(event)}`, '']),
+      ''
+    ].join('\n'), { headers: { 'Content-Type': 'text/event-stream' } });
+  }
+
+  const encoder = new TextEncoder();
+  const body = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      for (const event of events) {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+        await new Promise<void>((resolve) => globalThis.setTimeout(resolve, delayMs));
+      }
+      controller.close();
+    }
+  });
+
+  return new Response(body, { headers: { 'Content-Type': 'text/event-stream' } });
 }
 
 const unifiedFetch: typeof fetch = async (_source, init) => {
@@ -388,13 +404,15 @@ const unifiedFetch: typeof fetch = async (_source, init) => {
   } else {
     events.push(
       { type: EventType.TEXT_MESSAGE_START, messageId: `${request.runId}:assistant`, role: 'assistant' },
-      { type: EventType.TEXT_MESSAGE_CONTENT, messageId: `${request.runId}:assistant`, delta: '这是不需要任何 UI 组件的普通文本回答。' },
+      { type: EventType.TEXT_MESSAGE_CONTENT, messageId: `${request.runId}:assistant`, delta: '这是不需要任何 UI' },
+      { type: EventType.TEXT_MESSAGE_CONTENT, messageId: `${request.runId}:assistant`, delta: ' 组件的普通' },
+      { type: EventType.TEXT_MESSAGE_CONTENT, messageId: `${request.runId}:assistant`, delta: '文本回答。' },
       { type: EventType.TEXT_MESSAGE_END, messageId: `${request.runId}:assistant` }
     );
   }
 
   events.push({ type: EventType.RUN_FINISHED, threadId: request.threadId, runId: request.runId });
-  return sseResponse(events);
+  return sseResponse(events, content === 'text' ? 250 : 0);
 };
 
 const unifiedSession = useAgentChat({
@@ -497,7 +515,13 @@ async function sendClientMessage(envelope: A2UiClientEnvelope) {
         <button type="button" @click="unifiedSession.send('weather')">统一流：天气组件</button>
         <button type="button" @click="unifiedSession.send('a2ui')">统一流：动态 A2UI</button>
       </div>
-      <RunSurface :runtime="unifiedSession.runtime" v-bind="unifiedSession.surface.value" />
+      <AgentChatWorkspace
+        class="unified-workspace"
+        :runtime="unifiedSession.runtime"
+        :surface="unifiedSession.surface.value"
+        :busy="unifiedSession.busy.value"
+        :disclaimer="false"
+      />
       <output data-testid="unified-thread-ids">{{ unifiedRequestThreadIds.join(',') }}</output>
     </section>
   </main>
@@ -509,4 +533,5 @@ async function sendClientMessage(envelope: A2UiClientEnvelope) {
 button { font: inherit; }
 pre { overflow: auto; white-space: pre-wrap; }
 .unified-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
+.unified-workspace { min-height: 420px; }
 </style>

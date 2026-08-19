@@ -1186,6 +1186,12 @@ async def _yield_event(event: dict[str, Any]) -> AsyncIterator[dict[str, Any]]:
     await asyncio.sleep(0.01)
 
 
+def _text_stream_chunks(text: str) -> list[str]:
+    """Split completed model text into visible SSE typing increments."""
+
+    return list(text)
+
+
 async def stream_agui_events(
     request: AgUiRunAgentInput,
     settings: BackendSettings,
@@ -1282,22 +1288,31 @@ async def stream_agui_events(
     if known_action_surface is None:
         async for event in _yield_event({"type": "THINKING_END"}):
             yield event
-        response_events: list[dict[str, Any]] = []
         assistant_text = _generation_assistant_text(generation)
         if assistant_text:
-            response_events.extend([
+            async for event in _yield_event(
                 {
                     "type": "TEXT_MESSAGE_START",
                     "messageId": assistant_message_id,
                     "role": "assistant",
-                },
-                {
-                    "type": "TEXT_MESSAGE_CONTENT",
-                    "messageId": assistant_message_id,
-                    "delta": assistant_text,
-                },
-                {"type": "TEXT_MESSAGE_END", "messageId": assistant_message_id},
-            ])
+                }
+            ):
+                yield event
+            for chunk in _text_stream_chunks(assistant_text):
+                async for event in _yield_event(
+                    {
+                        "type": "TEXT_MESSAGE_CONTENT",
+                        "messageId": assistant_message_id,
+                        "delta": chunk,
+                    }
+                ):
+                    yield event
+            async for event in _yield_event(
+                {"type": "TEXT_MESSAGE_END", "messageId": assistant_message_id}
+            ):
+                yield event
+
+        response_events: list[dict[str, Any]] = []
         if isinstance(generation, AgUiModelGeneration):
             tool_arguments = None
             tool_result = None

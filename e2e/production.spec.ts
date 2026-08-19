@@ -106,6 +106,17 @@ test('renders a read-only A2UI result without inventing actions', async ({ page 
   await expect(weather.getByRole('textbox')).toHaveCount(0);
 });
 
+test('shows a waiting animation before streaming assistant text incrementally', async ({ page }) => {
+  const unified = page.getByTestId('unified-chat');
+
+  await unified.getByRole('button', { name: '统一流：文本' }).click();
+  await expect(unified.getByRole('status', { name: '正在思考' })).toBeVisible();
+  await expect(unified).toContainText('这是不需要任何 UI');
+  expect(await unified.textContent()).not.toContain('这是不需要任何 UI 组件的普通文本回答。');
+  await expect(unified).toContainText('这是不需要任何 UI 组件的普通文本回答。');
+  await expect(unified.getByRole('status', { name: '正在思考' })).toHaveCount(0);
+});
+
 test('uses one chat session for text, frontend components, and dynamic A2UI', async ({ page }) => {
   const unified = page.getByTestId('unified-chat');
 
