@@ -52,7 +52,7 @@ describe('createAgUiSseTransport', () => {
     });
     const events = [];
 
-    for await (const event of transport.connect('/api/stream/agui', {
+    for await (const event of transport.connect('/api/stream/chat', {
       signal: new AbortController().signal
     })) {
       events.push(event);

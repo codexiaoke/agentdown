@@ -6,7 +6,7 @@ describe('useAgUiChatSession', () => {
   it('exposes AG-UI state without installing application renderers', () => {
     const scope = effectScope();
     const session = scope.run(() => useAgUiChatSession<string>({
-      source: '/api/stream/agui',
+      source: '/api/stream/chat',
       conversationId: 'thread:test'
     }));
     expect(session).toBeDefined();

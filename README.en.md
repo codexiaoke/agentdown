@@ -38,25 +38,41 @@ It is mainly responsible for:
 - keeping long text and heavy blocks performant in the browser
 - letting official framework events plug into the frontend directly
 
-## AG-UI + A2UI Generative UI
+## One Chat Endpoint, Multiple Answer Formats
 
-AG-UI and A2UI are independent layers. Import pure AG-UI from `agentdown/ag-ui`, and opt into `agentdown/ag-ui-a2ui` only when you need generative UI.
+Product code should normally use `useAgentChat()` with one `/api/stream/chat` endpoint. AG-UI carries the chat events while the agent can answer with text, select a registered frontend component, or fall back to dynamic A2UI when fixed components are insufficient.
 
 ```ts
-import { useAgUiA2UiChatSession } from 'agentdown/ag-ui-a2ui';
+import { useAgentChat } from 'agentdown';
+import WeatherCard from './WeatherCard.vue';
 
-const session = useAgUiA2UiChatSession({
-  source: '/api/stream/agui',
-  conversationId: 'session:trip-planner',
-  recovery: {}
+const session = useAgentChat({
+  source: '/api/stream/chat',
+  conversationId: 'session:assistant',
+  components: {
+    weather_card: {
+      component: WeatherCard,
+      description: 'Render trusted weather result data',
+      propsSchema: {
+        type: 'object',
+        properties: {
+          city: { type: 'string' },
+          temperature: { type: 'number' },
+          condition: { type: 'string' }
+        },
+        required: ['city', 'temperature', 'condition'],
+        additionalProperties: false
+      }
+    }
+  }
 });
 
-await session.send('Build an interactive weekend trip planner');
+await session.send('Use this weather data: Shenzhen, 26°C, cloudy');
 ```
 
-The agent sends declarative components and data only. Vue implementations, URL policy, and resource limits remain frontend-owned. Actions and errors carry client capabilities and any data model explicitly enabled by the server. The standalone A2UI runtime is available from `agentdown/a2ui` without AG-UI.
+The agent sees only component names, descriptions, and prop schemas. It never receives Vue implementations and cannot return executable HTML or JavaScript. Dynamic A2UI remains constrained by frontend catalogs, URL policy, and resource limits. The `agentdown/ag-ui`, `agentdown/a2ui`, and `agentdown/ag-ui-a2ui` subpaths remain available as advanced low-level APIs.
 
-The repository includes three independent Vue consumers under `examples/`: pure AG-UI, standalone A2UI, and AG-UI+A2UI. Their reference endpoints call DeepSeek for real; in-memory state is limited to example conversations and events. See [AG-UI and A2UI](https://codexiaoke.github.io/agentdown/guide/ag-ui-a2ui) for the full contract.
+The repository demo uses real DeepSeek generation to exercise plain text, a frontend-owned `WeatherCard`, and an interactive reading-plan A2UI surface in one conversation. FastAPI exists only for library integration testing and keeps example conversations and events in memory. See [AG-UI and A2UI](https://codexiaoke.github.io/agentdown/guide/ag-ui-a2ui) for the full contract.
 
 ## Fastest Way To Integrate Official Frameworks
 

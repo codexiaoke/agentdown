@@ -2,7 +2,7 @@
 
 这个 `backend/` 目录提供的是一个真实的 FastAPI SSE backend，用来和前端适配层直接联调。
 
-其中 `/api/stream/agui` 是放在 `app/examples/` 下的真实 AG-UI+A2UI 参考实现：它调用 DeepSeek 生成 A2UI 计划，内存只承担会话与事件存储。它用于说明库的组合方式，不是 Agentdown 要求的固定后端。Agno、LangChain、AutoGen、CrewAI endpoint 同样不是业务 mock，而是：
+其中 `/api/stream/chat` 是放在 `app/examples/` 下的统一 Chat 参考实现：它调用 DeepSeek，并在同一个 AG-UI 流中选择普通文字、前端注册回答组件或动态 A2UI。内存只承担测试会话与事件存储；它用于说明前端库的组合方式，不是 Agentdown 要求用户部署的固定后端。Agno、LangChain、AutoGen、CrewAI endpoint 是协议适配实验入口，同样会真实调用：
 
 - `DeepSeek` 大模型
 - 真实 Agent 框架
@@ -11,7 +11,7 @@
 
 当前提供这些 endpoint：
 
-- `/api/stream/agui`：参考示例；DeepSeek 生成、后端校验并通过标准 AG-UI `CUSTOM` 发送 A2UI v0.9.1 Surface
+- `/api/stream/chat`：推荐参考示例；DeepSeek 在标准 AG-UI 流中选择文字、前端组件或经校验的 A2UI v0.9.1 Surface
 - `/api/examples/agui`：纯 AG-UI 消费者示例；DeepSeek 文本回复，只发送标准 lifecycle/text events
 - `/api/examples/a2ui`：独立 A2UI 消费者示例；普通 JSON transport 返回 A2UI messages，不依赖 AG-UI
 - `/api/stream/agno`
@@ -123,11 +123,11 @@ curl http://127.0.0.1:8000/api/health
 
 仓库的三个独立 Vue 消费者位于 `examples/vue-ag-ui`、`examples/vue-a2ui` 和 `examples/vue-ag-ui-a2ui`。它们分别连接上面三个真实端点，用于验证公开 npm subpath 的依赖边界。
 
-### AG-UI + A2UI 参考示例（真实 DeepSeek）
+### 统一 Chat 参考示例（真实 DeepSeek）
 
 ```bash
 curl -N \
-  -X POST http://127.0.0.1:8000/api/stream/agui \
+  -X POST http://127.0.0.1:8000/api/stream/chat \
   -H 'Content-Type: application/json' \
   -H 'Idempotency-Key: request:reading-demo-1' \
   -d '{
@@ -157,7 +157,7 @@ curl -N \
   }'
 ```
 
-这个 endpoint 会先校验首次请求中的 A2UI Basic Catalog 能力握手，再调用配置的 DeepSeek Chat Completion JSON mode。它会校验模型生成的组件树、DataModel、绑定路径、action 和资源上限，并返回标准 AG-UI lifecycle/text/tool/state events，以及三条装在 `CUSTOM name=a2ui` 中的 A2UI v0.9.1 Surface 消息。后续 action/error 回传继续采用 `forwardedProps.a2ui.clientMessage/clientCapabilities/clientDataModel`。完成事件的 `result.model` 和 `result.usage` 来自真实模型响应。
+这个 endpoint 会先校验首次请求中的 A2UI Basic Catalog 能力握手，再把显式标记为 `frontend-answer-component` 的 AG-UI tools 和内部 A2UI 工具交给 DeepSeek 选择。普通问题只返回 text events；固定组件返回标准 tool-call events；动态界面通过 `CUSTOM name=a2ui` 返回经过校验的 A2UI Surface。后续 action/error 回传继续采用 `forwardedProps.a2ui.clientMessage/clientCapabilities/clientDataModel`。完成事件的 `result.model` 和 `result.usage` 来自真实模型响应。
 
 读书计划中的已知业务 action 使用确定性示例 handler：`reading_plan_submitted` 会把原
 Surface 更新成“已提交”只读摘要，`reading_plan_edit_requested` 会带着原值回到编辑态。

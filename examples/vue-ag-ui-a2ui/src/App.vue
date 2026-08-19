@@ -1,12 +1,11 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import { RunSurface } from 'agentdown';
-import { useAgUiA2UiChatSession } from 'agentdown/ag-ui-a2ui';
+import { RunSurface, useAgentChat } from 'agentdown';
 
 const apiBase = (import.meta.env.VITE_AGENTDOWN_API_BASE || 'http://127.0.0.1:8000').replace(/\/$/, '');
 const prompt = ref('生成一个读书计划表单，包含书名、每日分钟数、阅读节奏和确认按钮。');
-const session = useAgUiA2UiChatSession<string>({
-  source: `${apiBase}/api/stream/agui`,
+const session = useAgentChat<string>({
+  source: `${apiBase}/api/stream/chat`,
   input: prompt,
   conversationId: 'example:ag-ui-a2ui',
   recovery: {}
@@ -22,9 +21,9 @@ async function submit() {
 <template>
   <main class="page">
     <header>
-      <p class="eyebrow">agentdown/ag-ui-a2ui</p>
-      <h1>AG-UI + A2UI 消费者</h1>
-      <p>AG-UI 管理 run 与恢复，A2UI 负责受前端 Catalog 约束的生成式界面。</p>
+      <p class="eyebrow">agentdown · useAgentChat</p>
+      <h1>统一 Chat 消费者</h1>
+      <p>一个 AG-UI 聊天流可返回普通文字、前端注册组件或受 Catalog 约束的 A2UI。</p>
     </header>
 
     <section class="chat">
