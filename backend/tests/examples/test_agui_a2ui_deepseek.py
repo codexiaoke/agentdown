@@ -212,7 +212,7 @@ class AgUiProviderTest(unittest.IsolatedAsyncioTestCase):
                 async for event in stream_agui_events(request, load_settings(), _fake_generator)
             ]
 
-    async def test_a2ui_action_is_sent_to_model_with_prior_session_context(self) -> None:
+    async def test_reading_plan_submit_uses_deterministic_confirmation_without_duplicate_chat(self) -> None:
         first_request = AgUiRunAgentInput.model_validate(_run_input())
         _ = [
             event
@@ -272,16 +272,103 @@ class AgUiProviderTest(unittest.IsolatedAsyncioTestCase):
             )
         ]
 
-        self.assertEqual(1, len(calls))
-        self.assertEqual("生成一个读书计划表单", calls[0][0][0]["content"])
-        self.assertIn('"book":"深度工作"', calls[0][1])
-        self.assertIn('"clientDataModel"', calls[0][1])
+        self.assertEqual([], calls)
+        self.assertNotIn("TEXT_MESSAGE_START", {event["type"] for event in events})
+        self.assertNotIn("TOOL_CALL_START", {event["type"] for event in events})
+        generating_state = next(event["snapshot"] for event in events if event["type"] == "STATE_SNAPSHOT")
+        self.assertEqual("application", generating_state["source"])
+        components_message = next(
+            event["value"]["updateComponents"]
+            for event in events
+            if event["type"] == "CUSTOM" and "updateComponents" in event["value"]
+        )
+        components = components_message["components"]
+        self.assertIn(
+            {"id": "status", "component": "Text", "text": "✓ 已提交", "variant": "h2"},
+            components,
+        )
+        edit_button = next(component for component in components if component["id"] == "edit")
+        self.assertEqual(
+            "reading_plan_edit_requested",
+            edit_button["action"]["event"]["name"],
+        )
         data_message = next(
             event["value"]["updateDataModel"]
             for event in events
             if event["type"] == "CUSTOM" and "updateDataModel" in event["value"]
         )
-        self.assertEqual("已提交的阅读计划", data_message["value"]["title"])
+        self.assertEqual("深度工作", data_message["value"]["book"])
+        self.assertEqual("每日阅读：45 分钟", data_message["value"]["minutesSummary"])
+
+    async def test_reading_plan_requires_a_book_and_can_return_to_prefilled_editing(self) -> None:
+        def action_request(name: str, book: str) -> AgUiRunAgentInput:
+            action = {
+                "name": name,
+                "surfaceId": "agent-surface",
+                "sourceComponentId": "submit" if name == "reading_plan_submitted" else "edit",
+                "timestamp": "2026-08-09T10:00:00.000Z",
+                "context": {"book": book, "minutes": 45, "pace": ["适中"]},
+            }
+            return AgUiRunAgentInput.model_validate(_run_input(
+                run_id=f"run-{name}",
+                content="",
+                forwarded_props={
+                    "a2ui": {
+                        "clientMessage": {"version": "v0.9.1", "action": action},
+                        "clientCapabilities": {
+                            "v0.9.1": {
+                                "supportedCatalogIds": [
+                                    "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+                                ]
+                            }
+                        },
+                    }
+                },
+            ))
+
+        invalid_events = [
+            event
+            async for event in stream_agui_events(
+                action_request("reading_plan_submitted", ""),
+                load_settings(),
+                _fake_generator,
+            )
+        ]
+        invalid_components = next(
+            event["value"]["updateComponents"]["components"]
+            for event in invalid_events
+            if event["type"] == "CUSTOM" and "updateComponents" in event["value"]
+        )
+        self.assertIn(
+            "请输入书名后再提交。",
+            [component.get("text") for component in invalid_components],
+        )
+        self.assertIn("submit", {component["id"] for component in invalid_components})
+
+        edit_events = [
+            event
+            async for event in stream_agui_events(
+                action_request("reading_plan_edit_requested", "深度工作"),
+                load_settings(),
+                _fake_generator,
+            )
+        ]
+        edit_data = next(
+            event["value"]["updateDataModel"]["value"]
+            for event in edit_events
+            if event["type"] == "CUSTOM" and "updateDataModel" in event["value"]
+        )
+        self.assertEqual(
+            {"book": "深度工作", "minutes": 45, "pace": ["适中"]},
+            edit_data,
+        )
+        edit_components = next(
+            event["value"]["updateComponents"]["components"]
+            for event in edit_events
+            if event["type"] == "CUSTOM" and "updateComponents" in event["value"]
+        )
+        self.assertIn("submit", {component["id"] for component in edit_components})
+        self.assertNotIn("edit", {component["id"] for component in edit_components})
 
     async def test_rejects_client_functions_and_missing_bindings(self) -> None:
         unsafe = _surface().model_dump(by_alias=True)

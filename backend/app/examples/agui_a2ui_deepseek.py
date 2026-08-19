@@ -93,6 +93,7 @@ _SYSTEM_PROMPT = """你是 Agentdown 的生成式界面 Agent。根据对话和�
 5. TextField 至少有 label；ChoicePicker 的 value 必须绑定字符串数组，options 为 label/value；Slider 必须有 max 和 value；DateTimeInput 的 value 是 ISO 8601 字符串或空字符串。
 6. 界面控制在 20 个组件以内，文案使用用户语言。不要生成 URL、媒体、密码框或正则表达式。
 7. 如果最新输入是 A2UI action，基于 action 的真实 context 更新结果，并按需要继续提供可交互界面。
+8. 如果用户只要求展示信息，使用 Text、Row、Column、List、Card、Divider 等展示组件，不要凭空添加 Button、提交或修改动作。
 
 合法 JSON 示例：
 {"assistantText":"我为你准备了一个可调整的阅读计划。","components":[{"id":"root","component":"Column","children":["title","card"]},{"id":"title","component":"Text","text":{"path":"/title"},"variant":"h2"},{"id":"card","component":"Card","child":"form"},{"id":"form","component":"Column","children":["book","minutes","submit"]},{"id":"book","component":"TextField","label":"书名","value":{"path":"/book"}},{"id":"minutes","component":"Slider","label":"每日分钟数","min":10,"max":120,"value":{"path":"/minutes"}},{"id":"submit","component":"Button","child":"submitText","variant":"primary","action":{"event":{"name":"reading_plan_submitted","context":{"book":{"path":"/book"},"minutes":{"path":"/minutes"}}}}},{"id":"submitText","component":"Text","text":"确认计划"}],"dataModel":{"title":"阅读计划","book":"","minutes":30}}
@@ -287,6 +288,184 @@ def _latest_input(request: AgUiRunAgentInput) -> str:
     if not prompt:
         raise ValueError("AG-UI request requires a user message or an A2UI action.")
     return prompt
+
+
+def _reading_plan_values(message: dict[str, Any]) -> tuple[str, int, list[str]]:
+    """Read bounded reading-plan values from one validated A2UI action."""
+
+    action = message.get("action")
+    context = action.get("context") if isinstance(action, dict) else None
+    context = context if isinstance(context, dict) else {}
+    book = str(context.get("book", "")).strip()[:200]
+    raw_minutes = context.get("minutes", 30)
+    minutes = raw_minutes if isinstance(raw_minutes, int) and not isinstance(raw_minutes, bool) else 30
+    minutes = max(10, min(120, minutes))
+    raw_pace = context.get("pace", ["稳定"])
+    pace = [str(value)[:40] for value in raw_pace[:4]] if isinstance(raw_pace, list) else ["稳定"]
+    return book, minutes, pace or ["稳定"]
+
+
+def _reading_plan_form_surface(
+    *,
+    book: str,
+    minutes: int,
+    pace: list[str],
+    error: str | None = None,
+) -> AgUiGeneratedSurface:
+    """Build the deterministic editable state for the reading-plan example."""
+
+    form_children = ["book", "minutes", "pace"]
+    components: list[dict[str, Any]] = [
+        {"id": "root", "component": "Column", "children": ["title", "card"]},
+        {"id": "title", "component": "Text", "text": "读书计划", "variant": "h2"},
+        {"id": "card", "component": "Card", "child": "form"},
+        {"id": "form", "component": "Column", "children": form_children},
+        {
+            "id": "book",
+            "component": "TextField",
+            "label": "书名",
+            "value": {"path": "/book"},
+        },
+        {
+            "id": "minutes",
+            "component": "Slider",
+            "label": "每日分钟数",
+            "min": 10,
+            "max": 120,
+            "value": {"path": "/minutes"},
+        },
+        {
+            "id": "pace",
+            "component": "ChoicePicker",
+            "label": "阅读节奏",
+            "variant": "mutuallyExclusive",
+            "options": [
+                {"label": "轻松", "value": "轻松"},
+                {"label": "适中", "value": "适中"},
+                {"label": "紧凑", "value": "紧凑"},
+            ],
+            "value": {"path": "/pace"},
+        },
+        {
+            "id": "submit",
+            "component": "Button",
+            "child": "submitText",
+            "variant": "primary",
+            "action": {
+                "event": {
+                    "name": "reading_plan_submitted",
+                    "context": {
+                        "book": {"path": "/book"},
+                        "minutes": {"path": "/minutes"},
+                        "pace": {"path": "/pace"},
+                    },
+                }
+            },
+        },
+        {"id": "submitText", "component": "Text", "text": "提交计划"},
+    ]
+    if error:
+        form_children.append("validationError")
+        components.append({
+            "id": "validationError",
+            "component": "Text",
+            "text": error,
+            "variant": "caption",
+        })
+    form_children.append("submit")
+    return validate_generated_surface(AgUiGeneratedSurface.model_validate({
+        "assistantText": error or "你可以继续调整计划，确认后再提交。",
+        "components": components,
+        "dataModel": {"book": book, "minutes": minutes, "pace": pace},
+    }))
+
+
+def _reading_plan_submitted_surface(
+    *,
+    book: str,
+    minutes: int,
+    pace: list[str],
+) -> AgUiGeneratedSurface:
+    """Build a stable read-only confirmation instead of regenerating the form."""
+
+    return validate_generated_surface(AgUiGeneratedSurface.model_validate({
+        "assistantText": "读书计划已提交。需要调整时可以原地修改。",
+        "components": [
+            {
+                "id": "root",
+                "component": "Column",
+                "children": ["status", "card", "edit"],
+            },
+            {
+                "id": "status",
+                "component": "Text",
+                "text": "✓ 已提交",
+                "variant": "h2",
+            },
+            {"id": "card", "component": "Card", "child": "summary"},
+            {
+                "id": "summary",
+                "component": "Column",
+                "children": ["bookSummary", "minutesSummary", "paceSummary"],
+            },
+            {"id": "bookSummary", "component": "Text", "text": {"path": "/bookSummary"}},
+            {
+                "id": "minutesSummary",
+                "component": "Text",
+                "text": {"path": "/minutesSummary"},
+            },
+            {"id": "paceSummary", "component": "Text", "text": {"path": "/paceSummary"}},
+            {
+                "id": "edit",
+                "component": "Button",
+                "child": "editText",
+                "variant": "default",
+                "action": {
+                    "event": {
+                        "name": "reading_plan_edit_requested",
+                        "context": {
+                            "book": {"path": "/book"},
+                            "minutes": {"path": "/minutes"},
+                            "pace": {"path": "/pace"},
+                        },
+                    }
+                },
+            },
+            {"id": "editText", "component": "Text", "text": "修改计划"},
+        ],
+        "dataModel": {
+            "book": book,
+            "minutes": minutes,
+            "pace": pace,
+            "bookSummary": f"书名：{book}",
+            "minutesSummary": f"每日阅读：{minutes} 分钟",
+            "paceSummary": f"阅读节奏：{'、'.join(pace)}",
+        },
+    }))
+
+
+def build_known_action_surface(message: dict[str, Any] | None) -> AgUiGeneratedSurface | None:
+    """Handle stable example actions without asking the model to invent lifecycle UI."""
+
+    if not isinstance(message, dict):
+        return None
+    action = message.get("action")
+    if not isinstance(action, dict):
+        return None
+    action_name = action.get("name")
+    if action_name not in {"reading_plan_submitted", "reading_plan_edit_requested"}:
+        return None
+    book, minutes, pace = _reading_plan_values(message)
+    if action_name == "reading_plan_edit_requested":
+        return _reading_plan_form_surface(book=book, minutes=minutes, pace=pace)
+    if not book:
+        return _reading_plan_form_surface(
+            book=book,
+            minutes=minutes,
+            pace=pace,
+            error="请输入书名后再提交。",
+        )
+    return _reading_plan_submitted_surface(book=book, minutes=minutes, pace=pace)
 
 
 def _validate_json_value(value: Any, *, path: str = "$", depth: int = 0) -> None:
@@ -734,8 +913,12 @@ async def stream_agui_events(
     """Run the real model agent and stream AG-UI lifecycle plus validated A2UI."""
 
     generator = generator or generate_deepseek_surface
+    client_transport = _read_a2ui_client_transport(request)
+    client_message = client_transport["message"]
+    known_action_surface = build_known_action_surface(client_message)
     latest_input = _latest_input(request)
     lock = await agui_agent_session_store.lock_for(request.thread_id)
+    source = "application" if known_action_surface is not None else "deepseek"
 
     async for event in _yield_event(
         {
@@ -746,17 +929,18 @@ async def stream_agui_events(
         }
     ):
         yield event
-    async for event in _yield_event(
-        {"type": "THINKING_START", "title": "DeepSeek 正在设计 A2UI 界面"}
-    ):
-        yield event
+    if known_action_surface is None:
+        async for event in _yield_event(
+            {"type": "THINKING_START", "title": "DeepSeek 正在设计 A2UI 界面"}
+        ):
+            yield event
     async for event in _yield_event(
         {
             "type": "STATE_SNAPSHOT",
             "snapshot": {
                 "example": "ag-ui-a2ui-deepseek-agent",
-                "status": "generating",
-                "source": "deepseek",
+                "status": "updating" if known_action_surface is not None else "generating",
+                "source": source,
                 "configuredModel": settings.deepseek_model,
             },
         }
@@ -764,19 +948,27 @@ async def stream_agui_events(
         yield event
 
     try:
-        async with lock:
-            stored_history = await agui_agent_session_store.history(request.thread_id)
-            request_history = _request_history(request)
-            history = stored_history or request_history[:-1]
-            generation = await generator(settings, history, latest_input)
-            await agui_agent_session_store.append_turn(
-                request.thread_id,
-                latest_input,
-                generation.surface.assistant_text,
+        if known_action_surface is not None:
+            generation = AgUiModelGeneration(
+                surface=known_action_surface,
+                model="deterministic-action-handler",
+                usage={},
             )
+        else:
+            async with lock:
+                stored_history = await agui_agent_session_store.history(request.thread_id)
+                request_history = _request_history(request)
+                history = stored_history or request_history[:-1]
+                generation = await generator(settings, history, latest_input)
+                await agui_agent_session_store.append_turn(
+                    request.thread_id,
+                    latest_input,
+                    generation.surface.assistant_text,
+                )
     except Exception as error:
-        async for event in _yield_event({"type": "THINKING_END"}):
-            yield event
+        if known_action_surface is None:
+            async for event in _yield_event({"type": "THINKING_END"}):
+                yield event
         async for event in _yield_event(
             {
                 "type": "RUN_ERROR",
@@ -789,58 +981,59 @@ async def stream_agui_events(
 
     assistant_message_id = f"message:assistant:{request.run_id}"
     tool_call_id = f"tool:render-a2ui:{request.run_id}"
-    async for event in _yield_event({"type": "THINKING_END"}):
-        yield event
-    for event in (
-        {
-            "type": "TEXT_MESSAGE_START",
-            "messageId": assistant_message_id,
-            "role": "assistant",
-        },
-        {
-            "type": "TEXT_MESSAGE_CONTENT",
-            "messageId": assistant_message_id,
-            "delta": generation.surface.assistant_text,
-        },
-        {"type": "TEXT_MESSAGE_END", "messageId": assistant_message_id},
-        {
-            "type": "TOOL_CALL_START",
-            "toolCallId": tool_call_id,
-            "toolCallName": "render_a2ui_surface",
-            "parentMessageId": assistant_message_id,
-        },
-        {
-            "type": "TOOL_CALL_ARGS",
-            "toolCallId": tool_call_id,
-            "delta": json.dumps(
-                {
-                    "surfaceId": A2UI_SURFACE_ID,
-                    "components": generation.surface.components,
-                    "dataModel": generation.surface.data_model,
-                },
-                ensure_ascii=False,
-                separators=(",", ":"),
-            ),
-        },
-        {"type": "TOOL_CALL_END", "toolCallId": tool_call_id},
-        {
-            "type": "TOOL_CALL_RESULT",
-            "messageId": f"message:tool:{request.run_id}",
-            "toolCallId": tool_call_id,
-            "content": json.dumps(
-                {
-                    "ok": True,
-                    "source": "deepseek",
-                    "model": generation.model,
-                    "componentCount": len(generation.surface.components),
-                },
-                ensure_ascii=False,
-                separators=(",", ":"),
-            ),
-        },
-    ):
-        async for streamed in _yield_event(event):
-            yield streamed
+    if known_action_surface is None:
+        async for event in _yield_event({"type": "THINKING_END"}):
+            yield event
+        for event in (
+            {
+                "type": "TEXT_MESSAGE_START",
+                "messageId": assistant_message_id,
+                "role": "assistant",
+            },
+            {
+                "type": "TEXT_MESSAGE_CONTENT",
+                "messageId": assistant_message_id,
+                "delta": generation.surface.assistant_text,
+            },
+            {"type": "TEXT_MESSAGE_END", "messageId": assistant_message_id},
+            {
+                "type": "TOOL_CALL_START",
+                "toolCallId": tool_call_id,
+                "toolCallName": "render_a2ui_surface",
+                "parentMessageId": assistant_message_id,
+            },
+            {
+                "type": "TOOL_CALL_ARGS",
+                "toolCallId": tool_call_id,
+                "delta": json.dumps(
+                    {
+                        "surfaceId": A2UI_SURFACE_ID,
+                        "components": generation.surface.components,
+                        "dataModel": generation.surface.data_model,
+                    },
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                ),
+            },
+            {"type": "TOOL_CALL_END", "toolCallId": tool_call_id},
+            {
+                "type": "TOOL_CALL_RESULT",
+                "messageId": f"message:tool:{request.run_id}",
+                "toolCallId": tool_call_id,
+                "content": json.dumps(
+                    {
+                        "ok": True,
+                        "source": "deepseek",
+                        "model": generation.model,
+                        "componentCount": len(generation.surface.components),
+                    },
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                ),
+            },
+        ):
+            async for streamed in _yield_event(event):
+                yield streamed
 
     for message in build_a2ui_surface_messages(generation.surface):
         async for event in _yield_event({"type": "CUSTOM", "name": "a2ui", "value": message}):
@@ -852,7 +1045,7 @@ async def stream_agui_events(
             "snapshot": {
                 "example": "ag-ui-a2ui-deepseek-agent",
                 "status": "completed",
-                "source": "deepseek",
+                "source": source,
                 "model": generation.model,
                 "usage": generation.usage,
                 "responseId": generation.response_id,
@@ -863,7 +1056,7 @@ async def stream_agui_events(
             "threadId": request.thread_id,
             "runId": request.run_id,
             "result": {
-                "provider": "deepseek",
+                "provider": source,
                 "model": generation.model,
                 "usage": generation.usage,
                 "responseId": generation.response_id,
