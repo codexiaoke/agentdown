@@ -16,8 +16,9 @@ interface DemoPacket {
  * 等待当前轮的 watch / async consume 全部完成。
  */
 async function flushAsyncWork() {
-  await Promise.resolve();
-  await Promise.resolve();
+  for (let index = 0; index < 6; index += 1) {
+    await Promise.resolve();
+  }
 }
 
 /**
@@ -131,6 +132,43 @@ describe('useAdapterSession', () => {
     ]);
     expect(sessionState.status.value.phase).toBe('idle');
     expect(sessionState.runtimeState.blocks.value[0]?.content).toBe('hello adapter session');
+
+    scope.stop();
+  });
+
+  it('exposes the consuming state before the first packet arrives', async () => {
+    const adapter = createDemoAdapter();
+    const scope = effectScope();
+    let releaseFirstPacket: (() => void) | undefined;
+    const firstPacketReady = new Promise<void>((resolve) => {
+      releaseFirstPacket = resolve;
+    });
+    const source = {
+      async *[Symbol.asyncIterator]() {
+        await firstPacketReady;
+        yield {
+          id: 'delayed',
+          text: 'delayed response'
+        };
+      }
+    };
+    const sessionState = scope.run(() => useAdapterSession(adapter));
+
+    if (!sessionState) {
+      throw new Error('Failed to create adapter session state.');
+    }
+
+    const connection = sessionState.connect(source);
+
+    expect(sessionState.status.value.phase).toBe('consuming');
+    expect(sessionState.consuming.value).toBe(true);
+
+    releaseFirstPacket?.();
+    await connection;
+
+    expect(sessionState.status.value.phase).toBe('idle');
+    expect(sessionState.consuming.value).toBe(false);
+    expect(sessionState.runtime.block('block:delayed')?.content).toBe('delayed response');
 
     scope.stop();
   });

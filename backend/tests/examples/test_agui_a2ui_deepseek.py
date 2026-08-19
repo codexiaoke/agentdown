@@ -193,6 +193,13 @@ class AgUiProviderTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("deepseek-test-model", events[-1]["result"]["model"])
 
         self.assertNotIn("TOOL_CALL_START", {event["type"] for event in events})
+        text_chunks = [
+            event["delta"]
+            for event in events
+            if event["type"] == "TEXT_MESSAGE_CONTENT"
+        ]
+        self.assertGreater(len(text_chunks), 1)
+        self.assertEqual(_surface().assistant_text, "".join(text_chunks))
         a2ui_values = [
             event["value"]
             for event in events

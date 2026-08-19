@@ -320,11 +320,12 @@ export function useAdapterSession<
 
     while (true) {
       try {
-        if (operation === 'connect') {
-          await session.connect(resolvedSource);
-        } else {
-          await session.restart(resolvedSource);
-        }
+        const connectTask = operation === 'connect'
+          ? session.connect(resolvedSource)
+          : session.restart(resolvedSource);
+
+        refresh();
+        await connectTask;
 
         runtimeState.refresh();
         break;
