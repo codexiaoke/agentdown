@@ -14,7 +14,10 @@ from app.main import app
 from app.models import AgUiRunAgentInput
 from app.examples.agui_a2ui_deepseek import (
     AgUiGeneratedSurface,
+    AgUiAnswerComponentGeneration,
     AgUiModelGeneration,
+    AgUiTextGeneration,
+    _frontend_answer_tools,
     _create_deepseek_http_client,
     agui_agent_session_store,
     generate_deepseek_surface,
@@ -149,6 +152,15 @@ async def _fake_generator(
     )
 
 
+async def _fake_chat_generator(
+    settings: object,
+    history: list[dict[str, str]],
+    latest_input: str,
+    _tools: list[dict[str, object]],
+) -> AgUiModelGeneration:
+    return await _fake_generator(settings, history, latest_input)
+
+
 def _parse_sse_events(body: str) -> list[dict[str, object]]:
     return [
         json.loads(line.removeprefix("data: "))
@@ -191,6 +203,94 @@ class AgUiProviderTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("createSurface", a2ui_values[0])
         self.assertIn("updateComponents", a2ui_values[1])
         self.assertEqual("阅读计划", a2ui_values[2]["updateDataModel"]["value"]["title"])
+
+    async def test_unified_chat_can_render_a_registered_frontend_component(self) -> None:
+        request_payload = _run_input(content="使用这些数据展示天气：深圳，26°C，多云")
+        request_payload["tools"] = [
+            {
+                "name": "weather_card",
+                "description": "展示已经获得的天气结果。",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "city": {"type": "string"},
+                        "temperature": {"type": "number"},
+                        "condition": {"type": "string"},
+                    },
+                    "required": ["city", "temperature", "condition"],
+                    "additionalProperties": False,
+                },
+                "metadata": {"kind": "frontend-answer-component"},
+            }
+        ]
+        request = AgUiRunAgentInput.model_validate(request_payload)
+
+        async def component_generator(
+            _settings: object,
+            _history: list[dict[str, str]],
+            _latest_input: str,
+        ) -> AgUiAnswerComponentGeneration:
+            return AgUiAnswerComponentGeneration(
+                name="weather_card",
+                props={"city": "深圳", "temperature": 26, "condition": "多云"},
+                assistant_text="深圳天气如下。",
+                model="deepseek-test-model",
+                usage={},
+            )
+
+        events = [
+            event
+            async for event in stream_agui_events(request, load_settings(), component_generator)
+        ]
+
+        tool_start = next(event for event in events if event["type"] == "TOOL_CALL_START")
+        tool_args = next(event for event in events if event["type"] == "TOOL_CALL_ARGS")
+        self.assertEqual("weather_card", tool_start["toolCallName"])
+        self.assertEqual(
+            {"city": "深圳", "temperature": 26, "condition": "多云"},
+            json.loads(tool_args["delta"]),
+        )
+        self.assertFalse(any(event["type"] == "CUSTOM" for event in events))
+
+    async def test_unified_chat_can_return_plain_text_without_ui(self) -> None:
+        request = AgUiRunAgentInput.model_validate(_run_input(content="解释一下什么是 AG-UI"))
+
+        async def text_generator(
+            _settings: object,
+            _history: list[dict[str, str]],
+            _latest_input: str,
+        ) -> AgUiTextGeneration:
+            return AgUiTextGeneration(
+                assistant_text="AG-UI 是聊天运行时的事件协议。",
+                model="deepseek-test-model",
+                usage={},
+            )
+
+        events = [
+            event
+            async for event in stream_agui_events(request, load_settings(), text_generator)
+        ]
+
+        self.assertIn("TEXT_MESSAGE_CONTENT", {event["type"] for event in events})
+        self.assertNotIn("TOOL_CALL_START", {event["type"] for event in events})
+        self.assertNotIn("CUSTOM", {event["type"] for event in events})
+
+    def test_only_explicit_frontend_answer_tools_are_exposed_to_the_model(self) -> None:
+        tools = _frontend_answer_tools([
+            {
+                "name": "lookup_weather",
+                "description": "后端业务工具",
+                "parameters": {"type": "object"},
+            },
+            {
+                "name": "weather_card",
+                "description": "前端天气卡",
+                "parameters": {"type": "object"},
+                "metadata": {"kind": "frontend-answer-component"},
+            },
+        ])
+
+        self.assertEqual(["weather_card"], [tool["function"]["name"] for tool in tools])
 
     async def test_requires_the_basic_catalog_in_the_initial_capability_handshake(self) -> None:
         request = AgUiRunAgentInput.model_validate(
@@ -487,10 +587,13 @@ class AgUiProviderTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_http_stream_is_archived_and_idempotently_replayed(self) -> None:
         transport = ASGITransport(app=app)
-        with patch("app.examples.agui_a2ui_deepseek.generate_deepseek_surface", new=_fake_generator):
+        with patch(
+            "app.examples.agui_a2ui_deepseek.generate_deepseek_chat_response",
+            new=_fake_chat_generator,
+        ):
             async with AsyncClient(transport=transport, base_url="http://test") as client:
                 response = await client.post(
-                    "/api/stream/agui",
+                    "/api/stream/chat",
                     json=_run_input(),
                     headers={"Idempotency-Key": "request:agui:test"},
                 )
@@ -502,7 +605,7 @@ class AgUiProviderTest(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual("false", response.headers["x-agentdown-request-reused"])
 
                 replay = await client.post(
-                    "/api/stream/agui",
+                    "/api/stream/chat",
                     json=_run_input(),
                     headers={"Idempotency-Key": "request:agui:test"},
                 )
