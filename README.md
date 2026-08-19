@@ -108,7 +108,7 @@ const prompt = ref('帮我查一下北京天气，并说明工具调用过程。
 
 // `mode: "hitl"` 会把人机交互事件也一起接进来。
 const session = useAgnoChatSession<string>({
-  source: 'http://127.0.0.1:8000/api/stream/agno',
+  source: 'http://127.0.0.1:8000/api/stream/chat?framework=agno',
   input: prompt,
   conversationId: 'session:weather-demo',
   title: 'Agno 助手',
@@ -372,7 +372,7 @@ const prompt = ref('帮我查一下北京天气，并说明工具调用过程。
 // 3. 预插入用户消息
 // 4. 把 regenerate 接回同一个聊天流
 const session = useAgnoChatSession<string>({
-  source: 'http://127.0.0.1:8000/api/stream/agno',
+  source: 'http://127.0.0.1:8000/api/stream/chat?framework=agno',
   input: prompt,
   conversationId: 'session:weather-demo',
   title: 'Agno 助手',
@@ -453,7 +453,7 @@ const prompt = ref('');
 const uploads = ref([]);
 
 const session = useAgnoChatSession({
-  source: 'http://127.0.0.1:8000/api/stream/agno',
+  source: 'http://127.0.0.1:8000/api/stream/chat?framework=agno',
   input: prompt,
   conversationId: 'session:workspace-demo',
   title: 'Agno 助手',
@@ -600,7 +600,7 @@ const archive = {
 import { defineAgnoEventActions, useAgnoChatSession } from 'agentdown';
 
 const session = useAgnoChatSession<string>({
-  source: 'http://127.0.0.1:8000/api/stream/agno',
+  source: 'http://127.0.0.1:8000/api/stream/chat?framework=agno',
   conversationId: 'session:weather-demo',
   eventActions: defineAgnoEventActions({
     SessionCreated: {
@@ -675,7 +675,7 @@ const { runtime, bridge, surface } = preset.createSession({
 // `useBridgeTransport()` 负责 start / stop / status 这层页面状态。
 const { start } = useBridgeTransport({
   bridge,
-  source: 'http://127.0.0.1:8000/api/stream/agno'
+  source: 'http://127.0.0.1:8000/api/stream/chat?framework=agno'
 });
 
 // 启动后，Agno 原始事件会被 bridge 持续消费。
@@ -748,10 +748,12 @@ Agentdown 在 `stream -> assembler -> block` 这一步会尽量把未闭合结�
 
 仓库里的 `backend/` 已经不是 mock，而是真实框架联调 backend：
 
-- `/api/stream/agno`
-- `/api/stream/langchain`
-- `/api/stream/autogen`
-- `/api/stream/crewai`
+- `/api/stream/chat?framework=agui`
+- `/api/stream/chat?framework=agno`
+- `/api/stream/chat?framework=springai`
+- `/api/stream/chat?framework=langchain`
+- `/api/stream/chat?framework=autogen`
+- `/api/stream/chat?framework=crewai`
 - `GET /api/v1/conversations/{conversation_id}`
 - `GET /api/v1/conversations/{conversation_id}/events?request_id=...`
 

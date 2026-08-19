@@ -44,7 +44,7 @@ def parse_args() -> argparse.Namespace:
     """Parse CLI options for the CrewAI smoke test."""
 
     parser = argparse.ArgumentParser(
-        description="Verify that the real /api/stream/crewai endpoint can stream text, call a tool, and finish with CrewOutput."
+        description="Verify that the real CrewAI framework can stream through the unified chat endpoint."
     )
     parser.add_argument(
         "--base-url",
@@ -226,7 +226,7 @@ def validate_summary(summary: CrewAISmokeSummary) -> None:
 def run_smoke_test(base_url: str, prompt: str, timeout_seconds: float) -> CrewAISmokeSummary:
     """Run the real CrewAI endpoint once and return a structured summary."""
 
-    endpoint = f"{base_url.rstrip('/')}/api/stream/crewai"
+    endpoint = f"{base_url.rstrip('/')}/api/stream/chat?framework=crewai"
     summary = CrewAISmokeSummary(
         endpoint=endpoint,
         prompt=prompt,

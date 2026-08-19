@@ -70,7 +70,6 @@ interface DemoSidePanelState {
 }
 
 const FASTAPI_BASE_URL = resolveConfiguredBaseUrl('http://127.0.0.1:8000');
-const SPRING_BASE_URL = resolveConfiguredBaseUrl('http://127.0.0.1:8080');
 const DEFAULT_EDITED_CITY = '上海';
 const providerOrder: DemoFrameworkId[] = [
   'agui',
@@ -97,6 +96,10 @@ function resolveConfiguredBaseUrl(fallback: string): string {
 
 function createConversationId(provider: DemoFrameworkId): string {
   return `session:demo:chat:${provider}`;
+}
+
+function createFrameworkChatSource(framework: DemoFrameworkId): string {
+  return `${FASTAPI_BASE_URL}/api/stream/chat?framework=${encodeURIComponent(framework)}`;
 }
 
 function createThinkingPlaceholder(label: string) {
@@ -184,7 +187,7 @@ const autoGenPendingUploads = ref<AgentChatPendingAttachment[]>([]);
 const crewAiPendingUploads = ref<AgentChatPendingAttachment[]>([]);
 
 const agUiSession = useAgentChat<string>({
-  source: `${FASTAPI_BASE_URL}/api/stream/chat`,
+  source: createFrameworkChatSource('agui'),
   input: agUiPrompt,
   conversationId: createConversationId('agui'),
   title: 'Agentdown Chat',
@@ -213,7 +216,7 @@ const agUiSession = useAgentChat<string>({
 });
 
 const agnoSession = useAgnoChatSession<string>({
-  source: `${FASTAPI_BASE_URL}/api/stream/agno`,
+  source: createFrameworkChatSource('agno'),
   input: agnoPrompt,
   conversationId: createConversationId('agno'),
   mode: 'hitl',
@@ -243,7 +246,7 @@ const agnoSession = useAgnoChatSession<string>({
 });
 
 const springAiSession = useSpringAiChatSession<string>({
-  source: `${SPRING_BASE_URL}/api/stream/springai`,
+  source: createFrameworkChatSource('springai'),
   input: springAiPrompt,
   conversationId: createConversationId('springai'),
   mode: 'hitl',
@@ -283,7 +286,7 @@ const springAiSession = useSpringAiChatSession<string>({
 });
 
 const langChainSession = useLangChainChatSession<string>({
-  source: `${FASTAPI_BASE_URL}/api/stream/langchain`,
+  source: createFrameworkChatSource('langchain'),
   input: langChainPrompt,
   conversationId: createConversationId('langchain'),
   mode: 'hitl',
@@ -323,7 +326,7 @@ const langChainSession = useLangChainChatSession<string>({
 });
 
 const autoGenSession = useAutoGenChatSession<string>({
-  source: `${FASTAPI_BASE_URL}/api/stream/autogen`,
+  source: createFrameworkChatSource('autogen'),
   input: autoGenPrompt,
   conversationId: createConversationId('autogen'),
   mode: 'hitl',
@@ -353,7 +356,7 @@ const autoGenSession = useAutoGenChatSession<string>({
 });
 
 const crewAiSession = useCrewAIChatSession<string>({
-  source: `${FASTAPI_BASE_URL}/api/stream/crewai`,
+  source: createFrameworkChatSource('crewai'),
   input: crewAiPrompt,
   conversationId: createConversationId('crewai'),
   title: 'CrewAI',

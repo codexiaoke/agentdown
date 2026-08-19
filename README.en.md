@@ -107,7 +107,7 @@ const prompt = ref('Check Beijing weather and explain the tool call process.');
 
 // `mode: "hitl"` keeps Human-In-The-Loop events in the same chat flow.
 const session = useAgnoChatSession<string>({
-  source: 'http://127.0.0.1:8000/api/stream/agno',
+  source: 'http://127.0.0.1:8000/api/stream/chat?framework=agno',
   input: prompt,
   conversationId: 'session:weather-demo',
   title: 'Agno Assistant',
@@ -330,7 +330,7 @@ const prompt = ref('Check Beijing weather and explain the tool call process.');
 // `useAgnoChatSession()` automatically wires adapter, transport,
 // chat ids, optimistic user message insertion, and regenerate.
 const session = useAgnoChatSession<string>({
-  source: 'http://127.0.0.1:8000/api/stream/agno',
+  source: 'http://127.0.0.1:8000/api/stream/chat?framework=agno',
   input: prompt,
   conversationId: 'session:weather-demo',
   title: 'Agno Assistant',
@@ -411,7 +411,7 @@ const prompt = ref('');
 const uploads = ref([]);
 
 const session = useAgnoChatSession({
-  source: 'http://127.0.0.1:8000/api/stream/agno',
+  source: 'http://127.0.0.1:8000/api/stream/chat?framework=agno',
   input: prompt,
   conversationId: 'session:workspace-demo',
   title: 'Agno Assistant',
@@ -556,7 +556,7 @@ You can also attach side effects for non-UI events:
 import { defineAgnoEventActions, useAgnoChatSession } from 'agentdown';
 
 const session = useAgnoChatSession<string>({
-  source: 'http://127.0.0.1:8000/api/stream/agno',
+  source: 'http://127.0.0.1:8000/api/stream/chat?framework=agno',
   conversationId: 'session:weather-demo',
   eventActions: defineAgnoEventActions({
     SessionCreated: {
@@ -656,10 +656,12 @@ The demo app also includes a performance lab page that exports benchmark JSON fo
 
 The repository also includes a real FastAPI backend for adapter integration tests:
 
-- `/api/stream/agno`
-- `/api/stream/langchain`
-- `/api/stream/autogen`
-- `/api/stream/crewai`
+- `/api/stream/chat?framework=agui`
+- `/api/stream/chat?framework=agno`
+- `/api/stream/chat?framework=springai`
+- `/api/stream/chat?framework=langchain`
+- `/api/stream/chat?framework=autogen`
+- `/api/stream/chat?framework=crewai`
 - `GET /api/v1/conversations/{conversation_id}`
 - `GET /api/v1/conversations/{conversation_id}/events?request_id=...`
 

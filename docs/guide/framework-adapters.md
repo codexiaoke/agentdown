@@ -64,7 +64,7 @@ const tools = defineAgnoToolComponents({
 });
 
 const session = useAgnoChatSession<string>({
-  source: 'http://127.0.0.1:8000/api/stream/agno',
+  source: 'http://127.0.0.1:8000/api/stream/chat?framework=agno',
   input: prompt,
   conversationId: 'session:weather-demo',
   title: 'Agno 助手',

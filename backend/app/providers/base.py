@@ -25,32 +25,38 @@ def create_provider_descriptors() -> list[ProviderDescriptor]:
 
     return [
         ProviderDescriptor(
-            id="chat",
-            path="/api/stream/chat",
+            id="agui",
+            path="/api/stream/chat?framework=agui",
             label="Agentdown Chat",
             note="统一聊天入口：通过 AG-UI 流返回文本、前端注册回答组件或经后端校验的 A2UI Surface。",
         ),
         ProviderDescriptor(
             id="agno",
-            path="/api/stream/agno",
+            path="/api/stream/chat?framework=agno",
             label="Agno",
             note="基于 DeepSeek 的真实 Agno Agent SSE，支持 `mode=hitl` 的 requirement 暂停与继续运行。",
         ),
         ProviderDescriptor(
+            id="springai",
+            path="/api/stream/chat?framework=springai",
+            label="Spring AI",
+            note="由统一 FastAPI 网关透传到真实 Spring AI 服务，前端不需要感知 Java 服务端口。",
+        ),
+        ProviderDescriptor(
             id="langchain",
-            path="/api/stream/langchain",
+            path="/api/stream/chat?framework=langchain",
             label="LangChain / LangGraph",
             note="基于 DeepSeek 的真实 LangChain Agent SSE，支持 `mode=hitl` 的 LangChain Human-in-the-Loop 暂停与继续运行。",
         ),
         ProviderDescriptor(
             id="autogen",
-            path="/api/stream/autogen",
+            path="/api/stream/chat?framework=autogen",
             label="AutoGen",
             note="基于 DeepSeek 的真实 AutoGen Agent SSE，支持 `mode=hitl` 的官方 handoff 暂停与继续运行。",
         ),
         ProviderDescriptor(
             id="crewai",
-            path="/api/stream/crewai",
+            path="/api/stream/chat?framework=crewai",
             label="CrewAI",
             note="基于 DeepSeek 的真实 CrewAI 流式执行，当前主打官方 SSE chunk 与工具调用展示，不默认提供操作级审批。",
         ),

@@ -14,6 +14,7 @@ class BackendSettings:
     deepseek_api_key: str | None
     deepseek_model: str
     deepseek_base_url: str
+    spring_ai_base_url: str
     cors_origins: list[str]
     agno_paused_run_store: str
     redis_url: str | None
@@ -86,6 +87,30 @@ def _parse_deepseek_base_url(raw_value: str | None) -> str:
     return normalized or "https://api.deepseek.com"
 
 
+def _parse_service_base_url(raw_value: str | None, default_value: str) -> str:
+    """Normalize an internal service base URL used by the local demo gateway."""
+
+    normalized = (raw_value or default_value).strip().rstrip("/")
+    return normalized or default_value
+
+
+def _sanitize_no_proxy_value(raw_value: str) -> str:
+    """Remove bare IPv6 entries that httpx currently parses as invalid ports."""
+
+    entries = [entry.strip() for entry in raw_value.split(",") if entry.strip()]
+    return ",".join(entry for entry in entries if "::" not in entry)
+
+
+def sanitize_httpx_proxy_environment() -> None:
+    """Keep SDK-created httpx clients usable with common macOS proxy settings."""
+
+    for key in ("NO_PROXY", "no_proxy"):
+        raw_value = os.environ.get(key)
+
+        if raw_value and "::" in raw_value:
+            os.environ[key] = _sanitize_no_proxy_value(raw_value)
+
+
 def _parse_agno_paused_run_store(raw_value: str | None) -> str:
     """Normalize the configured Agno paused run store backend."""
 
@@ -114,6 +139,7 @@ def load_settings() -> BackendSettings:
     """Load backend settings from the current process environment."""
 
     load_backend_env()
+    sanitize_httpx_proxy_environment()
 
     redis_url = os.getenv("AGENTDOWN_REDIS_URL")
     agno_paused_run_store = os.getenv("AGENTDOWN_AGNO_PAUSED_RUN_STORE")
@@ -128,6 +154,10 @@ def load_settings() -> BackendSettings:
         deepseek_api_key=os.getenv("DEEPSEEK_API_KEY"),
         deepseek_model=os.getenv("DEEPSEEK_MODEL", "deepseek-chat"),
         deepseek_base_url=_parse_deepseek_base_url(os.getenv("DEEPSEEK_BASE_URL")),
+        spring_ai_base_url=_parse_service_base_url(
+            os.getenv("AGENTDOWN_SPRING_AI_BASE_URL"),
+            "http://127.0.0.1:8080",
+        ),
         cors_origins=_parse_cors_origins(os.getenv("AGENTDOWN_CORS_ORIGINS")),
         agno_paused_run_store=_parse_agno_paused_run_store(agno_paused_run_store),
         redis_url=redis_url,
