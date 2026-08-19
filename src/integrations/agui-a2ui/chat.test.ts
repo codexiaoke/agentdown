@@ -340,4 +340,87 @@ describe('useAgUiA2UiChatSession', () => {
 
     scope.stop();
   });
+
+  it('accepts restarted backend cursors after resetting to a new chat', async () => {
+    let responseNumber = 0;
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      responseNumber += 1;
+      const request = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      const threadId = String(request.threadId);
+      const runId = String(request.runId);
+      const label = responseNumber === 1 ? '第一次' : '第二次';
+      const events = [
+        { type: 'RUN_STARTED', threadId, runId },
+        {
+          type: 'CUSTOM',
+          name: 'a2ui',
+          value: {
+            version: 'v0.9.1',
+            createSurface: {
+              surfaceId: 'planner',
+              catalogId: A2UI_BASIC_CATALOG_ID,
+              sendDataModel: true
+            }
+          }
+        },
+        {
+          type: 'CUSTOM',
+          name: 'a2ui',
+          value: {
+            version: 'v0.9.1',
+            updateComponents: {
+              surfaceId: 'planner',
+              components: [{ id: 'root', component: 'Text', text: label }]
+            }
+          }
+        },
+        { type: 'RUN_FINISHED', threadId, runId }
+      ];
+      const body = events.flatMap((event, index) => [
+        `id: ${threadId}:${index + 1}`,
+        `data: ${JSON.stringify(event)}`,
+        ''
+      ]).join('\n');
+
+      return new Response(`${body}\n`, {
+        headers: { 'Content-Type': 'text/event-stream' }
+      });
+    });
+    const scope = effectScope();
+    const session = scope.run(() => useAgUiA2UiChatSession<string>({
+      source: '/api/stream/agui',
+      conversationId: 'thread:reset',
+      transport: { fetch: fetchMock as typeof fetch }
+    }))!;
+
+    await session.send('第一次');
+    expect(session.eventCursor.value).toBe(4);
+    expect(session.runtime.block('block:a2ui:thread%3Areset:planner')?.data.messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          updateComponents: expect.objectContaining({
+            components: [expect.objectContaining({ text: '第一次' })]
+          })
+        })
+      ])
+    );
+
+    session.reset();
+    expect(session.eventCursor.value).toBe(0);
+    expect(session.sessionId.value).toBe('');
+
+    await session.send('第二次');
+    expect(session.eventCursor.value).toBe(4);
+    expect(session.runtime.block('block:a2ui:thread%3Areset:planner')?.data.messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          updateComponents: expect.objectContaining({
+            components: [expect.objectContaining({ text: '第二次' })]
+          })
+        })
+      ])
+    );
+
+    scope.stop();
+  });
 });

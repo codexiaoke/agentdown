@@ -15,6 +15,7 @@ from app.models import AgUiRunAgentInput
 from app.examples.agui_a2ui_deepseek import (
     AgUiGeneratedSurface,
     AgUiModelGeneration,
+    _create_deepseek_http_client,
     agui_agent_session_store,
     generate_deepseek_surface,
     parse_generated_surface,
@@ -411,6 +412,49 @@ class AgUiProviderTest(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual("原则", alias_data["book"])
         self.assertEqual(25, alias_data["minutes"])
+        self.assertEqual(["轻松"], alias_data["pace"])
+
+        model_value_action = {
+            **alias_action,
+            "context": {
+                "bookTitle": "深度工作",
+                "dailyMinutes": 30,
+                "readingPace": ["moderate"],
+            },
+        }
+        model_value_events = [
+            event
+            async for event in stream_agui_events(
+                AgUiRunAgentInput.model_validate(_run_input(
+                    run_id="run-model-value-action",
+                    content="",
+                    forwarded_props={
+                        "a2ui": {
+                            "clientMessage": {
+                                "version": "v0.9.1",
+                                "action": model_value_action,
+                            },
+                            "clientCapabilities": {
+                                "v0.9.1": {
+                                    "supportedCatalogIds": [
+                                        "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+                                    ]
+                                }
+                            },
+                        }
+                    },
+                )),
+                load_settings(),
+                _fake_generator,
+            )
+        ]
+        model_value_data = next(
+            event["value"]["updateDataModel"]["value"]
+            for event in model_value_events
+            if event["type"] == "CUSTOM" and "updateDataModel" in event["value"]
+        )
+        self.assertEqual(["适中"], model_value_data["pace"])
+        self.assertEqual("阅读节奏：适中", model_value_data["paceSummary"])
 
     async def test_rejects_client_functions_and_missing_bindings(self) -> None:
         unsafe = _surface().model_dump(by_alias=True)
@@ -471,6 +515,16 @@ class AgUiProviderTest(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual("agui", archive_body["provider_id"])
                 self.assertEqual(len(events), archive_body["latest_cursor"])
                 self.assertEqual(events, [item["data"] for item in archive_body["events"]])
+
+    async def test_live_client_ignores_invalid_system_no_proxy(self) -> None:
+        """The example must not inherit a malformed machine-level proxy setup."""
+
+        with patch.dict(os.environ, {"NO_PROXY": "localhost,::1"}):
+            client = _create_deepseek_http_client()
+            try:
+                self.assertFalse(client.trust_env)
+            finally:
+                await client.aclose()
 
     async def test_live_deepseek_generation_when_explicitly_enabled(self) -> None:
         if os.getenv("AGENTDOWN_RUN_LIVE_DEEPSEEK") != "1":
