@@ -229,7 +229,7 @@ class AgUiProviderTest(unittest.IsolatedAsyncioTestCase):
             return await _fake_generator(settings, history, latest_input)
 
         action = {
-            "name": "reading_plan_submitted",
+            "name": "submit_reading_plan",
             "surfaceId": "agent-surface",
             "sourceComponentId": "submit",
             "timestamp": "2026-08-09T10:00:00.000Z",
@@ -369,6 +369,48 @@ class AgUiProviderTest(unittest.IsolatedAsyncioTestCase):
         )
         self.assertIn("submit", {component["id"] for component in edit_components})
         self.assertNotIn("edit", {component["id"] for component in edit_components})
+
+        alias_action = {
+            "name": "confirm_reading_plan",
+            "surfaceId": "agent-surface",
+            "sourceComponentId": "confirm",
+            "timestamp": "2026-08-09T10:00:00.000Z",
+            "context": {
+                "bookTitle": "原则",
+                "dailyMinutes": 25,
+                "readingPace": ["轻松"],
+            },
+        }
+        alias_events = [
+            event
+            async for event in stream_agui_events(
+                AgUiRunAgentInput.model_validate(_run_input(
+                    run_id="run-alias-action",
+                    content="",
+                    forwarded_props={
+                        "a2ui": {
+                            "clientMessage": {"version": "v0.9.1", "action": alias_action},
+                            "clientCapabilities": {
+                                "v0.9.1": {
+                                    "supportedCatalogIds": [
+                                        "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+                                    ]
+                                }
+                            },
+                        }
+                    },
+                )),
+                load_settings(),
+                _fake_generator,
+            )
+        ]
+        alias_data = next(
+            event["value"]["updateDataModel"]["value"]
+            for event in alias_events
+            if event["type"] == "CUSTOM" and "updateDataModel" in event["value"]
+        )
+        self.assertEqual("原则", alias_data["book"])
+        self.assertEqual(25, alias_data["minutes"])
 
     async def test_rejects_client_functions_and_missing_bindings(self) -> None:
         unsafe = _surface().model_dump(by_alias=True)

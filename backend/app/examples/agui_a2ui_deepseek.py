@@ -94,6 +94,7 @@ _SYSTEM_PROMPT = """你是 Agentdown 的生成式界面 Agent。根据对话和�
 6. 界面控制在 20 个组件以内，文案使用用户语言。不要生成 URL、媒体、密码框或正则表达式。
 7. 如果最新输入是 A2UI action，基于 action 的真实 context 更新结果，并按需要继续提供可交互界面。
 8. 如果用户只要求展示信息，使用 Text、Row、Column、List、Card、Divider 等展示组件，不要凭空添加 Button、提交或修改动作。
+9. 读书计划的提交 action 固定命名为 reading_plan_submitted；如果提供修改入口，固定命名为 reading_plan_edit_requested。
 
 合法 JSON 示例：
 {"assistantText":"我为你准备了一个可调整的阅读计划。","components":[{"id":"root","component":"Column","children":["title","card"]},{"id":"title","component":"Text","text":{"path":"/title"},"variant":"h2"},{"id":"card","component":"Card","child":"form"},{"id":"form","component":"Column","children":["book","minutes","submit"]},{"id":"book","component":"TextField","label":"书名","value":{"path":"/book"}},{"id":"minutes","component":"Slider","label":"每日分钟数","min":10,"max":120,"value":{"path":"/minutes"}},{"id":"submit","component":"Button","child":"submitText","variant":"primary","action":{"event":{"name":"reading_plan_submitted","context":{"book":{"path":"/book"},"minutes":{"path":"/minutes"}}}}},{"id":"submitText","component":"Text","text":"确认计划"}],"dataModel":{"title":"阅读计划","book":"","minutes":30}}
@@ -296,11 +297,16 @@ def _reading_plan_values(message: dict[str, Any]) -> tuple[str, int, list[str]]:
     action = message.get("action")
     context = action.get("context") if isinstance(action, dict) else None
     context = context if isinstance(context, dict) else {}
-    book = str(context.get("book", "")).strip()[:200]
-    raw_minutes = context.get("minutes", 30)
+    book = str(
+        context.get("book")
+        or context.get("bookName")
+        or context.get("bookTitle")
+        or ""
+    ).strip()[:200]
+    raw_minutes = context.get("minutes", context.get("dailyMinutes", 30))
     minutes = raw_minutes if isinstance(raw_minutes, int) and not isinstance(raw_minutes, bool) else 30
     minutes = max(10, min(120, minutes))
-    raw_pace = context.get("pace", ["稳定"])
+    raw_pace = context.get("pace", context.get("readingPace", ["稳定"]))
     pace = [str(value)[:40] for value in raw_pace[:4]] if isinstance(raw_pace, list) else ["稳定"]
     return book, minutes, pace or ["稳定"]
 
@@ -453,10 +459,28 @@ def build_known_action_surface(message: dict[str, Any] | None) -> AgUiGeneratedS
     if not isinstance(action, dict):
         return None
     action_name = action.get("name")
-    if action_name not in {"reading_plan_submitted", "reading_plan_edit_requested"}:
+    if not isinstance(action_name, str):
+        return None
+    normalized_name = action_name.strip().lower()
+    context = action.get("context")
+    context_keys = set(context) if isinstance(context, dict) else set()
+    has_reading_plan_fields = bool(
+        context_keys.intersection({"book", "bookName", "bookTitle"})
+        and context_keys.intersection({"minutes", "dailyMinutes"})
+    )
+    names_reading_plan = "reading" in normalized_name and "plan" in normalized_name
+    if not has_reading_plan_fields and not names_reading_plan:
+        return None
+    is_edit = normalized_name == "reading_plan_edit_requested" or any(
+        token in normalized_name for token in ("edit", "modify")
+    )
+    is_submit = normalized_name == "reading_plan_submitted" or any(
+        token in normalized_name for token in ("submit", "confirm", "save")
+    )
+    if not is_edit and not is_submit:
         return None
     book, minutes, pace = _reading_plan_values(message)
-    if action_name == "reading_plan_edit_requested":
+    if is_edit:
         return _reading_plan_form_surface(book=book, minutes=minutes, pace=pace)
     if not book:
         return _reading_plan_form_surface(
