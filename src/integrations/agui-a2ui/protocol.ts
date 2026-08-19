@@ -10,7 +10,12 @@ import type {
 } from '../../runtime/types';
 import type { AgUiEvent } from '../../adapters/agui';
 import { createAgUiProtocol } from '../../adapters/agui';
-import type { AgUiProtocol, AgUiProtocolOptions, AgUiStateStore } from '../../adapters/agui';
+import type {
+  AgUiProtocol,
+  AgUiProtocolOptions,
+  AgUiStateStore,
+  AgUiValueResolver
+} from '../../adapters/agui';
 import { composeProtocols } from '../../runtime/composeProtocols';
 
 const DEFAULT_CUSTOM_EVENT_NAMES = new Set(['a2ui', 'a2ui.message', 'a2ui.surface']);
@@ -25,6 +30,8 @@ export interface AgUiA2UiBlockIdContext {
 
 export interface AgUiA2UiProtocolOptions {
   slot?: string;
+  /** 与主 AG-UI 协议共享的 Assistant messageId 解析规则。 */
+  messageId?: AgUiValueResolver<string | null | undefined>;
   /** 允许承载 A2UI 消息的 AG-UI CUSTOM name。 */
   customEventNames?: ReadonlySet<string>;
   /** RAW 默认禁用；只有 source 在此 allowlist 中才会被解析。 */
@@ -54,6 +61,7 @@ export interface AgUiA2UiCombinedProtocol extends RuntimeProtocol<AgUiEvent> {
 interface SurfaceHistory {
   threadId: string;
   surfaceId: string;
+  messageId: string;
   messages: A2uiMessage[];
   createdAt: number;
 }
@@ -111,6 +119,18 @@ function defaultBlockId(threadId: string, surfaceId: string): string {
   return `block:a2ui:${encodeURIComponent(threadId)}:${encodeURIComponent(surfaceId)}`;
 }
 
+function resolveMessageId(
+  resolver: AgUiA2UiProtocolOptions['messageId'],
+  event: AgUiEvent,
+  context: ProtocolContext,
+  fallback: string | null
+): string | null {
+  const resolved = typeof resolver === 'function'
+    ? resolver(event, context)
+    : resolver;
+  return resolved === undefined ? fallback : resolved;
+}
+
 /** 把明确承载 A2UI 的 AG-UI 扩展事件映射成可持续更新的 Runtime block。 */
 export function createAgUiA2UiProtocol(
   options: AgUiA2UiProtocolOptions = {}
@@ -121,6 +141,7 @@ export function createAgUiA2UiProtocol(
   const maxMessages = options.maxMessagesPerSurface ?? 256;
   let activeThreadId: string | null = null;
   let activeRunId: string | null = null;
+  let activeAssistantMessageId: string | null = null;
 
   if (!Number.isInteger(maxMessages) || maxMessages <= 0) {
     throw new Error('maxMessagesPerSurface must be a positive integer.');
@@ -141,6 +162,15 @@ export function createAgUiA2UiProtocol(
       if (event.type === EventType.RUN_STARTED) {
         activeThreadId = event.threadId;
         activeRunId = event.runId;
+        activeAssistantMessageId = null;
+      }
+      if (event.type === EventType.TEXT_MESSAGE_START && event.role === 'assistant') {
+        activeAssistantMessageId = resolveMessageId(
+          options.messageId,
+          event,
+          context,
+          event.messageId
+        );
       }
 
       const payload = options.extractMessages
@@ -153,6 +183,7 @@ export function createAgUiA2UiProtocol(
           && event.runId === activeRunId
         ) {
           activeRunId = null;
+          activeAssistantMessageId = null;
         }
         return [];
       }
@@ -193,6 +224,9 @@ export function createAgUiA2UiProtocol(
         const history: SurfaceHistory = {
           threadId,
           surfaceId,
+          messageId: 'createSurface' in message
+            ? (activeAssistantMessageId ?? `message:a2ui:${surfaceId}`)
+            : (previous?.messageId ?? activeAssistantMessageId ?? `message:a2ui:${surfaceId}`),
           messages: nextMessages,
           createdAt: 'createSurface' in message ? at : (previous?.createdAt ?? at)
         };
@@ -206,7 +240,7 @@ export function createAgUiA2UiProtocol(
           nodeId: activeRunId,
           conversationId: threadId,
           turnId: activeRunId,
-          messageId: `message:a2ui:${surfaceId}`,
+          messageId: history.messageId,
           data: { surfaceId, messages: nextMessages } as RuntimeData,
           createdAt: history.createdAt,
           updatedAt: at
@@ -218,6 +252,7 @@ export function createAgUiA2UiProtocol(
     reset() {
       // Bridge 会在每次新 run 前 reset；Surface 历史必须继续保留。
       activeRunId = null;
+      activeAssistantMessageId = null;
     },
     clearSurfaces,
     getSurfaceMessages(threadId, surfaceId) {
@@ -233,7 +268,10 @@ export function createAgUiA2UiCombinedProtocol(options: {
   a2uiProtocol?: AgUiA2UiProtocol;
 } = {}): AgUiA2UiCombinedProtocol {
   const agUi = createAgUiProtocol(options.agUi);
-  const a2ui = options.a2uiProtocol ?? createAgUiA2UiProtocol(options.a2ui);
+  const a2ui = options.a2uiProtocol ?? createAgUiA2UiProtocol({
+    ...(options.a2ui ?? {}),
+    messageId: options.a2ui?.messageId ?? options.agUi?.messageId
+  });
   return Object.assign(composeProtocols(agUi, a2ui), {
     agUi,
     a2ui,
