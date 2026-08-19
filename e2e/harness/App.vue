@@ -165,6 +165,44 @@ const a2uiMessages: unknown[] = [
   }
 ];
 
+const readonlyWeatherMessages: unknown[] = [
+  {
+    version: 'v0.9.1',
+    createSurface: {
+      surfaceId: 'readonly-weather',
+      catalogId: A2UI_BASIC_CATALOG_ID
+    }
+  },
+  {
+    version: 'v0.9.1',
+    updateComponents: {
+      surfaceId: 'readonly-weather',
+      components: [
+        { id: 'root', component: 'Card', child: 'content' },
+        { id: 'content', component: 'Column', children: ['city', 'condition', 'divider', 'humidity', 'wind'] },
+        { id: 'city', component: 'Text', text: { path: '/city' }, variant: 'h2' },
+        { id: 'condition', component: 'Text', text: { path: '/condition' }, variant: 'h3' },
+        { id: 'divider', component: 'Divider' },
+        { id: 'humidity', component: 'Text', text: { path: '/humidity' } },
+        { id: 'wind', component: 'Text', text: { path: '/wind' } }
+      ]
+    }
+  },
+  {
+    version: 'v0.9.1',
+    updateDataModel: {
+      surfaceId: 'readonly-weather',
+      path: '/',
+      value: {
+        city: '深圳',
+        condition: '26°C · 多云',
+        humidity: '湿度 72%',
+        wind: '风速 3.2 m/s'
+      }
+    }
+  }
+];
+
 const lastClientEnvelope = ref<A2UiClientEnvelope | null>(null);
 const actionStateHistory = ref<A2UiActionStateSnapshot[]>([]);
 
@@ -203,6 +241,14 @@ async function sendClientMessage(envelope: A2UiClientEnvelope) {
       />
       <pre data-testid="action-state-history">{{ JSON.stringify(actionStateHistory) }}</pre>
       <pre data-testid="client-envelope">{{ lastClientEnvelope ? JSON.stringify(lastClientEnvelope.message) : '' }}</pre>
+    </section>
+
+    <section data-testid="readonly-weather">
+      <h2>Read-only A2UI</h2>
+      <A2UiSurface
+        surface-id="readonly-weather"
+        :messages="readonlyWeatherMessages"
+      />
     </section>
   </main>
 </template>
