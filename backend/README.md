@@ -2,7 +2,7 @@
 
 这个 `backend/` 目录提供的是一个真实的 FastAPI SSE backend，用来和前端适配层直接联调。
 
-其中 `/api/stream/chat` 是放在 `app/examples/` 下的统一 Chat 参考实现：它调用 DeepSeek，并在同一个 AG-UI 流中选择普通文字、前端注册回答组件或动态 A2UI。内存只承担测试会话与事件存储；它用于说明前端库的组合方式，不是 Agentdown 要求用户部署的固定后端。Agno、LangChain、AutoGen、CrewAI endpoint 是协议适配实验入口，同样会真实调用：
+其中 `/api/stream/chat?framework=...` 是所有演示框架的统一 HTTP 入口。`framework=agui` 调用放在 `app/examples/` 下的统一 Chat 参考实现，在同一个 AG-UI 流中选择普通文字、前端注册回答组件或动态 A2UI；其他值分发到各自真实框架，并保持其原生事件格式。内存只承担测试会话与事件存储；它用于说明前端库的组合方式，不是 Agentdown 要求用户部署的固定后端。
 
 - `DeepSeek` 大模型
 - 真实 Agent 框架
@@ -11,17 +11,18 @@
 
 当前提供这些 endpoint：
 
-- `/api/stream/chat`：推荐参考示例；DeepSeek 在标准 AG-UI 流中选择文字、前端组件或经校验的 A2UI v0.9.1 Surface
+- `/api/stream/chat?framework=agui`：DeepSeek 在标准 AG-UI 流中选择文字、前端组件或经校验的 A2UI v0.9.1 Surface
+- `/api/stream/chat?framework=agno`
+- `/api/stream/chat?framework=springai`：由 FastAPI 网关转发到真实 Spring AI 服务
+- `/api/stream/chat?framework=langchain`
+- `/api/stream/chat?framework=autogen`
+- `/api/stream/chat?framework=crewai`
 - `/api/examples/agui`：纯 AG-UI 消费者示例；DeepSeek 文本回复，只发送标准 lifecycle/text events
 - `/api/examples/a2ui`：独立 A2UI 消费者示例；普通 JSON transport 返回 A2UI messages，不依赖 AG-UI
-- `/api/stream/agno`
-- `/api/stream/langchain`
-- `/api/stream/autogen`
-- `/api/stream/crewai`
 - `GET /api/v1/conversations/{conversation_id}`：读取后端权威事件归档
 - `GET /api/v1/conversations/{conversation_id}/events?request_id=...`：只读续接已有运行
 
-所有 stream endpoint 都支持稳定的 SSE id、幂等请求和按游标补发。AG-UI 使用标准 `RunAgentInput`，身份与游标放在 HTTP headers；其他框架 endpoint 同时兼容现有请求体字段：
+统一 stream endpoint 支持稳定的 SSE id、幂等请求和按游标补发。AG-UI 使用标准 `RunAgentInput`，身份与游标放在 HTTP headers；其他框架使用各自 adapter 的请求体字段：
 
 - `client_request_id` / `Idempotency-Key`：避免重连时重复执行模型调用
 - `after_cursor` / `Last-Event-ID`：只补发尚未应用的事件
@@ -85,6 +86,7 @@ DEEPSEEK_API_KEY=your_key
 ```dotenv
 DEEPSEEK_MODEL=deepseek-chat
 DEEPSEEK_BASE_URL=https://api.deepseek.com
+AGENTDOWN_SPRING_AI_BASE_URL=http://127.0.0.1:8080
 ```
 
 建议带工具调用的场景优先使用 `deepseek-chat`。
@@ -127,7 +129,7 @@ curl http://127.0.0.1:8000/api/health
 
 ```bash
 curl -N \
-  -X POST http://127.0.0.1:8000/api/stream/chat \
+  -X POST 'http://127.0.0.1:8000/api/stream/chat?framework=agui' \
   -H 'Content-Type: application/json' \
   -H 'Idempotency-Key: request:reading-demo-1' \
   -d '{
@@ -176,7 +178,7 @@ AGENTDOWN_RUN_LIVE_DEEPSEEK=1 uv run python -m unittest \
 
 ```bash
 curl -N \
-  -X POST http://127.0.0.1:8000/api/stream/agno \
+  -X POST 'http://127.0.0.1:8000/api/stream/chat?framework=agno' \
   -H 'Content-Type: application/json' \
   -d '{
     "message": "帮我查一下北京天气，并说明工具调用过程。",
@@ -190,7 +192,7 @@ curl -N \
 
 ```bash
 curl -N \
-  -X POST http://127.0.0.1:8000/api/stream/langchain \
+  -X POST 'http://127.0.0.1:8000/api/stream/chat?framework=langchain' \
   -H 'Content-Type: application/json' \
   -d '{
     "message": "帮我查一下北京天气，并说明工具调用过程。"
@@ -223,7 +225,7 @@ uv run --project backend python backend/scripts/smoke_langchain.py \
 
 ```bash
 curl -N \
-  -X POST http://127.0.0.1:8000/api/stream/autogen \
+  -X POST 'http://127.0.0.1:8000/api/stream/chat?framework=autogen' \
   -H 'Content-Type: application/json' \
   -d '{
     "message": "帮我查一下北京天气，并说明工具调用过程。"
@@ -234,7 +236,7 @@ curl -N \
 
 ```bash
 curl -N \
-  -X POST http://127.0.0.1:8000/api/stream/crewai \
+  -X POST 'http://127.0.0.1:8000/api/stream/chat?framework=crewai' \
   -H 'Content-Type: application/json' \
   -d '{
     "message": "帮我查一下北京天气，并说明工具调用过程。"

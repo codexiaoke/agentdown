@@ -541,7 +541,16 @@ export function resolveFrameworkChatRecoveryUrl(
     );
   }
 
-  const archiveUrl = `${sourceText.slice(0, markerIndex)}/api/v1/conversations/${encodeURIComponent(conversationId)}`;
+  const queryIndex = sourceText.indexOf('?', markerIndex);
+  const sourceQuery = queryIndex >= 0 ? sourceText.slice(queryIndex + 1) : '';
+  const framework = new URLSearchParams(sourceQuery).get('framework');
+  const frameworkQuery = framework
+    ? `framework=${encodeURIComponent(framework)}`
+    : '';
+  const archiveBaseUrl = `${sourceText.slice(0, markerIndex)}/api/v1/conversations/${encodeURIComponent(conversationId)}`;
+  const archiveUrl = frameworkQuery
+    ? `${archiveBaseUrl}?${frameworkQuery}`
+    : archiveBaseUrl;
 
   if (kind === 'archive') {
     return archiveUrl;
@@ -551,7 +560,10 @@ export function resolveFrameworkChatRecoveryUrl(
     throw new Error('A backend request id is required to reconnect conversation events.');
   }
 
-  return `${archiveUrl}/events?request_id=${encodeURIComponent(requestId)}`;
+  const eventQuery = frameworkQuery
+    ? `${frameworkQuery}&request_id=${encodeURIComponent(requestId)}`
+    : `request_id=${encodeURIComponent(requestId)}`;
+  return `${archiveBaseUrl}/events?${eventQuery}`;
 }
 
 /** 把非 2xx 的归档响应转成明确错误，同时把 404 视为新会话。 */

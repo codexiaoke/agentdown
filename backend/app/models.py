@@ -52,15 +52,15 @@ class StreamRequest(BaseModel):
     )
     agno_resume: "AgnoStreamResumeRequest | None" = Field(
         default=None,
-        description="Optional Agno resume payload used to continue a paused requirement on the same `/api/stream/agno` endpoint.",
+        description="Optional Agno resume payload used to continue a paused requirement on the unified chat endpoint.",
     )
     langchain_resume: "LangChainStreamResumeRequest | None" = Field(
         default=None,
-        description="Optional LangChain HITL resume payload used to continue a paused thread on the same `/api/stream/langchain` endpoint.",
+        description="Optional LangChain HITL resume payload used to continue a paused thread on the unified chat endpoint.",
     )
     autogen_resume: "AutoGenStreamResumeRequest | None" = Field(
         default=None,
-        description="Optional AutoGen HITL resume payload used to continue a paused handoff session on the same `/api/stream/autogen` endpoint.",
+        description="Optional AutoGen HITL resume payload used to continue a paused handoff session on the unified chat endpoint.",
     )
 
 
@@ -95,7 +95,7 @@ class AgnoRequirementResolutionRequest(BaseModel):
 
 
 class AgnoStreamResumeRequest(AgnoRequirementResolutionRequest):
-    """Agno resume payload accepted by the shared `/api/stream/agno` endpoint."""
+    """Agno resume payload accepted by the unified chat endpoint."""
 
     run_id: str = Field(
         description="Paused Agno run id that should be continued.",
@@ -144,7 +144,7 @@ class LangChainDecision(BaseModel):
 
 
 class LangChainStreamResumeRequest(BaseModel):
-    """Resume payload accepted by the shared `/api/stream/langchain` endpoint."""
+    """Resume payload accepted by the unified chat endpoint."""
 
     decisions: list[LangChainDecision] = Field(
         default_factory=list,
@@ -153,7 +153,7 @@ class LangChainStreamResumeRequest(BaseModel):
 
 
 class AutoGenStreamResumeRequest(BaseModel):
-    """Resume payload accepted by the shared `/api/stream/autogen` endpoint."""
+    """Resume payload accepted by the unified chat endpoint."""
 
     content: str = Field(
         description="Human reply content appended as the next user turn when resuming a paused AutoGen handoff.",

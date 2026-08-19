@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from typing import Any
 from uuid import uuid4
 
 from fastapi import FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import ValidationError
 
 from app.agno_state import get_agno_paused_run_store
 from app.models import (
@@ -27,6 +29,11 @@ from app.examples.a2ui_deepseek import (
 from app.examples.agui_a2ui_deepseek import stream_agui_events
 from app.examples.agui_deepseek import stream_agui_text_events
 from app.providers.base import ProviderContext, create_provider_descriptors
+from app.providers.springai import (
+    load_springai_archive,
+    proxy_springai_stream,
+    reconnect_springai_events,
+)
 from app.settings import load_settings
 from app.conversation_state import ConversationConflictError, conversation_event_store
 from app.sse import create_resumable_sse_response, create_sse_response
@@ -82,11 +89,35 @@ def parse_event_cursor(value: str | None) -> int | None:
 
 @app.post("/api/stream/chat")
 async def stream_chat(
-    request: AgUiRunAgentInput,
+    payload: dict[str, Any],
+    framework: str = Query(default="agui", min_length=1),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     last_event_id: str | None = Header(default=None, alias="Last-Event-ID"),
 ) -> object:
-    """Run one chat stream whose answers may be text, frontend components, or A2UI."""
+    """Dispatch every demo framework through one public streaming endpoint."""
+
+    framework_id = framework.strip().lower()
+
+    if framework_id == "springai":
+        return await proxy_springai_stream(
+            payload,
+            settings,
+            idempotency_key=idempotency_key,
+            last_event_id=last_event_id,
+        )
+
+    if framework_id != "agui":
+        return await _stream_registered_provider(
+            framework_id,
+            payload,
+            idempotency_key=idempotency_key,
+            last_event_id=last_event_id,
+        )
+
+    try:
+        request = AgUiRunAgentInput.model_validate(payload)
+    except ValidationError as error:
+        raise HTTPException(status_code=422, detail=error.errors(include_url=False)) from error
 
     conversation_id = request.thread_id
     request_id = idempotency_key or request.run_id
@@ -139,19 +170,31 @@ async def generate_pure_a2ui_example(
         raise HTTPException(status_code=422, detail=str(error)) from error
 
 
-@app.post("/api/stream/{provider_id}")
-async def stream_provider(
+async def _stream_registered_provider(
     provider_id: str,
-    request: StreamRequest,
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
-    last_event_id: str | None = Header(default=None, alias="Last-Event-ID"),
+    payload: dict[str, Any],
+    *,
+    idempotency_key: str | None,
+    last_event_id: str | None,
 ) -> object:
-    """Start or reconnect to an idempotent, backend-owned provider run."""
+    """Start or reconnect to a registered framework run."""
 
     factory = PROVIDER_REGISTRY.get(provider_id)
 
     if factory is None:
-        raise HTTPException(status_code=404, detail=f"Unknown provider: {provider_id}")
+        raise HTTPException(status_code=404, detail=f"Unknown framework: {provider_id}")
+
+    resume_keys = ("agno_resume", "langchain_resume", "autogen_resume")
+    if "message" not in payload and not any(key in payload for key in resume_keys):
+        raise HTTPException(
+            status_code=422,
+            detail=f"The {provider_id} request requires `message` or a framework resume payload.",
+        )
+
+    try:
+        request = StreamRequest.model_validate(payload)
+    except ValidationError as error:
+        raise HTTPException(status_code=422, detail=error.errors(include_url=False)) from error
 
     conversation_id = request.session_id or f"session:{uuid4()}"
     request_id = idempotency_key or request.client_request_id or f"request:{uuid4()}"
@@ -193,8 +236,19 @@ async def stream_provider(
     "/api/v1/conversations/{conversation_id}",
     response_model=ConversationArchiveResponse,
 )
-async def read_conversation_archive(conversation_id: str) -> ConversationArchiveResponse:
+async def read_conversation_archive(
+    conversation_id: str,
+    framework: str | None = Query(default=None),
+) -> ConversationArchiveResponse:
     """Return the authoritative raw event archive used for page recovery."""
+
+    if framework and framework.strip().lower() == "springai":
+        spring_archive = await load_springai_archive(conversation_id, settings)
+
+        if spring_archive is None:
+            raise HTTPException(status_code=404, detail=f"Conversation not found: {conversation_id}")
+
+        return spring_archive
 
     conversation = await conversation_event_store.get(conversation_id)
     if conversation is None:
@@ -225,6 +279,7 @@ async def read_conversation_archive(conversation_id: str) -> ConversationArchive
 async def reconnect_conversation_events(
     conversation_id: str,
     request_id: str = Query(min_length=1),
+    framework: str | None = Query(default=None),
     after_cursor: int = Query(default=0, ge=0),
     last_event_id: str | None = Header(default=None, alias="Last-Event-ID"),
 ) -> object:
@@ -233,6 +288,16 @@ async def reconnect_conversation_events(
     resolved_cursor = parse_event_cursor(last_event_id)
     if resolved_cursor is None:
         resolved_cursor = after_cursor
+
+    if framework and framework.strip().lower() == "springai":
+        return await reconnect_springai_events(
+            conversation_id,
+            request_id,
+            resolved_cursor,
+            last_event_id,
+            settings,
+        )
+
     loaded = await conversation_event_store.get_run(conversation_id, request_id)
     if loaded is None:
         raise HTTPException(

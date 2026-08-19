@@ -74,7 +74,7 @@ import {
 const prompt = ref('帮我查一下北京天气，并说明工具调用过程。');
 
 const session = useAgnoChatSession<string>({
-  source: 'http://127.0.0.1:8000/api/stream/agno',
+  source: 'http://127.0.0.1:8000/api/stream/chat?framework=agno',
   input: prompt,
   conversationId: 'session:weather-demo',
   mode: 'hitl'

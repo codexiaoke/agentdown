@@ -43,7 +43,7 @@ def parse_args() -> argparse.Namespace:
     """Parse CLI options for the LangChain smoke test."""
 
     parser = argparse.ArgumentParser(
-        description="Verify that the real /api/stream/langchain endpoint can stream, call a tool, and finish cleanly."
+        description="Verify that the real LangChain framework can stream through the unified chat endpoint."
     )
     parser.add_argument(
         "--base-url",
@@ -246,7 +246,7 @@ def validate_summary(summary: LangChainSmokeSummary) -> None:
 def run_smoke_test(base_url: str, prompt: str, timeout_seconds: float) -> LangChainSmokeSummary:
     """Run the real LangChain endpoint once and return a structured summary."""
 
-    endpoint = f"{base_url.rstrip('/')}/api/stream/langchain"
+    endpoint = f"{base_url.rstrip('/')}/api/stream/chat?framework=langchain"
     summary = LangChainSmokeSummary(
         endpoint=endpoint,
         prompt=prompt,

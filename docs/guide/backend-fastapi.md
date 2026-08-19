@@ -18,11 +18,12 @@ description: 使用仓库内置测试 backend 联调统一 Chat 与各协议适�
 
 | 路径 | 框架 | 默认定位 |
 | --- | --- | --- |
-| `/api/stream/chat` | Agentdown Chat | 一个 AG-UI 流按语义返回文字、前端组件或 A2UI |
-| `/api/stream/agno` | Agno | 聊天 + requirement / approval |
-| `/api/stream/langchain` | LangChain | interrupt / review |
-| `/api/stream/autogen` | AutoGen | handoff / 人机接力 |
-| `/api/stream/crewai` | CrewAI | 官方 SSE chunk + 工具展示 + `CrewOutput` |
+| `/api/stream/chat?framework=agui` | Agentdown Chat | 一个 AG-UI 流按语义返回文字、前端组件或 A2UI |
+| `/api/stream/chat?framework=agno` | Agno | 聊天 + requirement / approval |
+| `/api/stream/chat?framework=springai` | Spring AI | 统一网关转发到 Java 示例服务 |
+| `/api/stream/chat?framework=langchain` | LangChain | interrupt / review |
+| `/api/stream/chat?framework=autogen` | AutoGen | handoff / 人机接力 |
+| `/api/stream/chat?framework=crewai` | CrewAI | 官方 SSE chunk + 工具展示 + `CrewOutput` |
 | `/api/v1/conversations/{conversation_id}` | 通用 | 后端权威原始事件归档 |
 | `/api/v1/conversations/{conversation_id}/events` | 通用 | 按 request id 与游标只读续接已有运行 |
 
