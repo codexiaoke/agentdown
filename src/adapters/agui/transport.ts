@@ -14,6 +14,7 @@ import {
   type AgentdownEventRecoveryMetadata
 } from '../../recovery/backendConversation';
 import { createJsonSseTransport, type FetchTransportSource } from '../../runtime/transports';
+import type { TransportAdapter } from '../../runtime/types';
 import type { FrameworkChatTransportContext } from '../shared/chatFactory';
 import type { FrameworkJsonTransportResolvable } from '../shared/jsonSseTransportFactory';
 import type { AgUiSseTransportOptions } from './types';
@@ -90,7 +91,9 @@ async function resolveRunInput<TSource, TContext>(
 export function createAgUiSseTransport<
   TSource = FetchTransportSource,
   TContext = FrameworkChatTransportContext
->(options: AgUiSseTransportOptions<TSource, TContext> = {}) {
+>(
+  options: AgUiSseTransportOptions<TSource, TContext> = {}
+): TransportAdapter<TSource, AGUIEvent> {
   return createJsonSseTransport<AGUIEvent, TSource, RunAgentInput>({
     ...(options.fetch ? { fetch: options.fetch } : {}),
     ...(options.init ? { init: options.init } : {}),
