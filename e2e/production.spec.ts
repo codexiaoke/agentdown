@@ -82,3 +82,14 @@ test('supports A2UI forms, keyboard tabs, modal focus and client actions', async
   await expect(page.getByTestId('client-envelope')).toContainText('45');
   await expect(page.getByTestId('client-envelope')).toContainText('2026-09-01');
 });
+
+test('renders a read-only A2UI result without inventing actions', async ({ page }) => {
+  const weather = page.getByTestId('readonly-weather');
+
+  await expect(weather.getByRole('heading', { name: '深圳' })).toBeVisible();
+  await expect(weather).toContainText('26°C · 多云');
+  await expect(weather).toContainText('湿度 72%');
+  await expect(weather).toContainText('风速 3.2 m/s');
+  await expect(weather.getByRole('button')).toHaveCount(0);
+  await expect(weather.getByRole('textbox')).toHaveCount(0);
+});

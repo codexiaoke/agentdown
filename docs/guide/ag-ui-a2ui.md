@@ -64,6 +64,11 @@ const session = useAgUiChatSession({
 
 A2UI Renderer 不依赖 AG-UI。宿主只需要提供服务端消息，并自行发送 `client-message`：
 
+A2UI Surface 不等于表单。只读结果（例如天气、汇率、搜索摘要）只需声明
+`Text / Row / Column / List / Card / Divider` 等展示组件，不需要 Button 或 action；
+只有业务确实需要交互时才增加按钮。结构固定且高频的天气卡也可以直接使用
+前端注册的 `WeatherCard` 工具 renderer，A2UI 更适合动态组合的展示结构。
+
 ```vue
 <script setup lang="ts">
 import { ref } from 'vue';

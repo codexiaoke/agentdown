@@ -364,6 +364,7 @@ const providerStateMap: Record<DemoFrameworkId, DemoProviderState> = {
     subtitle: 'Generative UI',
     suggestions: [
       '生成一个读书计划表单，包含书名、每日分钟数、阅读节奏和提交按钮',
+      '使用这些数据生成只读天气卡：深圳，26°C，多云，湿度 72%，风速 3.2m/s。只做展示，不要按钮',
       '做一个产品需求优先级面板，让我选择重要程度、紧急程度和负责人',
       '生成一个健身打卡界面，包含训练目标、时长、强度和确认按钮'
     ],
