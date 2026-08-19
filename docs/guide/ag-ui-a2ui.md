@@ -262,6 +262,32 @@ useAgUiA2UiChatSession({
 
 ## Action 状态边界
 
+### 前端 Action Handler
+
+已知的轻量动作不必绕到 Agent。通过 `actionHandlers` 可以按 action name
+在前端处理；未注册动作仍默认发送给宿主 transport。需要“乐观更新 + 后端确认”时，
+handler 显式调用 `forward()` 即可，同一次执行只会真正转发一次：
+
+```ts
+useAgUiA2UiChatSession({
+  // ...
+  a2uiRenderer: {
+    actionHandlers: {
+      toggle_temperature_unit({ action }) {
+        weatherStore.toggleUnit(action.context?.city);
+      },
+      async book_hotel({ action, forward }) {
+        bookingStore.optimisticallyBook(action.context?.hotelId);
+        await forward();
+      }
+    }
+  }
+});
+```
+
+handler 抛错时会进入现有 delivery failure/retry 流程。长时间运行的业务状态仍应通过
+`A2UiActionStateSource` 提供；前端 handler 不会把“成功交给处理函数”误认为后端业务已完成。
+
 Agentdown 是前端库，因此把 transport delivery 与业务 execution 明确分开：
 
 - Agentdown 自己管理 `sending / delivered / failed`，用于阻止双击和重试发送失败；

@@ -17,10 +17,11 @@ describe('useAgUiA2UiChatSession', () => {
       subscribe: () => () => undefined
     };
     const retryExecution = vi.fn();
+    const actionHandlers = { toggle_unit: vi.fn() };
     const session = scope.run(() => useAgUiA2UiChatSession<string>({
       source: '/api/stream/agui',
       conversationId: 'thread:test',
-      a2uiRenderer: { actionStateSource, retryExecution }
+      a2uiRenderer: { actionHandlers, actionStateSource, retryExecution }
     }));
     expect(session).toBeDefined();
 
@@ -41,6 +42,7 @@ describe('useAgUiA2UiChatSession', () => {
     });
     expect(rendererProps?.sendClientMessage).toEqual(expect.any(Function));
     expect(rendererProps?.onActionStateChange).toEqual(expect.any(Function));
+    expect(rendererProps?.actionHandlers).toBe(actionHandlers);
     expect(rendererProps?.actionStateSource).toBe(actionStateSource);
     expect(rendererProps?.retryExecution).toBe(retryExecution);
     expect(rendererProps?.interactionDisabled).toBe(false);

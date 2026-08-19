@@ -10,6 +10,7 @@ import type {
 import { createA2UiProcessor, type A2UiProcessor } from './processor';
 import type {
   A2UiActionDeliveryState,
+  A2UiActionHandlerMap,
   A2UiActionExecutionSnapshot,
   A2UiActionExecutionState,
   A2UiActionState,
@@ -32,6 +33,11 @@ export interface CreateA2UiSurfaceControllerOptions<T extends ComponentApi = Com
   includeInlineCatalogs?: boolean;
   onChange?: (surface: SurfaceModel<T> | undefined) => void;
   onClientMessage?: (envelope: A2UiClientEnvelope) => void | Promise<void>;
+  /**
+   * 按 action name 拦截客户端动作。未注册动作仍交给 onClientMessage。
+   * handler 可调用 context.forward() 组合前端更新与远端执行。
+   */
+  actionHandlers?: A2UiActionHandlerMap<T>;
   /** 宿主拥有的业务 action 状态源；未提供时只展示 transport delivery 状态。 */
   actionStateSource?: A2UiActionStateSource;
   /** 宿主允许业务失败重试时负责重新执行；Agentdown 不推断执行策略。 */
@@ -216,7 +222,23 @@ export function createA2UiSurfaceController<T extends ComponentApi = ComponentAp
 
   async function deliverAction(record: A2UiActionRecord): Promise<void> {
     try {
-      await options.onClientMessage?.(record.envelope);
+      const action = record.state.action;
+      const handler = options.actionHandlers?.[action.name];
+      if (handler) {
+        let forwarding: Promise<void> | undefined;
+        const forward = () => {
+          forwarding ??= Promise.resolve(options.onClientMessage?.(record.envelope));
+          return forwarding;
+        };
+        await handler({
+          action,
+          envelope: record.envelope,
+          surface: processor.getSurface(options.surfaceId),
+          forward
+        });
+      } else {
+        await options.onClientMessage?.(record.envelope);
+      }
       record.state = {
         ...record.state,
         status: 'delivered',

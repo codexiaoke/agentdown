@@ -135,6 +135,9 @@ export function useAgUiA2UiChatSession<TSource = RequestInfo | URL>(
           ...(rendererOptions?.securityPolicy
             ? { securityPolicy: rendererOptions.securityPolicy }
             : {}),
+          ...(rendererOptions?.actionHandlers
+            ? { actionHandlers: rendererOptions.actionHandlers }
+            : {}),
           ...(rendererOptions?.actionStateSource
             ? { actionStateSource: rendererOptions.actionStateSource }
             : {}),

@@ -14,6 +14,7 @@ import {
 } from '../surfaceController';
 import type {
   A2UiActionExecutionState,
+  A2UiActionHandlerMap,
   A2UiActionStateSnapshot,
   A2UiActionStateSource,
   A2UiClientEnvelope,
@@ -41,6 +42,8 @@ interface Props {
    * 不代表业务 action 已执行成功。
    */
   sendClientMessage?: (envelope: A2UiClientEnvelope) => void | Promise<void>;
+  /** 按 action name 处理前端动作；未注册动作继续发送给宿主。 */
+  actionHandlers?: A2UiActionHandlerMap;
   /** 宿主拥有的只读业务 action 状态源。 */
   actionStateSource?: A2UiActionStateSource;
   /** 宿主允许业务失败重试时负责重新执行。 */
@@ -147,6 +150,7 @@ function rebuildController() {
       version: props.version,
       includeInlineCatalogs: props.includeInlineCatalogs,
       ...(props.securityPolicy ? { policy: props.securityPolicy } : {}),
+      ...(props.actionHandlers ? { actionHandlers: props.actionHandlers } : {}),
       ...(props.actionStateSource ? { actionStateSource: props.actionStateSource } : {}),
       ...(props.retryExecution ? { retryExecution: props.retryExecution } : {}),
       onChange(nextSurface) {
@@ -177,6 +181,7 @@ watch(
     props.version,
     props.includeInlineCatalogs,
     props.securityPolicy,
+    props.actionHandlers,
     props.actionStateSource,
     props.retryExecution
   ] as const,

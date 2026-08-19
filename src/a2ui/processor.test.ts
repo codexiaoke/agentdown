@@ -300,6 +300,69 @@ describe('createA2UiProcessor', () => {
     controller.dispose();
   });
 
+  it('routes registered actions to frontend handlers without forcing a transport request', async () => {
+    const onClientMessage = vi.fn();
+    const localHandler = vi.fn();
+    const controller = createA2UiSurfaceController({
+      surfaceId: 'planner',
+      catalogs: [createA2UiBasicCatalog()],
+      onClientMessage,
+      actionHandlers: {
+        trip_submitted: localHandler
+      },
+      createClientRequestId: () => 'a2ui:request:local'
+    });
+    controller.sync(createMessages());
+
+    await controller.getSurface()?.dispatchAction({
+      event: { name: 'trip_submitted', context: { city: '杭州' } }
+    }, 'submit');
+
+    expect(localHandler).toHaveBeenCalledWith(expect.objectContaining({
+      action: expect.objectContaining({
+        name: 'trip_submitted',
+        context: { city: '杭州' }
+      }),
+      envelope: expect.objectContaining({ requestId: 'a2ui:request:local' }),
+      surface: controller.getSurface(),
+      forward: expect.any(Function)
+    }));
+    expect(onClientMessage).not.toHaveBeenCalled();
+    expect(controller.getActionState('submit')).toMatchObject({
+      phase: 'delivery',
+      status: 'delivered'
+    });
+
+    controller.dispose();
+  });
+
+  it('lets a frontend action handler explicitly forward the same envelope once', async () => {
+    const onClientMessage = vi.fn();
+    const controller = createA2UiSurfaceController({
+      surfaceId: 'planner',
+      catalogs: [createA2UiBasicCatalog()],
+      onClientMessage,
+      actionHandlers: {
+        async trip_submitted({ forward }) {
+          await Promise.all([forward(), forward()]);
+        }
+      },
+      createClientRequestId: () => 'a2ui:request:hybrid'
+    });
+    controller.sync(createMessages());
+
+    await controller.getSurface()?.dispatchAction({
+      event: { name: 'trip_submitted', context: { city: '杭州' } }
+    }, 'submit');
+
+    expect(onClientMessage).toHaveBeenCalledTimes(1);
+    expect(onClientMessage).toHaveBeenCalledWith(expect.objectContaining({
+      requestId: 'a2ui:request:hybrid'
+    }));
+
+    controller.dispose();
+  });
+
   it('keeps one action sending and suppresses rapid duplicate dispatches', async () => {
     let release: (() => void) | undefined;
     const pending = new Promise<void>((resolve) => {
