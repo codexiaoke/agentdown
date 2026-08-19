@@ -16,6 +16,7 @@ import type { FrameworkChatTransportContext } from '../../adapters/shared/chatFa
 import type { RuntimeProtocol } from '../../runtime/types';
 import type { FetchTransportSource } from '../../runtime/transports';
 import type { AgUiA2UiProtocol, AgUiA2UiProtocolOptions } from './protocol';
+import type { AgentAnswerComponentMap } from './components';
 
 export interface AgUiA2UiRendererOptions {
   catalogs?: ReadonlyArray<A2UiVueCatalog>;
@@ -54,6 +55,8 @@ export type AgUiA2UiClientSerializer<TSource = unknown> = (
 
 export interface UseAgUiA2UiChatSessionOptions<TSource = FetchTransportSource>
   extends UseAgUiChatSessionOptions<TSource> {
+  /** Agent 可以选择的前端回答组件；定义会自动转为 AG-UI tools 和白名单 renderer。 */
+  components?: AgentAnswerComponentMap;
   a2uiProtocol?: AgUiA2UiProtocol;
   a2uiProtocolOptions?: AgUiA2UiProtocolOptions;
   a2uiRenderer?: AgUiA2UiRendererOptions;

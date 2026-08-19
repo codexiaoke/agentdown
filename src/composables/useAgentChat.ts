@@ -99,6 +99,12 @@ import type {
   RunSurfaceOptions,
   RunSurfaceRendererRegistration
 } from '../surface/types';
+import {
+  useAgUiA2UiChatSession,
+  type AgentAnswerComponentMap,
+  type UseAgUiA2UiChatSessionOptions,
+  type UseAgUiA2UiChatSessionResult
+} from '../integrations/agui-a2ui';
 
 /**
  * 当前统一 chat 入口内置支持的后端框架 id。
@@ -531,6 +537,18 @@ export type UseAgentChatSpringAiOptions<TSource = string> = UseAgentChatFramewor
 >;
 
 /**
+ * 推荐的统一 Chat 配置。
+ *
+ * AG-UI 只负责同一个 `/stream/chat` 的流事件；固定前端组件和 A2UI 都是回答表现，
+ * 不需要在产品界面里选择协议或后端框架。
+ */
+export interface UseAgentChatStreamOptions<TSource = string>
+  extends UseAgUiA2UiChatSessionOptions<TSource> {
+  framework?: 'ag-ui';
+  components?: AgentAnswerComponentMap;
+}
+
+/**
  * 自定义 framework 的统一 chat 入口配置。
  */
 export type UseAgentChatCustomOptions<
@@ -559,6 +577,7 @@ export type UseAgentChatCustomOptions<
  * 统一 chat 入口支持的全部配置联合类型。
  */
 export type UseAgentChatOptions<TSource = string> =
+  | UseAgentChatStreamOptions<TSource>
   | UseAgentChatAgnoOptions<TSource>
   | UseAgentChatLangChainOptions<TSource>
   | UseAgentChatAutoGenOptions<TSource>
@@ -582,6 +601,7 @@ export type UseAgentChatOptions<TSource = string> =
 export type UseAgentChatResult<
   TSource = string,
   TResult =
+  | UseAgUiA2UiChatSessionResult<TSource>
   | UseAgnoChatSessionResult<TSource>
   | UseLangChainChatSessionResult<TSource>
   | UseAutoGenChatSessionResult<TSource>
@@ -601,7 +621,7 @@ export type InferAgentChatSource<TOptions> =
  * 根据 `useAgentChat()` 的输入自动推导返回结果。
  */
 export type ResolveUseAgentChatResult<TOptions> =
-  TOptions extends { framework: infer TFramework }
+  TOptions extends { framework?: infer TFramework }
     ? TFramework extends 'agno'
       ? UseAgnoChatSessionResult<InferAgentChatSource<TOptions>>
       : TFramework extends 'langchain'
@@ -614,8 +634,8 @@ export type ResolveUseAgentChatResult<TOptions> =
               ? UseSpringAiChatSessionResult<InferAgentChatSource<TOptions>>
             : TFramework extends AnyAgentChatFrameworkDriver
               ? ExtractAgentChatFrameworkResult<TFramework>
-              : never
-    : never;
+              : UseAgUiA2UiChatSessionResult<InferAgentChatSource<TOptions>>
+    : UseAgUiA2UiChatSessionResult<InferAgentChatSource<TOptions>>;
 
 /**
  * 判断当前值是否是普通对象。
@@ -1273,6 +1293,9 @@ function runAgentChatWithFramework<
  * - 只有在你要封装自定义 framework 或做统一抽象层时，再使用 `useAgentChat()`
  */
 export function useAgentChat<TSource = string>(
+  options: UseAgentChatStreamOptions<TSource>
+): UseAgUiA2UiChatSessionResult<TSource>;
+export function useAgentChat<TSource = string>(
   options: UseAgentChatAgnoOptions<TSource>
 ): UseAgnoChatSessionResult<TSource>;
 export function useAgentChat<TSource = string>(
@@ -1301,6 +1324,12 @@ export function useAgentChat<
 export function useAgentChat(
   options: UseAgentChatOptions<any>
 ): unknown {
+  if (!('framework' in options) || options.framework === undefined || options.framework === 'ag-ui') {
+    const { framework, ...chatOptions } = options as UseAgentChatStreamOptions<any>;
+    void framework;
+    return useAgUiA2UiChatSession(chatOptions);
+  }
+
   return runAgentChatWithFramework(
     resolveAgentChatFrameworkDriver(options.framework as AgentChatFramework),
     options as UseAgentChatFrameworkOptions<any, any, any, any, any>
@@ -1308,6 +1337,7 @@ export function useAgentChat(
 }
 
 export type {
+  AgentAnswerComponentMap,
   AgnoChatAssistantActionsOptions,
   AgnoChatIdFactory,
   AgnoChatSessionIdOptions,

@@ -1,4 +1,13 @@
 export { createAgUiA2UiAdapter } from './adapter';
+export {
+  defineAgentAnswerComponents,
+  parseAgentAnswerComponentProps
+} from './components';
+export type {
+  AgentAnswerComponentDefinition,
+  AgentAnswerComponentMap,
+  AgentAnswerComponentRegistry
+} from './components';
 export { serializeAgUiA2UiForwardedProps, useAgUiA2UiChatSession } from './chat';
 export { createAgUiA2UiCombinedProtocol, createAgUiA2UiProtocol } from './protocol';
 export type {
