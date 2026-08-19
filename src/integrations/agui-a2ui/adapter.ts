@@ -48,6 +48,9 @@ export function createAgUiA2UiAdapter<
             ...(a2uiRenderer?.securityPolicy
               ? { securityPolicy: a2uiRenderer.securityPolicy }
               : {}),
+            ...(a2uiRenderer?.actionHandlers
+              ? { actionHandlers: a2uiRenderer.actionHandlers }
+              : {}),
             ...(a2uiRenderer?.actionStateSource
               ? { actionStateSource: a2uiRenderer.actionStateSource }
               : {}),

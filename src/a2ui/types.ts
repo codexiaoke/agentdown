@@ -99,6 +99,30 @@ export interface A2UiClientEnvelope extends A2UiClientMetadata {
   message: A2uiClientMessage;
 }
 
+/** 前端 action handler 执行时可用的受控上下文。 */
+export interface A2UiActionHandlerContext<T extends ComponentApi = ComponentApi> {
+  action: A2UiAction;
+  envelope: A2UiClientEnvelope;
+  surface: SurfaceModel<T> | undefined;
+  /**
+   * 将同一个 action envelope 继续交给宿主 transport。
+   *
+   * handler 不调用它时，action 只在前端处理；调用后可以组成
+   * “前端乐观更新 + 后端确认”的混合流程。同一次执行最多真正转发一次。
+   */
+  forward: () => Promise<void>;
+}
+
+/** 按 A2UI action name 注册的前端处理函数。 */
+export type A2UiActionHandler<T extends ComponentApi = ComponentApi> = (
+  context: A2UiActionHandlerContext<T>
+) => void | Promise<void>;
+
+/** 未注册的 action 会继续使用原有的宿主 transport。 */
+export type A2UiActionHandlerMap<T extends ComponentApi = ComponentApi> = Readonly<
+  Record<string, A2UiActionHandler<T>>
+>;
+
 /**
  * 一次 transport 请求携带的 A2UI 客户端上下文。
  *

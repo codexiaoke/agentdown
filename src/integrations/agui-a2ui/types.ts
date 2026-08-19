@@ -1,6 +1,7 @@
 import type { MaybeRefOrGetter, ShallowRef } from 'vue';
 import type {
   A2UiActionExecutionState,
+  A2UiActionHandlerMap,
   A2UiActionStateMap,
   A2UiActionStateSnapshot,
   A2UiActionStateSource,
@@ -21,6 +22,8 @@ export interface AgUiA2UiRendererOptions {
   version?: A2UiVersion;
   includeInlineCatalogs?: boolean;
   securityPolicy?: Partial<A2UiSecurityPolicy>;
+  /** 按 action name 注册前端 handler；未注册动作默认发给 AG-UI 后端。 */
+  actionHandlers?: A2UiActionHandlerMap;
   actionStateSource?: A2UiActionStateSource;
   retryExecution?: (state: A2UiActionExecutionState) => void | Promise<void>;
   onActionStateChange?: (snapshot: A2UiActionStateSnapshot) => void;
