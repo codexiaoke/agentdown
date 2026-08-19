@@ -75,4 +75,4 @@ export function createA2UiBasicCatalog(
 }
 
 /** 供零配置 Renderer 复用的默认 Catalog。 */
-export const defaultA2UiBasicCatalog = createA2UiBasicCatalog();
+export const defaultA2UiBasicCatalog: A2UiVueCatalog<ComponentApi> = createA2UiBasicCatalog();
