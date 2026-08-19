@@ -168,15 +168,15 @@ _A2UI_RENDER_TOOL: dict[str, Any] = {
     "type": "function",
     "function": {
         "name": "render_a2ui_surface",
-        "description": "当现有前端回答组件不足以表达结果时，生成一个受限 A2UI Basic Catalog 动态界面。",
+        "description": "当现有前端回答组件不足以表达结果时，选择由后端专用生成器创建受限 A2UI 动态界面。",
         "parameters": {
             "type": "object",
             "properties": {
-                "assistantText": {"type": "string"},
-                "components": {"type": "array", "items": {"type": "object"}},
-                "dataModel": {"type": "object"},
+                "reason": {
+                    "type": "string",
+                    "description": "现有固定组件无法表达该回答的简短原因。",
+                },
             },
-            "required": ["assistantText", "components", "dataModel"],
             "additionalProperties": False,
         },
     },
@@ -721,6 +721,10 @@ def normalize_generated_surface(surface: AgUiGeneratedSurface) -> AgUiGeneratedS
         if isinstance(component.get("id"), str)
     }
     for component in normalized.components:
+        if component.get("component") is None:
+            inferred = _infer_missing_component_type(component)
+            if inferred is not None:
+                component["component"] = inferred
         if component.get("component") != "ChoicePicker":
             if component.get("component") == "Button":
                 child = component.get("child")
@@ -738,6 +742,30 @@ def normalize_generated_surface(surface: AgUiGeneratedSurface) -> AgUiGeneratedS
             if isinstance(current, str):
                 _replace_json_pointer(normalized.data_model, value["path"], [current])
     return normalized
+
+
+def _infer_missing_component_type(component: dict[str, Any]) -> str | None:
+    """Recover an omitted discriminator only when the remaining shape is unambiguous."""
+
+    if "tabs" in component:
+        return "Tabs"
+    if "children" in component:
+        return "Column"
+    if "child" in component:
+        return "Button" if "action" in component else "Card"
+    if "options" in component:
+        return "ChoicePicker"
+    if "enableDate" in component or "enableTime" in component:
+        return "DateTimeInput"
+    if "max" in component:
+        return "Slider"
+    if "text" in component:
+        return "Text"
+    if "label" in component and "value" in component:
+        return "TextField"
+    if set(component).issubset({"id", "component", "axis", "weight"}):
+        return "Divider"
+    return None
 
 
 def validate_generated_surface(surface: AgUiGeneratedSurface) -> AgUiGeneratedSurface:
@@ -1046,9 +1074,8 @@ async def generate_deepseek_chat_response(
             "role": "system",
             "content": (
                 _CHAT_SYSTEM_PROMPT
-                + "\n调用 render_a2ui_surface 时，只能使用 Text、Row、Column、List、Card、Tabs、Divider、"
-                "Button、TextField、CheckBox、ChoicePicker、Slider、DateTimeInput；必须有 id=root，"
-                "所有引用必须指向已声明组件，Button 只能发送 event action。"
+                + "\n调用 render_a2ui_surface 只表示选择动态界面；不要把组件树放进参数，"
+                "后端会交给受 Catalog 和安全校验约束的专用生成器。"
             ),
         },
         *_bound_history(history),
@@ -1082,13 +1109,7 @@ async def generate_deepseek_chat_response(
                 if tool_calls:
                     function = tool_calls[0].function
                     if function.name == "render_a2ui_surface":
-                        surface = parse_generated_surface(function.arguments)
-                        return AgUiModelGeneration(
-                            surface=surface,
-                            model=response.model,
-                            usage=usage,
-                            response_id=response.id,
-                        )
+                        return await generate_deepseek_surface(settings, history, latest_input)
                     if function.name not in allowed_component_names:
                         raise ValueError(f"Model selected an unregistered answer component: {function.name}.")
                     props = _parse_answer_component_props(function.name, function.arguments)

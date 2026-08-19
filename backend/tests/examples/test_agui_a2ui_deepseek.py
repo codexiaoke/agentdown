@@ -585,6 +585,19 @@ class AgUiProviderTest(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual("Text", generated_label["component"])
 
+        missing_discriminators = _surface().model_dump(by_alias=True)
+        root = next(item for item in missing_discriminators["components"] if item["id"] == "root")
+        title = next(item for item in missing_discriminators["components"] if item["id"] == "title")
+        submit = next(item for item in missing_discriminators["components"] if item["id"] == "submit")
+        root["component"] = None
+        title["component"] = None
+        submit["component"] = None
+        normalized = parse_generated_surface(json.dumps(missing_discriminators, ensure_ascii=False))
+        normalized_by_id = {item["id"]: item for item in normalized.components}
+        self.assertEqual("Column", normalized_by_id["root"]["component"])
+        self.assertEqual("Text", normalized_by_id["title"]["component"])
+        self.assertEqual("Button", normalized_by_id["submit"]["component"])
+
     async def test_http_stream_is_archived_and_idempotently_replayed(self) -> None:
         transport = ASGITransport(app=app)
         with patch(
