@@ -105,3 +105,23 @@ test('renders a read-only A2UI result without inventing actions', async ({ page 
   await expect(weather.getByRole('button')).toHaveCount(0);
   await expect(weather.getByRole('textbox')).toHaveCount(0);
 });
+
+test('uses one chat session for text, frontend components, and dynamic A2UI', async ({ page }) => {
+  const unified = page.getByTestId('unified-chat');
+
+  await unified.getByRole('button', { name: '统一流：文本' }).click();
+  await expect(unified).toContainText('这是不需要任何 UI 组件的普通文本回答。');
+  await expect(unified.getByTestId('unified-weather-card')).toHaveCount(0);
+
+  await unified.getByRole('button', { name: '统一流：天气组件' }).click();
+  await expect(unified.getByTestId('unified-weather-card')).toContainText('深圳 26°C');
+  await expect(unified.getByTestId('unified-weather-card')).toContainText('湿度 72%');
+
+  await unified.getByRole('button', { name: '统一流：动态 A2UI' }).click();
+  await expect(unified.getByRole('heading', { name: '动态读书计划' })).toBeVisible();
+  await expect(unified.getByRole('textbox', { name: '书名' }))
+    .toHaveValue('Designing Data-Intensive Applications');
+  await expect(unified.getByRole('slider', { name: /每日分钟数/ })).toHaveValue('30');
+  await expect(unified.getByTestId('unified-thread-ids'))
+    .toHaveText('e2e:unified-chat,e2e:unified-chat,e2e:unified-chat');
+});
