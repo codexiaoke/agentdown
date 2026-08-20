@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import PreviewLightbox from './PreviewLightbox.vue';
+import { isCrossOriginHttpLink } from './htmlBlockLinks';
 import { resolveAgentdownHtml, sanitizeAgentdownHtml } from '../security/sanitizeHtml';
 import type { MarkdownHtmlSanitizer, MarkdownHtmlTrust } from '../core/types';
 
@@ -142,7 +143,9 @@ function enhanceLinks(container: HTMLDivElement): void {
   const links = Array.from(container.querySelectorAll<HTMLAnchorElement>('a[href]'));
 
   for (const link of links) {
-    if (!/^https?:\/\//i.test(link.href)) {
+    const rawHref = link.getAttribute('href');
+
+    if (!rawHref || !isCrossOriginHttpLink(rawHref, link.baseURI)) {
       continue;
     }
 
