@@ -95,7 +95,7 @@
   },
   "peerDependencies": {
     "@a2ui/web_core": "^0.10.6",
-    "@ag-ui/core": "^0.0.57",
+    "@ag-ui/core": "^0.0.58",
     "vue": "^3.5.0"
   },
   "peerDependenciesMeta": {
@@ -118,13 +118,13 @@
   },
   "devDependencies": {
     "@a2ui/web_core": "^0.10.6",
-    "@ag-ui/core": "^0.0.57",
+    "@ag-ui/core": "^0.0.58",
     "@playwright/test": "^1.62.1",
     "@types/markdown-it": "^14.1.2",
     "@types/markdown-it-container": "^4.0.0",
-    "@types/node": "^25.5.0",
+    "@types/node": "^26.2.0",
     "@vitejs/plugin-vue": "^6.0.5",
-    "typescript": "^6.0.2",
+    "typescript": "^7.0.2",
     "vite": "^8.0.3",
     "vitepress": "^1.6.4",
     "vitest": "^4.1.2",
