@@ -13,7 +13,10 @@ export default defineConfig({
   },
   server: {
     host: '0.0.0.0', port: 5174, strictPort: true,
-    proxy: { '/api': 'http://127.0.0.1:8010', '/health': 'http://127.0.0.1:8010' },
+    proxy: {
+      '/api': process.env.AGENTDOWN_BACKEND_URL ?? 'http://127.0.0.1:8010',
+      '/health': process.env.AGENTDOWN_BACKEND_URL ?? 'http://127.0.0.1:8010',
+    },
   },
   build: {
     outDir: '../../dist-next/prototype', emptyOutDir: true,

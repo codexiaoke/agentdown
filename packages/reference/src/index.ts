@@ -7,6 +7,9 @@ import type {
 export interface ReferenceAdapterOptions {
   endpoint: string;
   fetch?: typeof globalThis.fetch;
+  id?: string;
+  version?: string;
+  headers?: Readonly<Record<string, string>> | (() => Readonly<Record<string, string>>);
 }
 
 export interface ReferenceAdapter extends AgentAdapter {
@@ -18,6 +21,7 @@ export interface ReferenceAdapter extends AgentAdapter {
 export function createReferenceAdapter(options: ReferenceAdapterOptions): ReferenceAdapter {
   const endpoint = options.endpoint.replace(/\/$/, '');
   const fetcher = options.fetch ?? globalThis.fetch;
+  const requestHeaders = () => typeof options.headers === 'function' ? options.headers() : options.headers ?? {};
   const handoffs = new Map<string, { response: Response; release: () => void }>();
   let loseNext = false;
   let handoffSequence = 0;
@@ -79,7 +83,7 @@ export function createReferenceAdapter(options: ReferenceAdapterOptions): Refere
     // Reconcile an uncertain attempt before submitting the same frozen intent.
     const recorded = context.snapshot.operations[operation.operationId];
     if (recorded && recorded.attemptCount > 1) {
-      const lookup = await fetcher(`${endpoint}/operations/${encodeURIComponent(operation.operationId)}`, { signal: context.signal });
+      const lookup = await fetcher(`${endpoint}/operations/${encodeURIComponent(operation.operationId)}`, { signal: context.signal, headers: requestHeaders() });
       if (lookup.ok) {
         const known: unknown = await lookup.json();
         if (known && typeof known === 'object' && 'status' in known && known.status === 'accepted') {
@@ -101,6 +105,7 @@ export function createReferenceAdapter(options: ReferenceAdapterOptions): Refere
     const response = await checked(await fetcher(`${endpoint}/operations`, {
       method: 'POST', signal: context.signal,
       headers: {
+        ...requestHeaders(),
         'Content-Type': 'application/json', Accept: 'text/event-stream',
         ...(drop ? { 'x-agentdown-drop-ack': 'true' } : {}),
       },
@@ -120,7 +125,7 @@ export function createReferenceAdapter(options: ReferenceAdapterOptions): Refere
       const cursor = subscription.cursor ?? '';
       response = await checked(await fetcher(
         `${endpoint}/executions/${encodeURIComponent(subscription.executionId)}/events?cursor=${encodeURIComponent(cursor)}`,
-        { signal: context.signal, headers: { Accept: 'text/event-stream' } },
+        { signal: context.signal, headers: { ...requestHeaders(), Accept: 'text/event-stream' } },
       ));
     }
     if (!response.body) throw new Error('Reference event response has no body');
@@ -164,7 +169,7 @@ export function createReferenceAdapter(options: ReferenceAdapterOptions): Refere
   }
 
   return {
-    id: 'agentdown-reference', version: '1',
+    id: options.id ?? 'agentdown-reference', version: options.version ?? '1',
     capabilities: {
       maxConcurrentExecutions: 1, respond: true, regenerate: true,
       cancelExecution: true, resume: true, operationIdempotency: true, operationQuery: true,

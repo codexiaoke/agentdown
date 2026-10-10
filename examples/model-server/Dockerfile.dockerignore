@@ -1,0 +1,12 @@
+**
+!examples/
+!examples/model-server/
+!examples/model-server/package.json
+!examples/model-server/package-lock.json
+!examples/model-server/server.mjs
+!examples/model-server/deepseek.mjs
+!examples/model-server/Dockerfile
+!examples/model-server/Dockerfile.dockerignore
+!dist-next/
+!dist-next/prototype/
+!dist-next/prototype/**

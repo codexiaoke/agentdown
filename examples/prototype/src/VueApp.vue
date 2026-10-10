@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { useAgentSession } from '@agentdown/vue';
-import { artifactReport, createPrototypeAdapter, currentConnection, currentExecution, frameworkHref, initialOptions, interactionConfirmation, label, prototypeFootnote, reportDelivery, returnToLive, saveAndNavigate, text, toolOutput, toolTitle, uncertainOperations } from './ui';
+import { artifactReport, backendSettings, createPrototypeAdapter, currentConnection, currentExecution, frameworkHref, initialOptions, interactionConfirmation, label, prototypeFootnote, prototypeModeLabel, realAgentMode, reportDelivery, resetBackendConfiguration, returnToLive, saveAndNavigate, saveBackendConfiguration, text, toolOutput, toolTitle, uncertainOperations } from './ui';
 
 const adapter = createPrototypeAdapter();
 const initial = initialOptions('vue', adapter);
@@ -9,6 +9,8 @@ const { session, snapshot, actions } = useAgentSession(initial.options);
 const draft = ref('调研 Agentdown 的下一代架构，关键操作前请让我确认。');
 const notice = ref(initial.error);
 const ackArmed = ref(false);
+const backendEndpoint = ref(backendSettings.endpoint);
+const backendToken = ref('');
 const execution = computed(() => currentExecution(snapshot.value));
 const connection = computed(() => currentConnection(snapshot.value));
 const uncertain = computed(() => uncertainOperations(snapshot.value));
@@ -44,6 +46,15 @@ function save(mode: 'live' | 'replay') {
   catch { notice.value = '会话保存失败，请检查浏览器是否允许本地存储。'; }
 }
 function loseAck() { adapter.loseNextAcknowledgement(); ackArmed.value = true; }
+function connectBackend() {
+  try { saveBackendConfiguration(backendEndpoint.value, backendToken.value); }
+  catch (error) { notice.value = error instanceof Error ? error.message : '后端连接设置保存失败。'; }
+}
+function resetBackend() {
+  try { resetBackendConfiguration(); }
+  catch { notice.value = '默认连接恢复失败，请检查浏览器存储。'; }
+}
+function interactionInput(toolCallId: string | undefined) { return snapshot.value.tools.find(tool => tool.id === toolCallId)?.input; }
 </script>
 
 <template>
@@ -56,10 +67,20 @@ function loseAck() { adapter.loseNextAcknowledgement(); ackArmed.value = true; }
     <div class="page-heading">
       <div><p class="eyebrow">Agent workspace / prototype</p><h1>每一步，都有迹可循。</h1><p class="page-description">发起任务、查看执行、处理决策，再带着完整上下文继续。</p></div>
       <span v-if="replay" class="mode-badge replay" data-testid="replay-mode">历史回放 · 只读</span>
-      <span v-else class="mode-badge">Vue · 实时工作台</span>
+      <span v-else class="mode-badge" data-testid="backend-mode">Vue · {{ prototypeModeLabel }}</span>
     </div>
+    <details class="backend-settings" data-testid="backend-settings">
+      <summary>连接设置 · {{ prototypeModeLabel }}</summary>
+      <form class="backend-form" @submit.prevent="connectBackend">
+        <label for="backend-endpoint">真实后端 API URL</label><input id="backend-endpoint" v-model="backendEndpoint" type="url" data-testid="backend-endpoint" placeholder="https://your-agent.example/api" required />
+        <label for="backend-token">后端访问令牌（可选）</label><input id="backend-token" v-model="backendToken" type="password" data-testid="backend-token" autocomplete="off" placeholder="留空表示不使用令牌" />
+        <p>使用你部署的后端签发的访问令牌，不是模型 API 密钥。令牌仅在当前标签页保存，不进入会话存档。保存只切换设置，发送任务后才连接后端。{{ backendSettings.hasToken ? '当前标签页已配置令牌，修改连接时请重新填写。' : '' }}</p>
+        <div class="backend-form-actions"><button class="primary-button" type="submit" data-testid="connect-backend">使用真实后端</button><button class="secondary-button" type="button" data-testid="reset-backend" @click="resetBackend">恢复默认连接</button></div>
+      </form>
+    </details>
     <div v-if="replay" class="replay-banner"><span>正在查看已保存的会话。回放不会连接后端或提交操作。</span><button class="text-button" @click="returnToLive">返回实时模式</button></div>
     <div v-if="notice" class="toast" role="alert" data-testid="notice"><span>{{ notice }}</span><button aria-label="关闭提示" @click="notice = ''">×</button></div>
+    <div v-if="execution?.status === 'failed'" class="toast" role="alert" data-testid="execution-error"><span>任务执行失败：{{ execution.error || '后端未提供错误详情，请检查任务与连接。' }}</span></div>
 
     <div v-for="operation in uncertain" :key="operation.id" class="operation-notice" data-testid="uncertain-operation" role="status">
       <p>这次操作的投递结果尚未确定。后端可能已经收到，当前界面仍等待确认。</p>
@@ -95,8 +116,8 @@ function loseAck() { adapter.loseNextAcknowledgement(); ackArmed.value = true; }
             <div class="status-row"><span>最近操作</span><span class="status-value" data-testid="operation-status">{{ latestOperation ? `${label(latestOperation.status)} · ${label(latestOperation.acceptance)}` : '暂无操作' }}</span></div>
             <div class="control-buttons"><button class="secondary-button" :disabled="!canDisconnect" data-testid="disconnect" @click="disconnect">断开连接</button><button class="secondary-button" :disabled="replay || !snapshot.canResume || !execution" data-testid="resume" @click="resume">恢复执行</button><button class="danger-button" :disabled="replay || !snapshot.canCancel || !execution" data-testid="cancel" @click="cancel">取消任务</button></div>
             <div class="archive-controls"><button class="text-button" data-testid="save-reload" @click="save('live')">保存并刷新</button><span class="separator" aria-hidden="true">/</span><button class="text-button" :disabled="replay || snapshot.messages.length === 0" data-testid="replay" @click="save('replay')">查看回放</button></div>
-            <button v-if="!replay" class="text-button" :disabled="ackArmed" data-testid="simulate-lost-ack" @click="loseAck">{{ ackArmed ? '下一次投递将丢失确认' : '模拟确认丢失' }}</button>
-            <p v-if="!replay" class="simulation-note">先断开连接，再模拟丢失确认，可观察待核实状态。</p>
+            <button v-if="!replay && !realAgentMode" class="text-button" :disabled="ackArmed" data-testid="simulate-lost-ack" @click="loseAck">{{ ackArmed ? '下一次投递将丢失确认' : '模拟确认丢失' }}</button>
+            <p v-if="!replay && !realAgentMode" class="simulation-note">先断开连接，再模拟丢失确认，可观察待核实状态。</p>
           </div>
         </section>
 
@@ -115,6 +136,7 @@ function loseAck() { adapter.loseNextAcknowledgement(); ackArmed.value = true; }
             <p v-if="snapshot.interactions.length === 0" class="interaction-empty">Agent 需要你的决定时，会在这里提出请求。</p>
             <article v-for="interaction in snapshot.interactions" :key="interaction.id" :class="['interaction-card', { resolved: interaction.status === 'resolved' }]" :data-testid="`interaction-${interaction.id}`">
               <h3>{{ interaction.prompt }}</h3><p>{{ interaction.kind === 'approval' ? '这一项由你决定，结果以实际后端确认为准。' : '当前原型只支持审批交互。' }}</p>
+              <details v-if="interactionInput(interaction.toolCallId) !== undefined" class="artifact-data"><summary>查看执行内容</summary><pre>{{ text(interactionInput(interaction.toolCallId)) }}</pre></details>
               <div v-if="interaction.kind === 'approval' && interaction.status !== 'resolved'" class="interaction-actions"><button class="primary-button" :disabled="replay || interaction.status !== 'pending'" :data-testid="`approve-${interaction.id}`" @click="respond(interaction.id, true)">批准</button><button class="secondary-button" :disabled="replay || interaction.status !== 'pending'" :data-testid="`reject-${interaction.id}`" @click="respond(interaction.id, false)">拒绝</button></div>
               <p class="interaction-confirmation" :data-testid="`interaction-status-${interaction.id}`">{{ interaction.status === 'pending' ? '等待你的选择' : interactionConfirmation(interaction) }}</p>
             </article>

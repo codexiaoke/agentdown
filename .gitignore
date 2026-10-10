@@ -20,3 +20,6 @@ packages/*/dist/
 playwright-report-next/
 
 test-results-next/
+
+.agentdown-data/
+examples/model-server/.env

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import type { IncomingMessage } from 'node:http';
 import { createAgentSession, projectAgentView, type AgentSession } from '@agentdown/core';
 import { createReferenceAdapter } from '@agentdown/reference';
 // The dependency-free fixture backend is intentionally native JavaScript.
@@ -95,6 +96,75 @@ describe('Session over the reference HTTP protocol', () => {
     expect(requests.filter(request => request.method === 'POST')).toHaveLength(2);
     expect(session.getSnapshot().operations[attempt.operationId]?.acceptance).toBe('accepted');
     expect(projectAgentView(session.getSnapshot()).executions[0]!.id).toBe(executionId);
+  });
+
+  it('refreshes backend authorization for send, restored resume and lost-ACK query without archiving credentials', async () => {
+    const credentials = ['fixture-send-token', 'fixture-resume-token', 'fixture-decision-token', 'fixture-query-token'];
+    let token = credentials[0]!;
+    const authenticatedRequests: { url: string; method: string; authorization: string | undefined }[] = [];
+    // Observe the actual HTTP request received by the fixture, not only fetch options.
+    server.on('request', (request: IncomingMessage) => {
+      authenticatedRequests.push({
+        url: request.url ?? '', method: request.method ?? 'GET', authorization: request.headers.authorization,
+      });
+    });
+    const identity = { id: 'custom-backend', version: '2026-10' };
+    const authenticatedAdapter = () => createReferenceAdapter({
+      endpoint, ...identity, headers: () => ({ Authorization: `Bearer ${token}` }),
+    });
+    const original = makeSession(authenticatedAdapter());
+    const send = original.dispatch({ type: 'send', input: { text: 'Authenticated recovery test' } });
+    expect((await send.delivery).status).toBe('delivered');
+    await until(original, view => view.pendingInteractions.length === 2);
+    expect(authenticatedRequests).toEqual([
+      { url: '/api/operations', method: 'POST', authorization: `Bearer ${credentials[0]}` },
+    ]);
+    const archive = original.exportSnapshot();
+    expect(archive.adapter).toEqual(identity);
+    const executionId = projectAgentView(original.getSnapshot()).executions[0]!.id;
+    original.dispose();
+
+    token = credentials[1]!;
+    const transport = authenticatedAdapter();
+    const restored = makeSession(transport, archive);
+    expect(authenticatedRequests).toHaveLength(1);
+    expect((await restored.dispatch({ type: 'resume', executionId }).delivery).status).toBe('delivered');
+    await expect.poll(() => authenticatedRequests.find(request => request.url.includes('/events?cursor='))).toEqual({
+      url: expect.stringContaining(`/api/executions/${executionId}/events?cursor=`),
+      method: 'GET', authorization: `Bearer ${credentials[1]}`,
+    });
+
+    await restored.dispatch({ type: 'disconnect', executionId }).delivery;
+    token = credentials[2]!;
+    transport.loseNextAcknowledgement();
+    const decision = restored.dispatch({
+      type: 'respond', interactionId: projectAgentView(restored.getSnapshot()).pendingInteractions[0]!.id,
+      response: { approved: true },
+    });
+    expect((await decision.delivery).status).toBe('uncertain');
+    token = credentials[3]!;
+    const retry = restored.dispatch({ type: 'retryOperation', operationId: decision.operationId });
+    expect(retry.operationId).toBe(decision.operationId);
+    expect((await retry.delivery).status).toBe('delivered');
+    await until(restored, view => view.pendingInteractions.length === 1);
+    expect(authenticatedRequests.filter(request => request.method === 'POST').map(request => request.authorization)).toEqual([
+      `Bearer ${credentials[0]}`, `Bearer ${credentials[2]}`,
+    ]);
+    expect(authenticatedRequests.find(request => request.url.endsWith(`/operations/${decision.operationId}`))).toEqual({
+      url: `/api/operations/${decision.operationId}`, method: 'GET', authorization: `Bearer ${credentials[3]}`,
+    });
+    expect(authenticatedRequests.filter(request => request.url.includes('/events?cursor=')).map(request => request.authorization)).toEqual([
+      `Bearer ${credentials[1]}`, `Bearer ${credentials[3]}`,
+    ]);
+    expect(restored.getSnapshot().operations[decision.operationId]?.acceptance).toBe('accepted');
+    expect(restored.exportSnapshot().adapter).toEqual(identity);
+    for (const saved of [archive, restored.exportSnapshot()]) {
+      const serialized = JSON.stringify(saved);
+      for (const credential of credentials) expect(serialized).not.toContain(credential);
+      expect(serialized).not.toContain('Authorization');
+      expect(serialized).not.toContain('Bearer');
+      expect(serialized).not.toContain('headers');
+    }
   });
 
   it('replay is passive and cancellation requires a distinct confirmed backend action', async () => {
