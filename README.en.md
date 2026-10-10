@@ -6,6 +6,12 @@ Agentdown is being rewritten as an agent interaction runtime for multiple fronte
 
 This repository currently contains the **agentdown-next rewrite prototype**. Stage 0 implements the core contract, both framework bindings and a model-free reference backend, with a complete flow available locally. This preview allows breaking changes, is incompatible with the old API and is not yet a complete production library. The new `@agentdown/*` workspace packages are all `private` and have not been published to npm.
 
+## Online preview
+
+[Open the workspace](https://codexiaoke.github.io/agentdown/next/) · [React example](https://codexiaoke.github.io/agentdown/next/react.html)
+
+The online preview uses a browser-only, no-model fixture backend. Tasks and event logs stay in the current browser and support approvals, refresh recovery, replay and lost-acknowledgement simulation. It demonstrates the interaction workflow without calling a model or performing actual save/publish operations. Local development continues to use the Node HTTP reference backend by default.
+
 ## Run locally
 
 Use Node.js `^20.19.0 || >=22.12.0`. From the repository root:

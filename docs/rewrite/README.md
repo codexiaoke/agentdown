@@ -10,9 +10,9 @@
 
 在仓库根目录执行 `npm ci`，然后执行 `npm run dev` 或等价的 `npm run dev:next`。它们共同启动 Node 无模型参考后端（8010）和 Vite 原型（5174）：
 
-- 默认 Vue 工作台：[http://localhost:5174/](http://localhost:5174/)，页面内可切换 React。
-- Vue：[http://localhost:5174/vue.html](http://localhost:5174/vue.html)
-- React：[http://localhost:5174/react.html](http://localhost:5174/react.html)
+- 默认 Vue 工作台：`http://localhost:5174/`，页面内可切换 React。
+- Vue：`http://localhost:5174/vue.html`
+- React：`http://localhost:5174/react.html`
 
 两个页面共享纯 TypeScript Session 与参考 HTTP / SSE 协议，支持发送任务、文本 / 步骤 / 工具、两项独立审批、继续执行、产物、断开恢复、存档刷新、只读回放与确认丢失后的恢复。当前示例界面不等于已导出的 `AgentWorkspace` 组件。
 
@@ -24,7 +24,7 @@ npm run build:next
 npm run test:next:package-consumer
 ```
 
-也可单独执行 `npm run typecheck:next`；默认 `test`、`typecheck` 与 `build` 仍面向旧实现。参考后端按固定流程运行，不调用模型，也不执行真实保存或发布；事件和操作只保存在当前进程内存。后端重启后，浏览器存档无法恢复已丢失的服务端数据。完整契约及限制见[参考后端说明](../../examples/reference-server/README.md)。
+也可单独执行 `npm run typecheck:next`；默认 `test`、`typecheck` 与 `build` 仍面向旧实现。参考后端按固定流程运行，不调用模型，也不执行真实保存或发布；事件和操作只保存在当前进程内存。后端重启后，浏览器存档无法恢复已丢失的服务端数据。完整契约及限制见[参考后端说明](https://github.com/codexiaoke/agentdown/blob/rewrite/agentdown-next/examples/reference-server/README.md)。
 
 ## 设计依据
 

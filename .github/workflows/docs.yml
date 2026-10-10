@@ -8,6 +8,12 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      include_next:
+        description: Include the browser prototype at /next/
+        type: boolean
+        required: false
+        default: false
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -36,6 +42,16 @@ jobs:
 
       - name: Build docs
         run: npm run docs:build
+
+      - name: Include browser prototype
+        if: github.event_name == 'workflow_dispatch' && inputs.include_next
+        env:
+          VITE_BROWSER_DEMO: 'true'
+        run: |
+          export PROTOTYPE_BASE="/${GITHUB_REPOSITORY##*/}/next/"
+          npm run build:next
+          mkdir -p docs/.vitepress/dist/next
+          cp -a dist-next/prototype/. docs/.vitepress/dist/next/
 
       - name: Upload Pages artifact
         if: github.event_name != 'pull_request'

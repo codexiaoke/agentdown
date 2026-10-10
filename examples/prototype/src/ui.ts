@@ -1,4 +1,17 @@
 import { createAgentSession, type AgentSessionOptions, type AgentSession, type AgentAdapter, type SessionArchive, type OperationHandle, type AgentViewSnapshot, type Interaction, type JsonValue, type JsonObject, type Artifact } from '@agentdown/core';
+import { createReferenceAdapter } from '@agentdown/reference';
+import { createBrowserReferenceAdapter } from './browser-adapter';
+
+export const browserDemo = import.meta.env.VITE_BROWSER_DEMO === 'true';
+export const prototypeFootnote = browserDemo
+  ? '浏览器演示后端 · 无真实模型调用 · 演示数据保存在当前浏览器。'
+  : '无模型参考后端 · 本阶段验证完整交互流程，内容以安全纯文本呈现。';
+export function frameworkHref(framework: 'vue' | 'react'): string {
+  return `${import.meta.env.BASE_URL}${framework}.html`;
+}
+export function createPrototypeAdapter() {
+  return browserDemo ? createBrowserReferenceAdapter() : createReferenceAdapter({ endpoint: `${import.meta.env.BASE_URL}api` });
+}
 
 export const statusLabels: Readonly<Record<string, string>> = {
   idle: '尚未连接', connecting: '正在连接', connected: '已连接', reconnecting: '正在重连', disconnected: '连接已断开', error: '连接错误',
@@ -68,7 +81,7 @@ export function uncertainOperations(view: AgentViewSnapshot) {
   return view.operations.filter(operation => operation.status === 'uncertain' && operation.acceptance === 'unknown');
 }
 
-export function archiveKey(framework: 'vue' | 'react') { return `agentdown-next:${framework}:archive`; }
+export function archiveKey(framework: 'vue' | 'react') { return `agentdown-next:${framework}:${browserDemo ? 'browser:' : ''}archive`; }
 
 export function initialOptions(framework: 'vue' | 'react', adapter: AgentAdapter): { options: AgentSessionOptions; error: string } {
   const mode = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('mode') === 'replay' ? 'replay' : 'live';

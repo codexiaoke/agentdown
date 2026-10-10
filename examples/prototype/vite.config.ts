@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 export default defineConfig({
   root: fileURLToPath(new URL('.', import.meta.url)),
+  base: process.env.PROTOTYPE_BASE ?? '/',
   plugins: [vue()],
   resolve: {
     alias: Object.fromEntries(['core', 'reference', 'vue', 'react'].map(name => [

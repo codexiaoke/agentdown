@@ -6,6 +6,12 @@ Agentdown 正在重写为跨前端框架的 Agent 交互运行时，覆盖从发
 
 当前仓库提供 **agentdown-next 重写原型**：阶段 0 的核心契约、双框架绑定和无模型参考后端已经实现，完整流程可以在本地体验。这是允许破坏性更新的预览阶段，不兼容旧 API，也尚未形成完整正式库。新的 `@agentdown/*` workspace 包均为 `private`，未发布到 npm。
 
+## 在线体验
+
+[打开工作台](https://codexiaoke.github.io/agentdown/next/) · [React 示例](https://codexiaoke.github.io/agentdown/next/react.html)
+
+在线版使用浏览器无模型演示后端，任务和事件保存在当前浏览器，支持审批、刷新恢复、回放与确认丢失模拟。它用于体验交互流程，不连接真实模型或执行保存、发布操作。本地开发默认继续使用 Node HTTP 参考后端。
+
 ## 本地运行
 
 需要 Node.js `^20.19.0 || >=22.12.0`。在仓库根目录执行：

@@ -1,9 +1,8 @@
 import { useState, type FormEvent } from 'react';
 import { useAgentSession } from '@agentdown/react';
-import { createReferenceAdapter } from '@agentdown/reference';
-import { artifactReport, currentConnection, currentExecution, initialOptions, interactionConfirmation, label, reportDelivery, returnToLive, saveAndNavigate, text, toolOutput, toolTitle, uncertainOperations } from './ui';
+import { artifactReport, createPrototypeAdapter, currentConnection, currentExecution, frameworkHref, initialOptions, interactionConfirmation, label, prototypeFootnote, reportDelivery, returnToLive, saveAndNavigate, text, toolOutput, toolTitle, uncertainOperations } from './ui';
 
-const adapter = createReferenceAdapter({ endpoint: '/api' });
+const adapter = createPrototypeAdapter();
 const initial = initialOptions('react', adapter);
 
 export function ReactApp() {
@@ -46,8 +45,8 @@ export function ReactApp() {
   return (
     <main className="workspace">
       <header className="topbar">
-        <a className="brand" href="/react.html" aria-label="Agentdown React 工作台"><span className="brand-mark" aria-hidden="true">a</span>agentdown<span className="brand-note">交互运行时</span></a>
-        <nav className="framework-tabs" aria-label="切换框架示例"><a className="framework-tab" href="/vue.html">Vue</a><a className="framework-tab" href="/react.html" aria-current="page">React</a></nav>
+        <a className="brand" href={frameworkHref('react')} aria-label="Agentdown React 工作台"><span className="brand-mark" aria-hidden="true">a</span>agentdown<span className="brand-note">交互运行时</span></a>
+        <nav className="framework-tabs" aria-label="切换框架示例"><a className="framework-tab" href={frameworkHref('vue')}>Vue</a><a className="framework-tab" href={frameworkHref('react')} aria-current="page">React</a></nav>
       </header>
 
       <div className="page-heading">
@@ -132,7 +131,7 @@ export function ReactApp() {
           </section>
         </aside>
       </div>
-      <p className="workbench-footnote">无模型参考后端 · 本阶段验证完整交互流程，内容以安全纯文本呈现。</p>
+      <p className="workbench-footnote">{prototypeFootnote}</p>
     </main>
   );
 }
