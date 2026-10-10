@@ -1,7 +1,7 @@
 {
   "name": "agentdown",
   "version": "0.1.0-rc.1",
-  "description": "Reactive agent-native markdown UI runtime for Vue, powered by markdown-it and @chenglou/pretext.",
+  "description": "Cross-framework agent workflow runtime for tasks, tools, human decisions, artifacts and recovery.",
   "type": "module",
   "license": "MIT",
   "author": "xiaoke",
@@ -16,11 +16,12 @@
   "keywords": [
     "vue",
     "vue3",
+    "react",
     "vite",
     "agent",
     "generative-ui",
     "markdown",
-    "pretext",
+    "workflow",
     "runtime",
     "npm"
   ],
@@ -68,7 +69,7 @@
     "**/*.css"
   ],
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/dev-next.mjs",
     "build": "npm run typecheck && vite build && npm run build:types",
     "build:types": "vue-tsc --declaration --emitDeclarationOnly -p tsconfig.types.json",
     "docs:dev": "vitepress dev docs --host 127.0.0.1",
@@ -91,7 +92,15 @@
     "test:e2e:chrome": "playwright test --project=chrome",
     "test:watch": "vitest",
     "typecheck": "vue-tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json && vue-tsc --noEmit -p tsconfig.e2e.json",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "dev:legacy": "vite",
+    "dev:next": "node scripts/dev-next.mjs",
+    "build:next": "node scripts/build-next.mjs",
+    "test:next": "vitest run --config vitest.next.config.ts --maxWorkers=2",
+    "test:reference": "node --test examples/reference-server/*.test.mjs",
+    "test:next:e2e": "playwright test --config playwright.next.config.ts",
+    "typecheck:next": "tsc --build tsconfig.next.json && vue-tsc --noEmit -p examples/prototype/tsconfig.json",
+    "test:next:package-consumer": "npm run build:next && node scripts/test-next-package-consumer.mjs"
   },
   "peerDependencies": {
     "@a2ui/web_core": "^0.10.6",
@@ -129,6 +138,14 @@
     "vitepress": "^1.6.4",
     "vitest": "^4.1.2",
     "vue": "^3.5.31",
-    "vue-tsc": "^3.2.6"
-  }
+    "vue-tsc": "^3.2.6",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "jsdom": "^27.0.0"
+  },
+  "workspaces": [
+    "packages/*"
+  ]
 }

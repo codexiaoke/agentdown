@@ -1,0 +1,49 @@
+name: rewrite prototype
+
+on:
+  push:
+    branches: [rewrite/agentdown-next]
+  pull_request:
+    paths:
+      - '.github/workflows/rewrite.yml'
+      - 'packages/**'
+      - 'tests/**'
+      - 'examples/prototype/**'
+      - 'examples/reference-server/**'
+      - 'e2e-next/**'
+      - 'scripts/*next*'
+      - '*next*.json'
+      - '*next*.ts'
+      - 'package.json'
+      - 'package-lock.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rewrite-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  prototype:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build:next
+      - run: npm run test:next
+      - run: npm run test:reference
+      - name: Consume private package tarballs independently
+        run: node scripts/test-next-package-consumer.mjs
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - run: npm run test:next:e2e
