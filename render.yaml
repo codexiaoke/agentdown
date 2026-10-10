@@ -6,7 +6,7 @@ services:
     repo: https://github.com/codexiaoke/agentdown
     branch: rewrite/agentdown-next
     autoDeployTrigger: 'off'
-    buildCommand: npm ci --no-audit --no-fund && npm run build:live
+    buildCommand: npm ci --include=dev --no-audit --no-fund && npm run build:live
     startCommand: npm run start:demo
     healthCheckPath: /health
     envVars:
