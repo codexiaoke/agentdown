@@ -12,6 +12,14 @@ This repository currently contains the **agentdown-next rewrite prototype**. Sta
 
 The online preview defaults to a browser-only, no-model fixture backend. Tasks and event logs stay in the current browser and support approvals, refresh recovery, replay and lost-acknowledgement simulation. This static URL does not have a deployed live model service; real model use requires your own public backend. Local development defaults to the Node HTTP reference backend.
 
+## Deploy a real demo
+
+[Deploy to Render](https://render.com/deploy?repo=https%3A%2F%2Fgithub.com%2Fcodexiaoke%2Fagentdown%2Ftree%2Frewrite%2Fagentdown-next)
+
+Deployment configuration is ready, but no public real backend URL has been provided yet. It uses Render Free, Node 24 and the rewrite branch, with automatic deployment disabled. Enter `DEEPSEEK_API_KEY` in the platform's secure environment settings; do not send it in chat or put it in the frontend. The platform generates a separate `AGENTDOWN_ACCESS_TOKEN`.
+
+After deployment, open the assigned domain and enter that domain plus `/api` and the access token in the UI settings. One service serves Vue, React and the API. Free instances may sleep and take time to wake; sleep or restart loses in-memory history, and temporary report files are not long-term storage. See the [real demo guide](./examples/model-server/DEMO.md) for the steps in Chinese.
+
 ## Run the local no-model demo
 
 Use Node.js `^20.19.0 || >=22.12.0`. From the repository root:
@@ -28,17 +36,21 @@ npm run dev
 - React entry: [http://localhost:5174/react.html](http://localhost:5174/react.html)
 - Reference backend: `http://localhost:8010`, accessed through the frontend's `/api` proxy.
 
-## Run a real model locally
+## Run the real demo locally
 
 Configure `DEEPSEEK_API_KEY` in the server environment, then run:
 
 ```sh
-npm run dev:live
+npm run demo:live
 ```
 
-The script sets `VITE_AGENT_MODE=live`, disables the browser fixture, and starts the DeepSeek backend at `127.0.0.1:8011` by default alongside the Vue / React workspace on `5174`. The frontend connects through the `/api` proxy. `AGENTDOWN_MODEL_PORT` changes the backend port. Optional model settings are `DEEPSEEK_MODEL` and `DEEPSEEK_BASE_URL`; keep the provider key on the server.
+This runs `build:live`, then starts one Node service serving Vue, React and the API. The default entry is `http://127.0.0.1:8011/`, with React at `/react.html` and the API at `/api`. Startup verifies the live build marker and rejects no-model fixture builds. Hosting environments with an existing live build use `npm run start:demo`.
+
+For development with hot reload, `npm run dev:live` remains available. It sets `VITE_AGENT_MODE=live`, disables the browser fixture, and starts the model backend at `127.0.0.1:8011` by default alongside the Vite workspace on `5174`, connected through the `/api` proxy. `AGENTDOWN_MODEL_PORT` changes that backend port. Optional model settings are `DEEPSEEK_MODEL` and `DEEPSEEK_BASE_URL`; keep the provider key on the server.
 
 Try asking for a Vue versus React selection report to be saved on the server. The real save flow is: **streamed model text → model requests `save_report` → human approval → server writes the file → tool result returns to the model → model continues answering**. Approved reports appear as artifacts with their actual content. A denial returns to the model so it can continue. Ordinary questions can finish directly without fixture approval cards.
+
+Example task buttons only fill the input. Click Send to call the model.
 
 Execution logs, operation receipts and recovery events remain in server process memory. A server restart cannot resume an old execution; saved report files remain. Disconnecting stops frontend observation while the task continues. Cancellation aborts the model request and expires pending approvals; files already committed are not removed.
 

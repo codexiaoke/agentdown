@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: agentdown-live
+    runtime: node
+    plan: free
+    repo: https://github.com/codexiaoke/agentdown
+    branch: rewrite/agentdown-next
+    autoDeployTrigger: 'off'
+    buildCommand: npm ci --no-audit --no-fund && npm run build:live
+    startCommand: npm run start:demo
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: 24.19.0
+      - key: HOST
+        value: 0.0.0.0
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      - key: DEEPSEEK_MODEL
+        value: deepseek-flash
+      - key: AGENTDOWN_ACCESS_TOKEN
+        generateValue: true

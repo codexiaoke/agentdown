@@ -18,9 +18,19 @@
 
 ### 真实模型模式
 
-服务端环境已配置 `DEEPSEEK_API_KEY` 后执行 `npm run dev:live`。脚本设置 `VITE_AGENT_MODE=live` 并关闭浏览器演示，启动默认 `127.0.0.1:8011` 的 DeepSeek 后端和 `5174` 的工作台；前端通过 `/api` 代理连接。后端端口可用 `AGENTDOWN_MODEL_PORT` 修改，模型可用 `DEEPSEEK_MODEL`、`DEEPSEEK_BASE_URL` 配置。
+服务端环境已配置 `DEEPSEEK_API_KEY` 后执行 `npm run demo:live`，先构建真实模式 UI，再启动单个 Node 服务。Vue、React 和 API 同域提供，默认入口为 `http://127.0.0.1:8011/`，React 为 `/react.html`。启动会验证 live 构建标记并拒绝 fixture；已完成 `npm run build:live` 的托管环境使用 `npm run start:demo`。
+
+开发热更新可继续使用 `npm run dev:live`：脚本设置 `VITE_AGENT_MODE=live` 并关闭浏览器演示，启动默认 `127.0.0.1:8011` 的 DeepSeek 后端和 `5174` 的工作台，通过 `/api` 代理连接。其后端端口可用 `AGENTDOWN_MODEL_PORT` 修改，模型可用 `DEEPSEEK_MODEL`、`DEEPSEEK_BASE_URL` 配置。
 
 真实保存链路是：模型文本 → 模型发起 `save_report` → 用户审批 → 服务器落盘 → 工具结果返回模型继续执行。普通问题没有固定审批，工具调用与审批数量由模型决定。断开连接不会取消任务；显式取消会中止模型请求并使待审批失效，已落盘文件保留。执行日志和操作记录仍在进程内存，服务重启后不能 resume 原任务。
+
+### 部署真实演示
+
+[一键部署到 Render](https://render.com/deploy?repo=https%3A%2F%2Fgithub.com%2Fcodexiaoke%2Fagentdown%2Ftree%2Frewrite%2Fagentdown-next)
+
+部署配置已做好，尚未提供公网真实后端地址。`render.yaml` 使用 Free、Node 24、当前重写分支与 `/health` 健康检查，关闭自动部署。平台安全环境设置输入 `DEEPSEEK_API_KEY`，另行自动生成 `AGENTDOWN_ACCESS_TOKEN`。部署后打开平台提供的域名，将“部署域名 + `/api`”和后端访问令牌填入 UI 设置；Vue / React 同域工作。示例任务按钮只填输入，仍需点击发送。
+
+启动脚本从 `RENDER_EXTERNAL_URL` 加入精确的部署 origin。Free 实例休眠后首次唤醒可能需要等待；休眠或重启丢失进程内历史，磁盘临时文件不作长期存储。操作步骤见[真实演示指南](https://github.com/codexiaoke/agentdown/blob/rewrite/agentdown-next/examples/model-server/DEMO.md)。
 
 [线上工作台](https://codexiaoke.github.io/agentdown/next/)默认使用浏览器无模型演示，不自带实时模型服务。真实模式需要自己的公网后端：Vue / React 设置中填写 HTTPS API URL（包含 `/api`）与独立后端访问令牌。令牌只保存在当前标签页 `sessionStorage`，不进入存档；`DEEPSEEK_API_KEY` 仅在服务端配置。公网部署的 Docker、`AGENTDOWN_ACCESS_TOKEN` 与精准 `AGENTDOWN_CORS_ORIGINS` 配置见[真实模型后端说明](https://github.com/codexiaoke/agentdown/blob/rewrite/agentdown-next/examples/model-server/README.md)。
 
@@ -61,6 +71,7 @@ npm run test:next:package-consumer
 
 - [x] 跑通发送 → 文本 / 步骤 → 工具 → 多项审批 → 继续执行 → 产物的双框架原型。
 - [x] 增加 DeepSeek 真实模型后端，验证模型发起工具 → 独立审批 → 报告落盘 → 工具结果返回模型继续执行；提供公网后端连接设置。
+- [x] 提供单服务同域真实演示与 Render 部署配置；尚未部署公网真实后端。
 - [ ] 提供可复用默认工作区组件和工作台 / 紧凑布局；原型已有对话、执行、待处理交互与产物区域。
 - [ ] 提供共享 Catalog、分别注册 Vue / React 组件的扩展方式。
 - [ ] 重做主题 tokens、中文 / 英文文案和基础可访问性。
