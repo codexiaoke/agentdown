@@ -1,10 +1,9 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { useAgentSession } from '@agentdown/vue';
-import { createReferenceAdapter } from '@agentdown/reference';
-import { artifactReport, currentConnection, currentExecution, initialOptions, interactionConfirmation, label, reportDelivery, returnToLive, saveAndNavigate, text, toolOutput, toolTitle, uncertainOperations } from './ui';
+import { artifactReport, createPrototypeAdapter, currentConnection, currentExecution, frameworkHref, initialOptions, interactionConfirmation, label, prototypeFootnote, reportDelivery, returnToLive, saveAndNavigate, text, toolOutput, toolTitle, uncertainOperations } from './ui';
 
-const adapter = createReferenceAdapter({ endpoint: '/api' });
+const adapter = createPrototypeAdapter();
 const initial = initialOptions('vue', adapter);
 const { session, snapshot, actions } = useAgentSession(initial.options);
 const draft = ref('调研 Agentdown 的下一代架构，关键操作前请让我确认。');
@@ -50,8 +49,8 @@ function loseAck() { adapter.loseNextAcknowledgement(); ackArmed.value = true; }
 <template>
   <main class="workspace">
     <header class="topbar">
-      <a class="brand" href="/vue.html" aria-label="Agentdown Vue 工作台"><span class="brand-mark" aria-hidden="true">a</span>agentdown<span class="brand-note">交互运行时</span></a>
-      <nav class="framework-tabs" aria-label="切换框架示例"><a class="framework-tab" href="/vue.html" aria-current="page">Vue</a><a class="framework-tab" href="/react.html">React</a></nav>
+      <a class="brand" :href="frameworkHref('vue')" aria-label="Agentdown Vue 工作台"><span class="brand-mark" aria-hidden="true">a</span>agentdown<span class="brand-note">交互运行时</span></a>
+      <nav class="framework-tabs" aria-label="切换框架示例"><a class="framework-tab" :href="frameworkHref('vue')" aria-current="page">Vue</a><a class="framework-tab" :href="frameworkHref('react')">React</a></nav>
     </header>
 
     <div class="page-heading">
@@ -135,6 +134,6 @@ function loseAck() { adapter.loseNextAcknowledgement(); ackArmed.value = true; }
         </section>
       </aside>
     </div>
-    <p class="workbench-footnote">无模型参考后端 · 本阶段验证完整交互流程，内容以安全纯文本呈现。</p>
+    <p class="workbench-footnote">{{ prototypeFootnote }}</p>
   </main>
 </template>
