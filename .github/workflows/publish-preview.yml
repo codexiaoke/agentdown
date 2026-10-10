@@ -1,0 +1,79 @@
+name: publish next preview
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_run_id:
+        description: Completed docs build on rewrite/agentdown-next containing the preview
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-pages
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  artifact:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Verify the preview build source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          BUILD_RUN_ID: ${{ inputs.build_run_id }}
+        run: |
+          gh api "repos/$GH_REPO/actions/runs/$BUILD_RUN_ID" > run.json
+          jq -e --arg repository "$GH_REPO" '.status == "completed" and .head_branch == "rewrite/agentdown-next" and .path == ".github/workflows/docs.yml" and .head_repository.full_name == $repository' run.json
+          gh api "repos/$GH_REPO/actions/runs/$BUILD_RUN_ID/jobs" > jobs.json
+          jq -e '.jobs | any(.name == "build" and .conclusion == "success")' jobs.json
+
+      - name: Download the verified static site
+        uses: actions/download-artifact@v5
+        with:
+          name: github-pages
+          path: archive
+          run-id: ${{ inputs.build_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Prepare docs and preview
+        run: |
+          mkdir site
+          tar -xf archive/artifact.tar -C site
+          test -f site/index.html
+          test -f site/next/index.html
+          test -f site/next/react.html
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+
+  deploy:
+    needs: artifact
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Configure Pages
+        uses: actions/configure-pages@v6
+        with:
+          token: ${{ secrets.PAGES_ENABLEMENT_TOKEN != '' && secrets.PAGES_ENABLEMENT_TOKEN || github.token }}
+          enablement: ${{ secrets.PAGES_ENABLEMENT_TOKEN != '' }}
+
+      - name: Deploy docs and next preview
+        id: deployment
+        uses: actions/deploy-pages@v4
