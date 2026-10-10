@@ -16,9 +16,20 @@
 
 两个页面共享纯 TypeScript Session 与参考 HTTP / SSE 协议，支持发送任务、文本 / 步骤 / 工具、两项独立审批、继续执行、产物、断开恢复、存档刷新、只读回放与确认丢失后的恢复。当前示例界面不等于已导出的 `AgentWorkspace` 组件。
 
+### 真实模型模式
+
+服务端环境已配置 `DEEPSEEK_API_KEY` 后执行 `npm run dev:live`。脚本设置 `VITE_AGENT_MODE=live` 并关闭浏览器演示，启动默认 `127.0.0.1:8011` 的 DeepSeek 后端和 `5174` 的工作台；前端通过 `/api` 代理连接。后端端口可用 `AGENTDOWN_MODEL_PORT` 修改，模型可用 `DEEPSEEK_MODEL`、`DEEPSEEK_BASE_URL` 配置。
+
+真实保存链路是：模型文本 → 模型发起 `save_report` → 用户审批 → 服务器落盘 → 工具结果返回模型继续执行。普通问题没有固定审批，工具调用与审批数量由模型决定。断开连接不会取消任务；显式取消会中止模型请求并使待审批失效，已落盘文件保留。执行日志和操作记录仍在进程内存，服务重启后不能 resume 原任务。
+
+[线上工作台](https://codexiaoke.github.io/agentdown/next/)默认使用浏览器无模型演示，不自带实时模型服务。真实模式需要自己的公网后端：Vue / React 设置中填写 HTTPS API URL（包含 `/api`）与独立后端访问令牌。令牌只保存在当前标签页 `sessionStorage`，不进入存档；`DEEPSEEK_API_KEY` 仅在服务端配置。公网部署的 Docker、`AGENTDOWN_ACCESS_TOKEN` 与精准 `AGENTDOWN_CORS_ORIGINS` 配置见[真实模型后端说明](https://github.com/codexiaoke/agentdown/blob/rewrite/agentdown-next/examples/model-server/README.md)。
+
+### 验证命令
+
 ```sh
 npm run test:next
 npm run test:reference
+npm run test:model
 npm run test:next:e2e
 npm run build:next
 npm run test:next:package-consumer
@@ -49,6 +60,7 @@ npm run test:next:package-consumer
 ### 1. 完整任务流程与默认工作区
 
 - [x] 跑通发送 → 文本 / 步骤 → 工具 → 多项审批 → 继续执行 → 产物的双框架原型。
+- [x] 增加 DeepSeek 真实模型后端，验证模型发起工具 → 独立审批 → 报告落盘 → 工具结果返回模型继续执行；提供公网后端连接设置。
 - [ ] 提供可复用默认工作区组件和工作台 / 紧凑布局；原型已有对话、执行、待处理交互与产物区域。
 - [ ] 提供共享 Catalog、分别注册 Vue / React 组件的扩展方式。
 - [ ] 重做主题 tokens、中文 / 英文文案和基础可访问性。

@@ -100,7 +100,11 @@
     "test:reference": "node --test examples/reference-server/*.test.mjs",
     "test:next:e2e": "playwright test --config playwright.next.config.ts",
     "typecheck:next": "tsc --build tsconfig.next.json && vue-tsc --noEmit -p examples/prototype/tsconfig.json",
-    "test:next:package-consumer": "npm run build:next && node scripts/test-next-package-consumer.mjs"
+    "test:next:package-consumer": "npm run build:next && node scripts/test-next-package-consumer.mjs",
+    "dev:live": "node scripts/dev-live.mjs",
+    "build:live": "node scripts/build-live.mjs",
+    "backend:live": "node examples/model-server/server.mjs",
+    "test:model": "node --test examples/model-server/*.test.mjs"
   },
   "peerDependencies": {
     "@a2ui/web_core": "^0.10.6",
@@ -132,18 +136,19 @@
     "@types/markdown-it": "^14.1.2",
     "@types/markdown-it-container": "^4.0.0",
     "@types/node": "^25.5.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-vue": "^6.0.5",
+    "jsdom": "^27.0.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
     "typescript": "^6.0.2",
+    "undici": "^7.30.0",
     "vite": "^8.0.3",
     "vitepress": "^1.6.4",
     "vitest": "^4.1.2",
     "vue": "^3.5.31",
-    "vue-tsc": "^3.2.6",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
-    "@types/react": "^19.2.0",
-    "@types/react-dom": "^19.2.0",
-    "jsdom": "^27.0.0"
+    "vue-tsc": "^3.2.6"
   },
   "workspaces": [
     "packages/*"

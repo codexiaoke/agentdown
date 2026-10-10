@@ -4,15 +4,15 @@ Language: [中文](./README.md) | **English**
 
 Agentdown is being rewritten as an agent interaction runtime for multiple frontend frameworks. It covers the frontend flow from starting a task, streaming execution, tools and human decisions to artifacts, reconnection and historical replay. Vue and React share one pure TypeScript Session; the backend remains responsible for model calls, task execution and business authorization.
 
-This repository currently contains the **agentdown-next rewrite prototype**. Stage 0 implements the core contract, both framework bindings and a model-free reference backend, with a complete flow available locally. This preview allows breaking changes, is incompatible with the old API and is not yet a complete production library. The new `@agentdown/*` workspace packages are all `private` and have not been published to npm.
+This repository currently contains the **agentdown-next rewrite prototype**. Stage 0 implements the core contract, both framework bindings and a model-free reference backend. An optional real DeepSeek backend is also available. This preview allows breaking changes, is incompatible with the old API and is not yet a complete production library. The new `@agentdown/*` workspace packages are all `private` and have not been published to npm.
 
 ## Online preview
 
 [Open the workspace](https://codexiaoke.github.io/agentdown/next/) · [React example](https://codexiaoke.github.io/agentdown/next/react.html)
 
-The online preview uses a browser-only, no-model fixture backend. Tasks and event logs stay in the current browser and support approvals, refresh recovery, replay and lost-acknowledgement simulation. It demonstrates the interaction workflow without calling a model or performing actual save/publish operations. Local development continues to use the Node HTTP reference backend by default.
+The online preview defaults to a browser-only, no-model fixture backend. Tasks and event logs stay in the current browser and support approvals, refresh recovery, replay and lost-acknowledgement simulation. This static URL does not have a deployed live model service; real model use requires your own public backend. Local development defaults to the Node HTTP reference backend.
 
-## Run locally
+## Run the local no-model demo
 
 Use Node.js `^20.19.0 || >=22.12.0`. From the repository root:
 
@@ -28,9 +28,29 @@ npm run dev
 - React entry: [http://localhost:5174/react.html](http://localhost:5174/react.html)
 - Reference backend: `http://localhost:8010`, accessed through the frontend's `/api` proxy.
 
-## Try the complete flow
+## Run a real model locally
 
-Both pages consume the same Session contract and reference backend protocol. In either page:
+Configure `DEEPSEEK_API_KEY` in the server environment, then run:
+
+```sh
+npm run dev:live
+```
+
+The script sets `VITE_AGENT_MODE=live`, disables the browser fixture, and starts the DeepSeek backend at `127.0.0.1:8011` by default alongside the Vue / React workspace on `5174`. The frontend connects through the `/api` proxy. `AGENTDOWN_MODEL_PORT` changes the backend port. Optional model settings are `DEEPSEEK_MODEL` and `DEEPSEEK_BASE_URL`; keep the provider key on the server.
+
+Try asking for a Vue versus React selection report to be saved on the server. The real save flow is: **streamed model text → model requests `save_report` → human approval → server writes the file → tool result returns to the model → model continues answering**. Approved reports appear as artifacts with their actual content. A denial returns to the model so it can continue. Ordinary questions can finish directly without fixture approval cards.
+
+Execution logs, operation receipts and recovery events remain in server process memory. A server restart cannot resume an old execution; saved report files remain. Disconnecting stops frontend observation while the task continues. Cancellation aborts the model request and expires pending approvals; files already committed are not removed.
+
+## Connect the online page to a real backend
+
+In either framework's backend settings, enter an HTTPS API URL including `/api`, such as `https://your-agent.example/api`, and a separate backend access token. The token stays in the current tab's `sessionStorage` and is excluded from Session archives. **Never enter `DEEPSEEK_API_KEY` here.** Saving settings only changes the connection; sending a task starts the request. Local loopback development addresses may use HTTP.
+
+A public backend needs HTTPS, `AGENTDOWN_ACCESS_TOKEN` and exact `AGENTDOWN_CORS_ORIGINS`. For the current GitHub Pages frontend, allow the origin `https://codexiaoke.github.io`. See the [real model backend guide](./examples/model-server/README.md) for Docker deployment, data directories and access controls.
+
+## Try the complete no-model flow
+
+Both pages consume the same Session contract. The default no-model fixture follows the flow below; in real mode, model output determines tools and approvals:
 
 1. Send a task and watch streamed text, execution steps and tool status.
 2. Approve or reject each of two independent approvals. Request delivery and backend confirmation are shown separately; one decision does not resolve the other.
@@ -52,6 +72,7 @@ Cancellation is a separate backend operation and is confirmed only by a backend 
 | [`packages/reference`](./packages/reference/README.md) | Reference HTTP / SSE adapter, including recovery after a lost acknowledgement |
 | [`examples/prototype`](./examples/prototype) | Vue and React example interfaces for the complete flow |
 | [`examples/reference-server`](./examples/reference-server/README.md) | Model-free Node reference backend with stable event identities, operation idempotency, result queries and cursor replay |
+| [`examples/model-server`](./examples/model-server/README.md) | Real DeepSeek streaming, report saving after approval, continued execution from tool results, authentication and deployment examples |
 
 The UI is a workflow prototype and currently renders safe plain text. A reusable `AgentWorkspace`, shared Catalog, production themes and localization, a Markdown content model, A2UI and production protocol adapters remain planned work.
 
@@ -62,6 +83,7 @@ The reference backend uses a fixed workflow to demonstrate tools and approvals. 
 ```sh
 npm run test:next                  # Core, Vue / React bindings and HTTP integration tests
 npm run test:reference             # Node reference backend contract tests
+npm run test:model                 # Model protocol and real backend contract tests with injected test models
 npm run test:next:e2e              # Browser workflow tests for both frameworks
 npm run build:next                 # New workspace type checks and prototype build
 npm run test:next:package-consumer # Standalone tarball installation, types and dependency checks

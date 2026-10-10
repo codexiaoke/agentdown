@@ -20,7 +20,8 @@ export default defineConfig({
   webServer: {
     command: 'npm run dev:next',
     url: 'http://127.0.0.1:5174/vue.html',
-    reuseExistingServer: !process.env.CI,
+    // An existing dev:live server could issue paid requests during fixture tests.
+    reuseExistingServer: false,
     timeout: 30_000,
   },
 });

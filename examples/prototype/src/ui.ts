@@ -2,15 +2,84 @@ import { createAgentSession, type AgentSessionOptions, type AgentSession, type A
 import { createReferenceAdapter } from '@agentdown/reference';
 import { createBrowserReferenceAdapter } from './browser-adapter';
 
-export const browserDemo = import.meta.env.VITE_BROWSER_DEMO === 'true';
-export const prototypeFootnote = browserDemo
-  ? '浏览器演示后端 · 无真实模型调用 · 演示数据保存在当前浏览器。'
-  : '无模型参考后端 · 本阶段验证完整交互流程，内容以安全纯文本呈现。';
+const configuredEndpointKey = 'agentdown-next:backend-endpoint';
+const accessTokenPrefix = 'agentdown-next:backend-access-token:';
+const tokenStorageKey = (endpoint: string) => `${accessTokenPrefix}${encodeURIComponent(endpoint)}`;
+const environmentLive = import.meta.env.VITE_AGENT_MODE === 'live';
+const staticBrowserDemo = import.meta.env.VITE_BROWSER_DEMO === 'true';
+
+export function validateBackendEndpoint(input: string): string {
+  const url = new URL(input.trim());
+  const loopback = url.hostname === 'localhost' || url.hostname === '[::1]' || /^127(?:\.\d{1,3}){3}$/.test(url.hostname);
+  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && loopback)) throw new Error('真实后端请使用 HTTPS；本机 localhost 或 loopback 可以使用 HTTP。');
+  if (url.username || url.password || url.search || url.hash) throw new Error('后端 URL 不能包含用户名、密码、查询参数或片段。');
+  return url.href.replace(/\/$/, '');
+}
+
+function readBackendConfiguration() {
+  let endpoint = '';
+  let token = '';
+  let error = '';
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = window.localStorage.getItem(configuredEndpointKey);
+      if (stored) endpoint = validateBackendEndpoint(stored);
+    } catch { error = '后端连接设置无法读取，请重新设置连接。'; }
+  }
+  const live = environmentLive || endpoint.length > 0;
+  if (!endpoint && live && typeof window !== 'undefined') endpoint = new URL(`${import.meta.env.BASE_URL}api`, window.location.origin).href.replace(/\/$/, '');
+  if (live && typeof window !== 'undefined') {
+    try { token = window.sessionStorage.getItem(tokenStorageKey(endpoint)) ?? ''; }
+    catch { error = '后端访问令牌无法读取，请重新设置连接。'; }
+  }
+  return { endpoint, token, live, error };
+}
+
+// Read once at module initialization; credentials stay outside Session and archives.
+const runtimeBackend = readBackendConfiguration();
+export const backendSettings = Object.freeze({ endpoint: runtimeBackend.endpoint, hasToken: runtimeBackend.token.length > 0, error: runtimeBackend.error });
+export const realAgentMode = runtimeBackend.live;
+export const browserDemo = staticBrowserDemo && !realAgentMode;
+export const prototypeModeLabel = realAgentMode ? '真实 Agent' : '无模型演示';
+export const prototypeFootnote = realAgentMode
+  ? '真实模型由应用后端调用 · 浏览器只连接所配置的后端，内容以安全纯文本呈现。'
+  : browserDemo ? '浏览器演示后端 · 无真实模型调用 · 演示数据保存在当前浏览器。'
+    : '无模型参考后端 · 本阶段验证完整交互流程，内容以安全纯文本呈现。';
+
+export function saveBackendConfiguration(endpoint: string, token: string): void {
+  const checked = validateBackendEndpoint(endpoint);
+  const checkedToken = token.trim();
+  if (/[\r\n]/.test(checkedToken)) throw new Error('后端访问令牌格式无效。');
+  window.localStorage.setItem(configuredEndpointKey, checked);
+  if (checkedToken) window.sessionStorage.setItem(tokenStorageKey(checked), checkedToken);
+  else window.sessionStorage.removeItem(tokenStorageKey(checked));
+  if (runtimeBackend.endpoint && runtimeBackend.endpoint !== checked) window.sessionStorage.removeItem(tokenStorageKey(runtimeBackend.endpoint));
+  runtimeBackend.token = '';
+  const url = new URL(window.location.href);
+  url.searchParams.delete('mode');
+  window.location.assign(url.href);
+}
+
+export function resetBackendConfiguration(): void {
+  window.localStorage.removeItem(configuredEndpointKey);
+  window.sessionStorage.removeItem(tokenStorageKey(runtimeBackend.endpoint));
+  runtimeBackend.token = '';
+  const url = new URL(window.location.href);
+  url.searchParams.delete('mode');
+  window.location.assign(url.href);
+}
 export function frameworkHref(framework: 'vue' | 'react'): string {
   return `${import.meta.env.BASE_URL}${framework}.html`;
 }
 export function createPrototypeAdapter() {
-  return browserDemo ? createBrowserReferenceAdapter() : createReferenceAdapter({ endpoint: `${import.meta.env.BASE_URL}api` });
+  if (browserDemo) return createBrowserReferenceAdapter();
+  return createReferenceAdapter({
+    endpoint: realAgentMode ? runtimeBackend.endpoint : `${import.meta.env.BASE_URL}api`,
+    ...(realAgentMode ? {
+      id: 'agentdown-model-http', version: '1',
+      headers: (): Record<string, string> => runtimeBackend.token ? { Authorization: `Bearer ${runtimeBackend.token}` } : {},
+    } : {}),
+  });
 }
 
 export const statusLabels: Readonly<Record<string, string>> = {
@@ -32,7 +101,7 @@ function isObject(value: JsonValue | undefined): value is JsonObject {
 }
 
 export function toolTitle(name: string): string {
-  return ({ save_report: '保存演示报告', publish_summary: '公开报告摘要' } as Readonly<Record<string, string>>)[name] ?? name;
+  return ({ save_report: realAgentMode ? '保存报告' : '保存演示报告', publish_summary: '公开报告摘要' } as Readonly<Record<string, string>>)[name] ?? name;
 }
 
 export function toolOutput(value: JsonValue | undefined): string {
@@ -81,15 +150,32 @@ export function uncertainOperations(view: AgentViewSnapshot) {
   return view.operations.filter(operation => operation.status === 'uncertain' && operation.acceptance === 'unknown');
 }
 
-export function archiveKey(framework: 'vue' | 'react') { return `agentdown-next:${framework}:${browserDemo ? 'browser:' : ''}archive`; }
+function backendScope(): string { return encodeURIComponent(runtimeBackend.endpoint); }
+export function archiveKey(framework: 'vue' | 'react') {
+  return realAgentMode ? `agentdown-next:${framework}:live:${backendScope()}:archive` : `agentdown-next:${framework}:${browserDemo ? 'browser:' : ''}archive`;
+}
+
+function conversationId(framework: 'vue' | 'react'): string {
+  if (!realAgentMode) return `demo-${framework}`;
+  const fresh = () => `agent-${framework}-${globalThis.crypto.randomUUID()}`;
+  if (typeof window === 'undefined') return fresh();
+  const key = `agentdown-next:${framework}:live:${backendScope()}:conversation`;
+  try {
+    const stored = window.localStorage.getItem(key);
+    if (stored && /^agent-(vue|react)-[a-zA-Z0-9-]+$/.test(stored)) return stored;
+    const created = fresh();
+    window.localStorage.setItem(key, created);
+    return created;
+  } catch { return fresh(); }
+}
 
 export function initialOptions(framework: 'vue' | 'react', adapter: AgentAdapter): { options: AgentSessionOptions; error: string } {
   const mode = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('mode') === 'replay' ? 'replay' : 'live';
-  const options: AgentSessionOptions = { conversationId: `demo-${framework}`, adapter, mode };
+  const options: AgentSessionOptions = { conversationId: conversationId(framework), adapter, mode };
   if (typeof window === 'undefined') return { options, error: '' };
   try {
     const raw = window.localStorage.getItem(archiveKey(framework));
-    if (!raw) return { options, error: mode === 'replay' ? '没有已保存的会话，可以返回实时模式开始任务。' : '' };
+    if (!raw) return { options, error: mode === 'replay' ? '没有已保存的会话，可以返回实时模式开始任务。' : backendSettings.error };
     const candidate: unknown = JSON.parse(raw);
     if (!candidate || typeof candidate !== 'object' || !('schemaVersion' in candidate) || candidate.schemaVersion !== 1 || !('conversationId' in candidate) || candidate.conversationId !== options.conversationId) {
       throw new Error('存档格式或会话身份不匹配。');

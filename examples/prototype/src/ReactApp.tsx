@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { useAgentSession } from '@agentdown/react';
-import { artifactReport, createPrototypeAdapter, currentConnection, currentExecution, frameworkHref, initialOptions, interactionConfirmation, label, prototypeFootnote, reportDelivery, returnToLive, saveAndNavigate, text, toolOutput, toolTitle, uncertainOperations } from './ui';
+import { artifactReport, backendSettings, createPrototypeAdapter, currentConnection, currentExecution, frameworkHref, initialOptions, interactionConfirmation, label, prototypeFootnote, prototypeModeLabel, realAgentMode, reportDelivery, resetBackendConfiguration, returnToLive, saveAndNavigate, saveBackendConfiguration, text, toolOutput, toolTitle, uncertainOperations } from './ui';
 
 const adapter = createPrototypeAdapter();
 const initial = initialOptions('react', adapter);
@@ -10,6 +10,8 @@ export function ReactApp() {
   const [draft, setDraft] = useState('调研 Agentdown 的下一代架构，关键操作前请让我确认。');
   const [notice, setNotice] = useState(initial.error);
   const [ackArmed, setAckArmed] = useState(false);
+  const [backendEndpoint, setBackendEndpoint] = useState(backendSettings.endpoint);
+  const [backendToken, setBackendToken] = useState('');
   const execution = currentExecution(snapshot);
   const connection = currentConnection(snapshot);
   const uncertain = uncertainOperations(snapshot);
@@ -41,6 +43,15 @@ export function ReactApp() {
     catch { setNotice('会话保存失败，请检查浏览器是否允许本地存储。'); }
   }
   function loseAck() { adapter.loseNextAcknowledgement(); setAckArmed(true); }
+  function connectBackend(event: FormEvent) {
+    event.preventDefault();
+    try { saveBackendConfiguration(backendEndpoint, backendToken); }
+    catch (error) { setNotice(error instanceof Error ? error.message : '后端连接设置保存失败。'); }
+  }
+  function resetBackend() {
+    try { resetBackendConfiguration(); }
+    catch { setNotice('默认连接恢复失败，请检查浏览器存储。'); }
+  }
 
   return (
     <main className="workspace">
@@ -51,10 +62,20 @@ export function ReactApp() {
 
       <div className="page-heading">
         <div><p className="eyebrow">Agent workspace / prototype</p><h1>每一步，都有迹可循。</h1><p className="page-description">发起任务、查看执行、处理决策，再带着完整上下文继续。</p></div>
-        {replay ? <span className="mode-badge replay" data-testid="replay-mode">历史回放 · 只读</span> : <span className="mode-badge">React · 实时工作台</span>}
+        {replay ? <span className="mode-badge replay" data-testid="replay-mode">历史回放 · 只读</span> : <span className="mode-badge" data-testid="backend-mode">React · {prototypeModeLabel}</span>}
       </div>
+      <details className="backend-settings" data-testid="backend-settings">
+        <summary>连接设置 · {prototypeModeLabel}</summary>
+        <form className="backend-form" onSubmit={connectBackend}>
+          <label htmlFor="backend-endpoint">真实后端 API URL</label><input id="backend-endpoint" value={backendEndpoint} onChange={event => setBackendEndpoint(event.target.value)} type="url" data-testid="backend-endpoint" placeholder="https://your-agent.example/api" required />
+          <label htmlFor="backend-token">后端访问令牌（可选）</label><input id="backend-token" value={backendToken} onChange={event => setBackendToken(event.target.value)} type="password" data-testid="backend-token" autoComplete="off" placeholder="留空表示不使用令牌" />
+          <p>使用你部署的后端签发的访问令牌，不是模型 API 密钥。令牌仅在当前标签页保存，不进入会话存档。保存只切换设置，发送任务后才连接后端。{backendSettings.hasToken ? '当前标签页已配置令牌，修改连接时请重新填写。' : ''}</p>
+          <div className="backend-form-actions"><button className="primary-button" type="submit" data-testid="connect-backend">使用真实后端</button><button className="secondary-button" type="button" data-testid="reset-backend" onClick={resetBackend}>恢复默认连接</button></div>
+        </form>
+      </details>
       {replay && <div className="replay-banner"><span>正在查看已保存的会话。回放不会连接后端或提交操作。</span><button className="text-button" onClick={returnToLive}>返回实时模式</button></div>}
       {notice && <div className="toast" role="alert" data-testid="notice"><span>{notice}</span><button aria-label="关闭提示" onClick={() => setNotice('')}>×</button></div>}
+      {execution?.status === 'failed' && <div className="toast" role="alert" data-testid="execution-error"><span>任务执行失败：{execution.error || '后端未提供错误详情，请检查任务与连接。'}</span></div>}
 
       {uncertain.map(operation => <div key={operation.id} className="operation-notice" data-testid="uncertain-operation" role="status">
         <p>这次操作的投递结果尚未确定。后端可能已经收到，当前界面仍等待确认。</p>
@@ -90,8 +111,8 @@ export function ReactApp() {
               <div className="status-row"><span>最近操作</span><span className="status-value" data-testid="operation-status">{latestOperation ? `${label(latestOperation.status)} · ${label(latestOperation.acceptance)}` : '暂无操作'}</span></div>
               <div className="control-buttons"><button className="secondary-button" disabled={!canDisconnect} data-testid="disconnect" onClick={disconnect}>断开连接</button><button className="secondary-button" disabled={replay || !snapshot.canResume || !execution} data-testid="resume" onClick={resume}>恢复执行</button><button className="danger-button" disabled={replay || !snapshot.canCancel || !execution} data-testid="cancel" onClick={cancel}>取消任务</button></div>
               <div className="archive-controls"><button className="text-button" data-testid="save-reload" onClick={() => save('live')}>保存并刷新</button><span className="separator" aria-hidden="true">/</span><button className="text-button" disabled={replay || snapshot.messages.length === 0} data-testid="replay" onClick={() => save('replay')}>查看回放</button></div>
-              {!replay && <button className="text-button" disabled={ackArmed} data-testid="simulate-lost-ack" onClick={loseAck}>{ackArmed ? '下一次投递将丢失确认' : '模拟确认丢失'}</button>}
-              {!replay && <p className="simulation-note">先断开连接，再模拟丢失确认，可观察待核实状态。</p>}
+              {!replay && !realAgentMode && <button className="text-button" disabled={ackArmed} data-testid="simulate-lost-ack" onClick={loseAck}>{ackArmed ? '下一次投递将丢失确认' : '模拟确认丢失'}</button>}
+              {!replay && !realAgentMode && <p className="simulation-note">先断开连接，再模拟丢失确认，可观察待核实状态。</p>}
             </div>
           </section>
 
@@ -110,6 +131,7 @@ export function ReactApp() {
               {snapshot.interactions.length === 0 && <p className="interaction-empty">Agent 需要你的决定时，会在这里提出请求。</p>}
               {snapshot.interactions.map(interaction => <article key={interaction.id} className={`interaction-card${interaction.status === 'resolved' ? ' resolved' : ''}`} data-testid={`interaction-${interaction.id}`}>
                 <h3>{interaction.prompt}</h3><p>{interaction.kind === 'approval' ? '这一项由你决定，结果以实际后端确认为准。' : '当前原型只支持审批交互。'}</p>
+                {snapshot.tools.find(tool => tool.id === interaction.toolCallId)?.input !== undefined && <details className="artifact-data"><summary>查看执行内容</summary><pre>{text(snapshot.tools.find(tool => tool.id === interaction.toolCallId)?.input)}</pre></details>}
                 {interaction.kind === 'approval' && interaction.status !== 'resolved' && <div className="interaction-actions"><button className="primary-button" disabled={replay || interaction.status !== 'pending'} data-testid={`approve-${interaction.id}`} onClick={() => respond(interaction.id, true)}>批准</button><button className="secondary-button" disabled={replay || interaction.status !== 'pending'} data-testid={`reject-${interaction.id}`} onClick={() => respond(interaction.id, false)}>拒绝</button></div>}
                 <p className="interaction-confirmation" data-testid={`interaction-status-${interaction.id}`}>{interaction.status === 'pending' ? '等待你的选择' : interactionConfirmation(interaction)}</p>
               </article>)}

@@ -10,8 +10,11 @@ on:
       - 'tests/**'
       - 'examples/prototype/**'
       - 'examples/reference-server/**'
+      - 'examples/model-server/**'
       - 'e2e-next/**'
       - 'scripts/*next*'
+      - 'scripts/dev-live.mjs'
+      - 'scripts/build-live.mjs'
       - '*next*.json'
       - '*next*.ts'
       - 'package.json'
@@ -42,6 +45,7 @@ jobs:
       - run: npm run build:next
       - run: npm run test:next
       - run: npm run test:reference
+      - run: npm run test:model
       - name: Consume private package tarballs independently
         run: node scripts/test-next-package-consumer.mjs
       - name: Install Chromium
