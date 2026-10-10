@@ -102,9 +102,12 @@
     "typecheck:next": "tsc --build tsconfig.next.json && vue-tsc --noEmit -p examples/prototype/tsconfig.json",
     "test:next:package-consumer": "npm run build:next && node scripts/test-next-package-consumer.mjs",
     "dev:live": "node scripts/dev-live.mjs",
+    "demo:live": "node scripts/demo-live.mjs",
+    "start:demo": "node scripts/start-demo.mjs",
     "build:live": "node scripts/build-live.mjs",
     "backend:live": "node examples/model-server/server.mjs",
-    "test:model": "node --test examples/model-server/*.test.mjs"
+    "test:model": "node --test examples/model-server/*.test.mjs",
+    "test:demo": "node --test scripts/demo-live.test.mjs"
   },
   "peerDependencies": {
     "@a2ui/web_core": "^0.10.6",

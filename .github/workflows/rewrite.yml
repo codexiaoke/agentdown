@@ -15,6 +15,9 @@ on:
       - 'scripts/*next*'
       - 'scripts/dev-live.mjs'
       - 'scripts/build-live.mjs'
+      - 'scripts/demo-live*'
+      - 'scripts/start-demo.mjs'
+      - 'render.yaml'
       - '*next*.json'
       - '*next*.ts'
       - 'package.json'
@@ -42,10 +45,11 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run build:next
+      - run: npm run build:live
       - run: npm run test:next
       - run: npm run test:reference
       - run: npm run test:model
+      - run: npm run test:demo
       - name: Consume private package tarballs independently
         run: node scripts/test-next-package-consumer.mjs
       - name: Install Chromium

@@ -70,6 +70,7 @@ export function ReactApp() {
           <label htmlFor="backend-endpoint">真实后端 API URL</label><input id="backend-endpoint" value={backendEndpoint} onChange={event => setBackendEndpoint(event.target.value)} type="url" data-testid="backend-endpoint" placeholder="https://your-agent.example/api" required />
           <label htmlFor="backend-token">后端访问令牌（可选）</label><input id="backend-token" value={backendToken} onChange={event => setBackendToken(event.target.value)} type="password" data-testid="backend-token" autoComplete="off" placeholder="留空表示不使用令牌" />
           <p>使用你部署的后端签发的访问令牌，不是模型 API 密钥。令牌仅在当前标签页保存，不进入会话存档。保存只切换设置，发送任务后才连接后端。{backendSettings.hasToken ? '当前标签页已配置令牌，修改连接时请重新填写。' : ''}</p>
+          <p>还没有后端？<a href="https://render.com/deploy?repo=https%3A%2F%2Fgithub.com%2Fcodexiaoke%2Fagentdown%2Ftree%2Frewrite%2Fagentdown-next" target="_blank" rel="noopener noreferrer" data-testid="deploy-demo">创建真实演示服务</a>，部署后填写它的 API 地址和访问令牌。</p>
           <div className="backend-form-actions"><button className="primary-button" type="submit" data-testid="connect-backend">使用真实后端</button><button className="secondary-button" type="button" data-testid="reset-backend" onClick={resetBackend}>恢复默认连接</button></div>
         </form>
       </details>
@@ -89,6 +90,11 @@ export function ReactApp() {
             {snapshot.messages.length === 0 && <div className="conversation-empty">
               <div className="empty-symbol" aria-hidden="true">↗</div><h3>从一个任务开始</h3><p>这里会保留你的输入、Agent 的说明和最终结果。执行过程与待处理决策会同步显示在右侧。</p>
               <div className="flow-preview" aria-hidden="true"><span>发起任务</span><i>→</i><span>执行与工具</span><i>→</i><span>人工决策</span><i>→</i><span>交付产物</span></div>
+              {realAgentMode && !replay && snapshot.canSend && <div className="demo-task-buttons" aria-label="选择一个演示任务">
+                <button className="demo-task-button" type="button" data-testid="demo-question" onClick={() => setDraft('请用三句话解释：Agent 应用为什么需要人工审批？')}>问一个问题 <span aria-hidden="true">↗</span></button>
+                <button className="demo-task-button" type="button" data-testid="demo-report" onClick={() => setDraft('Agentdown 是跨框架的 Agent 交互运行时，覆盖任务、工具、人工审批、产物、恢复与回放，Vue 与 React 共享核心。请基于这些事实生成不超过 150 字的简介，标题为《Agentdown 简介》，调用 save_report 请求我的审批后保存到服务器，不对外发布。')}>生成并保存报告 <span aria-hidden="true">↗</span></button>
+                <p>选择后会填入下方输入框，点击发送才开始任务。</p>
+              </div>}
             </div>}
             {snapshot.messages.map(message => <article key={message.id} className={`message ${message.role}`} data-testid={`message-${message.id}`}>
               <div className="message-avatar" aria-hidden="true">{message.role === 'user' ? '你' : 'AD'}</div>

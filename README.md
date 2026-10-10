@@ -12,6 +12,14 @@ Agentdown 正在重写为跨前端框架的 Agent 交互运行时，覆盖从发
 
 在线版默认使用浏览器无模型演示后端，任务和事件保存在当前浏览器，支持审批、刷新恢复、回放与确认丢失模拟。这个静态地址本身没有已部署的实时模型服务；要使用真实模型，需要连接自己的公网后端。本地开发默认使用 Node HTTP 参考后端。
 
+## 一键部署真实演示
+
+[部署到 Render](https://render.com/deploy?repo=https%3A%2F%2Fgithub.com%2Fcodexiaoke%2Fagentdown%2Ftree%2Frewrite%2Fagentdown-next)
+
+部署配置已做好，目前尚未提供任何公网真实后端地址。配置使用 Render Free、Node 24 和当前重写分支，关闭自动部署。请在平台安全环境变量设置中输入 `DEEPSEEK_API_KEY`；不要把它发到聊天或放进前端。平台会生成独立的 `AGENTDOWN_ACCESS_TOKEN`。
+
+部署完成后，打开平台提供的域名，在界面设置中填写“部署域名 + `/api`”及该访问令牌。Vue、React 和 API 由同一个服务提供。Free 实例可能休眠，首次唤醒需要等待；休眠或重启会丢失进程内历史，临时磁盘上的报告不作长期存储。完整步骤见[真实演示指南](./examples/model-server/DEMO.md)。
+
 ## 本地无模型演示
 
 需要 Node.js `^20.19.0 || >=22.12.0`。在仓库根目录执行：
@@ -28,17 +36,21 @@ npm run dev
 - React 独立入口：[http://localhost:5174/react.html](http://localhost:5174/react.html)
 - 参考后端：`http://localhost:8010`，前端通过 `/api` 代理访问。
 
-## 本地真实模型
+## 本地真实演示
 
 在服务端环境配置 `DEEPSEEK_API_KEY` 后执行：
 
 ```sh
-npm run dev:live
+npm run demo:live
 ```
 
-启动脚本设置 `VITE_AGENT_MODE=live`，关闭浏览器演示模式，启动默认 `127.0.0.1:8011` 的 DeepSeek 后端与 `5174` 的 Vue / React 工作台。前端仍通过 `/api` 代理连接；`AGENTDOWN_MODEL_PORT` 可修改后端端口。可选模型配置为 `DEEPSEEK_MODEL` 和 `DEEPSEEK_BASE_URL`，模型密钥仅保留在服务端。
+此命令先执行 `build:live`，再用单个 Node 服务同时提供 Vue、React 和 API。默认入口为 `http://127.0.0.1:8011/`，React 为 `/react.html`，API 为 `/api`。启动时检查真实模式构建标记，拒绝无模型 fixture 构建；已构建的托管环境使用 `npm run start:demo` 启动。
+
+需要开发热更新时，仍可执行 `npm run dev:live`：脚本设置 `VITE_AGENT_MODE=live`，关闭浏览器演示，启动默认 `127.0.0.1:8011` 的模型后端与 `5174` 的 Vite 工作台，通过 `/api` 代理连接；`AGENTDOWN_MODEL_PORT` 可修改其后端端口。可选模型配置为 `DEEPSEEK_MODEL` 和 `DEEPSEEK_BASE_URL`，模型密钥仅保留在服务端。
 
 可以请求“写一份 Vue 与 React 选型报告，并保存到服务器”。保存报告的真实链路为：**模型流式文本 → 模型发起 `save_report` → 用户审批 → 服务器落盘 → 工具结果返回模型 → 模型继续回答**。批准后，实际报告内容作为产物显示；拒绝后，模型收到拒绝结果并继续。普通问题可直接回答，不会固定插入演示审批。
+
+界面的示例任务按钮只填入输入框，仍需点击“发送任务”才调用模型。
 
 执行日志、操作确认和恢复事件仍在服务端进程内存中，重启后不能恢复原执行；已保存的报告文件保留。断开连接只停止前端观察，任务继续；取消会中止模型请求并使待审批失效，已经落盘的文件不会撤回。
 
