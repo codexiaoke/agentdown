@@ -12,3 +12,11 @@ backend/.env
 backend/.idea
 playwright-report
 test-results
+
+dist-next/
+
+packages/*/dist/
+
+playwright-report-next/
+
+test-results-next/

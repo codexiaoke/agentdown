@@ -1,0 +1,21 @@
+{
+  "name": "@agentdown/vue",
+  "version": "0.0.0-next.0",
+  "private": true,
+  "type": "module",
+  "description": "Vue bindings for the Agentdown session runtime.",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "dependencies": {
+    "@agentdown/core": "*"
+  },
+  "peerDependencies": {
+    "vue": "^3.5.0"
+  },
+  "sideEffects": false
+}
