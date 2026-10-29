@@ -204,9 +204,7 @@ async function runBuiltinAction(actionKey: string, context: RunSurfaceMessageAct
     }
     case 'like':
     case 'dislike': {
-      feedbackAction.value = feedbackAction.value === actionKey
-          ? null
-          : actionKey;
+      feedbackAction.value = actionKey;
       break;
     }
     case 'regenerate':
