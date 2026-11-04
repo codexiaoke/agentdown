@@ -107,14 +107,14 @@
     }
   },
   "dependencies": {
-    "@chenglou/pretext": "^0.0.8",
+    "@chenglou/pretext": "^1.0.0",
     "dompurify": "^3.4.13",
     "highlight.js": "^11.11.2",
-    "katex": "^0.16.44",
-    "markdown-it": "^14.3.0",
+    "katex": "^0.19.1",
+    "markdown-it": "^15.0.3",
     "markdown-it-container": "^4.0.0",
-    "markdown-it-math": "^5.2.1",
-    "mermaid": "^11.16.1"
+    "markdown-it-math": "^6.1.0",
+    "mermaid": "^12.2.0"
   },
   "devDependencies": {
     "@a2ui/web_core": "^0.10.6",
